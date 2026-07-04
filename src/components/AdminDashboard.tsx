@@ -99,6 +99,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
   const [showPassword, setShowPassword] = useState(false);
   const [userSuccessMessage, setUserSuccessMessage] = useState<string | null>(null);
 
+  // 1b. Bulk CSV Import States
+  const [userCreateMode, setUserCreateMode] = useState<'single' | 'bulk'>('single');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [parsedInvestors, setParsedInvestors] = useState<any[]>([]);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResults, setBulkResults] = useState<any | null>(null);
+  const [isDraggingCsv, setIsDraggingCsv] = useState(false);
+
   // 2. Allocate Plot
   const [allocFarmId, setAllocFarmId] = useState('');
   const [allocPlotNumber, setAllocPlotNumber] = useState('');
@@ -417,6 +425,135 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  // Handle CSV file processing and parsing
+  const handleCsvSelect = (file: File) => {
+    if (!file) return;
+    setCsvFile(file);
+    setBulkResults(null);
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text) return;
+      
+      try {
+        const lines = text.split(/\r?\n/);
+        if (lines.length === 0) {
+          alert('CSV file is empty.');
+          return;
+        }
+        
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+        
+        // Find if necessary columns are present
+        const hasUsername = headers.includes('username');
+        const hasName = headers.includes('name');
+        const hasEmail = headers.includes('email');
+        
+        if (!hasUsername || !hasName || !hasEmail) {
+          alert('CSV file must have at least "username", "name", and "email" columns.');
+          return;
+        }
+        
+        const records: any[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          // Quotes-aware comma split
+          const values: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          for (let charIndex = 0; charIndex < line.length; charIndex++) {
+            const char = line[charIndex];
+            if (char === '"' || char === "'") {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              values.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          values.push(current.trim());
+
+          const record: any = {};
+          headers.forEach((header, index) => {
+            const val = values[index] ? values[index].replace(/^["']|["']$/g, '').trim() : '';
+            if (header === 'username') record.username = val;
+            if (header === 'name') record.name = val;
+            if (header === 'email') record.email = val;
+            if (header === 'phone' || header === 'telephone') record.phone = val;
+            if (header === 'password') record.password = val;
+          });
+          
+          if (record.username || record.name || record.email) {
+            records.push(record);
+          }
+        }
+        
+        setParsedInvestors(records);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to parse CSV file. Ensure it is a valid comma-separated format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleBulkUploadInvestors = async () => {
+    if (parsedInvestors.length === 0) {
+      alert('No parsed investor records to upload.');
+      return;
+    }
+    
+    try {
+      setBulkUploading(true);
+      setBulkResults(null);
+      
+      const res = await fetch('/api/admin/users/bulk-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ investors: parsedInvestors })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Bulk upload failed');
+      
+      setBulkResults(data);
+      if (data.successCount > 0) {
+        setCsvFile(null);
+        setParsedInvestors([]);
+        triggerRefreshSignal();
+      }
+    } catch (err: any) {
+      alert(err.message || 'An error occurred during bulk import.');
+    } finally {
+      setBulkUploading(false);
+    }
+  };
+
+  const handleDownloadSampleCsv = () => {
+    const csvContent = 
+      "username,name,email,phone,password\n" +
+      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026\n" +
+      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99\n" +
+      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,\n" +
+      "funmi_peaks,Funmilayo Alao,funmi@estatemanager.com,,\n";
+      
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'adubiaro_investors_bulk_import_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Submit Plot
@@ -1554,118 +1691,340 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
               </form>
             )}
 
-            {/* CREATE USER USER_PLUS FORM */}
+            {/* CREATE USER USER_PLUS FORM & BULK CSV IMPORT */}
             {activeFormTab === 'user' && (
-              <form onSubmit={handleCreateUser} className="space-y-4">
-                <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
-                  <UserPlus className="text-emerald-700 h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Register New User / Farm Manager Account</h3>
-                </div>
-
-                {userSuccessMessage && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    <span>{userSuccessMessage}</span>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="text-emerald-700 h-4 w-4" />
+                    <h3 className="font-sans font-bold text-sm text-gray-800">Provision Investor / Staff Accounts</h3>
                   </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Full Account Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Olumide Benson"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Primary Username</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. mbenson"
-                      value={newUsername}
-                      onChange={(e) => setNewUsername(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Email Address</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="benson@email.com"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Primary Telephone</label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="+234..."
-                      value={newPhone}
-                      onChange={(e) => setNewPhone(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">System Permission Role</label>
-                    <select
-                      value={newRole}
-                      onChange={(e) => setNewRole(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                  
+                  {/* Mode Toggles */}
+                  <div className="flex bg-stone-100 rounded-lg p-0.5 text-xs font-mono border border-stone-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserCreateMode('single');
+                        setBulkResults(null);
+                      }}
+                      className={`px-3 py-1 rounded-md transition duration-200 cursor-pointer ${
+                        userCreateMode === 'single' 
+                          ? 'bg-white text-[#1B4332] font-bold shadow-sm' 
+                          : 'text-stone-500 hover:text-stone-800'
+                      }`}
                     >
-                      <option value="investor">Investor (Read-Only Portfolio Client)</option>
-                      <option value="farm_manager">Farm Manager (Updates & Documents Supervisor)</option>
-                      <option value="admin">Super Admin (Full Root Access)</option>
-                    </select>
+                      Single Account
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserCreateMode('bulk');
+                        setUserSuccessMessage(null);
+                      }}
+                      className={`px-3 py-1 rounded-md transition duration-200 cursor-pointer ${
+                        userCreateMode === 'bulk' 
+                          ? 'bg-white text-[#1B4332] font-bold shadow-sm' 
+                          : 'text-stone-500 hover:text-stone-800'
+                      }`}
+                    >
+                      Bulk Import (CSV)
+                    </button>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Account Access Password (Defined by Admin)</label>
-                    <div className="relative">
+                {userCreateMode === 'single' ? (
+                  <form onSubmit={handleCreateUser} className="space-y-4">
+                    {userSuccessMessage && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>{userSuccessMessage}</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Full Account Name</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Olumide Benson"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Primary Username</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. mbenson"
+                          value={newUsername}
+                          onChange={(e) => setNewUsername(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="benson@email.com"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Primary Telephone</label>
+                        <input
+                          type="tel"
+                          required
+                          placeholder="+234..."
+                          value={newPhone}
+                          onChange={(e) => setNewPhone(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">System Permission Role</label>
+                        <select
+                          value={newRole}
+                          onChange={(e) => setNewRole(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                        >
+                          <option value="investor">Investor (Read-Only Portfolio Client)</option>
+                          <option value="farm_manager">Farm Manager (Updates & Documents Supervisor)</option>
+                          <option value="admin">Super Admin (Full Root Access)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Account Access Password (Defined by Admin)</label>
+                        <div className="relative">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            required
+                            placeholder="e.g. FarmManager2026!"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="w-full text-xs border border-gray-200 rounded-lg p-2.5 pr-10 bg-gray-50 focus:outline-[#1B4332]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
+                            title={showPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-mono font-bold p-3 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all duration-200 shadow-sm"
+                    >
+                      <PlusCircle className="h-4 w-4" />
+                      <span>Register Account Profile</span>
+                    </button>
+                  </form>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Drag and Drop Zone */}
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingCsv(true);
+                      }}
+                      onDragLeave={() => setIsDraggingCsv(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingCsv(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && file.name.endsWith('.csv')) {
+                          handleCsvSelect(file);
+                        } else {
+                          alert('Please drop a valid CSV file.');
+                        }
+                      }}
+                      className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer ${
+                        isDraggingCsv 
+                          ? 'border-[#2D6A4F] bg-emerald-50/40' 
+                          : 'border-stone-200 bg-stone-50 hover:bg-stone-100/50'
+                      }`}
+                      onClick={() => {
+                        const input = document.getElementById('bulk-csv-input');
+                        if (input) input.click();
+                      }}
+                    >
+                      <UploadCloud className={`h-10 w-10 mb-2 transition-transform duration-300 ${isDraggingCsv ? 'scale-110 text-[#2D6A4F]' : 'text-[#1B4332]'}`} />
+                      <p className="text-xs text-stone-700 font-medium text-center">
+                        Drag & Drop investor CSV file here, or{' '}
+                        <span className="text-[#2D6A4F] hover:underline font-bold cursor-pointer">
+                          browse files
+                        </span>
+                      </p>
                       <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        placeholder="e.g. FarmManager2026!"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full text-xs border border-gray-200 rounded-lg p-2.5 pr-10 bg-gray-50 focus:outline-[#1B4332]"
+                        id="bulk-csv-input"
+                        type="file"
+                        accept=".csv"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleCsvSelect(file);
+                        }}
+                        className="hidden"
                       />
+                      <p className="text-[10px] text-stone-400 mt-1 font-mono">
+                        Requires columns: <span className="text-stone-600 font-bold">username, name, email</span> (phone and password are optional)
+                      </p>
+                    </div>
+
+                    {/* Download Sample Template */}
+                    <div className="flex justify-end">
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
-                        title={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={handleDownloadSampleCsv}
+                        className="text-[10px] font-mono text-[#2D6A4F] hover:text-[#1B4332] flex items-center gap-1 bg-[#52B788]/10 hover:bg-[#52B788]/20 px-2.5 py-1.5 rounded-md transition duration-200 cursor-pointer"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        <FileText className="h-3.5 w-3.5" />
+                        Download Import Template (CSV)
                       </button>
                     </div>
-                  </div>
-                </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-mono font-bold p-3 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Register Account Profile</span>
-                </button>
-              </form>
+                    {/* Parsed List Preview */}
+                    {parsedInvestors.length > 0 && (
+                      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3 shadow-inner">
+                        <div className="flex justify-between items-center border-b border-stone-100 pb-2">
+                          <h4 className="font-sans font-bold text-xs text-stone-800">
+                            Parsed File Preview ({parsedInvestors.length} records ready)
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCsvFile(null);
+                              setParsedInvestors([]);
+                              setBulkResults(null);
+                            }}
+                            className="text-[10px] font-mono text-rose-600 hover:underline cursor-pointer font-bold"
+                          >
+                            Clear Selection
+                          </button>
+                        </div>
+
+                        <div className="overflow-x-auto max-h-[160px] overflow-y-auto border border-stone-100 rounded-lg">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-stone-50 border-b border-stone-100 text-[10px] uppercase font-mono text-stone-500">
+                                <th className="p-2">Row</th>
+                                <th className="p-2">Username</th>
+                                <th className="p-2">Full Name</th>
+                                <th className="p-2">Email</th>
+                                <th className="p-2">Phone</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {parsedInvestors.slice(0, 10).map((p, idx) => (
+                                <tr key={idx} className="border-b border-stone-50 text-xs text-stone-600 hover:bg-stone-50/50">
+                                  <td className="p-2 font-mono text-stone-400">{idx + 1}</td>
+                                  <td className="p-2 font-bold font-mono text-[#1B4332]">{p.username}</td>
+                                  <td className="p-2 font-medium">{p.name}</td>
+                                  <td className="p-2 text-stone-500 font-mono">{p.email}</td>
+                                  <td className="p-2 text-stone-400 font-mono">{p.phone || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {parsedInvestors.length > 10 && (
+                            <p className="p-2 bg-stone-50/50 text-[10px] text-center text-stone-400 italic font-mono border-t border-stone-100">
+                              Showing first 10 of {parsedInvestors.length} records.
+                            </p>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={bulkUploading}
+                          onClick={handleBulkUploadInvestors}
+                          className="w-full bg-[#1B4332] hover:bg-[#2D6A4F] disabled:bg-stone-300 text-white text-xs font-mono font-bold p-3 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all duration-200"
+                        >
+                          {bulkUploading ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              <span>Uploading & configuring {parsedInvestors.length} accounts...</span>
+                            </>
+                          ) : (
+                            <>
+                              <UploadCloud className="h-4 w-4" />
+                              <span>Process & Provision {parsedInvestors.length} Investors</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Bulk results report block */}
+                    {bulkResults && (
+                      <div className="border rounded-xl p-4 space-y-3 bg-white shadow-sm border-stone-200 animate-fade-in">
+                        <div className="flex items-center gap-2 border-b border-stone-100 pb-2">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                          <h4 className="font-sans font-bold text-sm text-stone-800">
+                            Bulk Import Complete
+                          </h4>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 text-center">
+                          <div className="bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-100">
+                            <p className="text-[10px] text-emerald-600 font-mono uppercase font-bold">Imported</p>
+                            <p className="text-xl font-mono font-bold text-emerald-800">{bulkResults.successCount}</p>
+                          </div>
+                          <div className="bg-rose-50/60 p-2.5 rounded-lg border border-rose-100">
+                            <p className="text-[10px] text-rose-500 font-mono uppercase font-bold">Warnings</p>
+                            <p className="text-xl font-mono font-bold text-rose-800">{bulkResults.failCount}</p>
+                          </div>
+                          <div className="bg-stone-50 p-2.5 rounded-lg border border-stone-200">
+                            <p className="text-[10px] text-stone-500 font-mono uppercase font-bold">Total Scanned</p>
+                            <p className="text-xl font-mono font-bold text-stone-800">{bulkResults.total}</p>
+                          </div>
+                        </div>
+
+                        {bulkResults.errors && bulkResults.errors.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] uppercase font-mono font-bold text-rose-600">Import Warnings & Skips</p>
+                            <div className="max-h-[140px] overflow-y-auto border border-stone-100 rounded-lg p-2.5 space-y-1.5 bg-stone-50 shadow-inner">
+                              {bulkResults.errors.map((err: any, idx: number) => (
+                                <div key={idx} className="text-xs text-stone-600 flex items-start gap-1.5 font-mono">
+                                  <span className="text-rose-600 font-bold">[Row {err.row}]</span>
+                                  <span>
+                                    {err.username ? `(${err.username}) ` : ''}
+                                    {err.error}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {bulkResults.successCount > 0 && (
+                          <p className="text-[10px] font-mono text-emerald-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
+                            ✓ Welcome letters & portals registration logs loaded into the dispatch outbox queue.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ALLOCATE PLOT FORM */}

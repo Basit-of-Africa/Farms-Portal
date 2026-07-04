@@ -2574,6 +2574,130 @@ app.post('/api/users/create', requireAuth, (req, res) => {
   res.status(201).json(createdUser);
 });
 
+// Admin command: Manage bulk user creation (Admin only)
+app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
+  const currentUser = (req as any).user as User;
+  if (currentUser.role !== UserRole.ADMIN) {
+    return res.status(403).json({ error: 'Restricted to super administrators.' });
+  }
+
+  const { investors } = req.body;
+  if (!Array.isArray(investors)) {
+    return res.status(400).json({ error: 'Payload must contain an "investors" array.' });
+  }
+
+  const results = {
+    total: investors.length,
+    successCount: 0,
+    failCount: 0,
+    added: [] as any[],
+    errors: [] as { row: number; username?: string; name?: string; error: string }[]
+  };
+
+  const usersToAdd: User[] = [];
+
+  for (let i = 0; i < investors.length; i++) {
+    const rowNum = i + 1;
+    const item = investors[i];
+    const { username, name, email, phone, password } = item;
+
+    if (!username || !name || !email) {
+      results.failCount++;
+      results.errors.push({
+        row: rowNum,
+        username: username || '',
+        name: name || '',
+        error: 'Missing required fields: Username, Name, and Email are mandatory.'
+      });
+      continue;
+    }
+
+    const cleanUsername = String(username).trim();
+    const cleanEmail = String(email).trim();
+    const cleanName = String(name).trim();
+    const cleanPhone = phone ? String(phone).trim() : '';
+
+    // Check duplicate in db.users or already in usersToAdd list
+    const isDuplicateInDb = db.users.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
+    const isDuplicateInBatch = usersToAdd.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
+
+    if (isDuplicateInDb || isDuplicateInBatch) {
+      results.failCount++;
+      results.errors.push({
+        row: rowNum,
+        username: cleanUsername,
+        name: cleanName,
+        error: `Username "${cleanUsername}" is already registered.`
+      });
+      continue;
+    }
+
+    const isEmailInDb = db.users.some(u => u.email.toLowerCase() === cleanEmail.toLowerCase());
+    const isEmailInBatch = usersToAdd.some(u => u.email.toLowerCase() === cleanEmail.toLowerCase());
+    if (isEmailInDb || isEmailInBatch) {
+      results.failCount++;
+      results.errors.push({
+        row: rowNum,
+        username: cleanUsername,
+        name: cleanName,
+        error: `Email "${cleanEmail}" is already registered.`
+      });
+      continue;
+    }
+
+    const newUserId = 'user-' + (Date.now() + i);
+    const createdUser: User = {
+      id: newUserId,
+      username: cleanUsername,
+      name: cleanName,
+      email: cleanEmail,
+      phone: cleanPhone,
+      role: UserRole.INVESTOR,
+      password: password || undefined
+    };
+
+    usersToAdd.push(createdUser);
+    results.successCount++;
+    results.added.push({ id: createdUser.id, username: createdUser.username, name: createdUser.name });
+  }
+
+  // Save if any succeeded
+  if (usersToAdd.length > 0) {
+    db.users.push(...usersToAdd);
+    saveDb();
+
+    // Send notifications/emails for each added user
+    usersToAdd.forEach(createdUser => {
+      const tempPassword = createdUser.password || 'Investor@1234';
+      dispatchEmail(
+        createdUser.email,
+        'Welcome to Adubiaro Farm Estates Portal',
+        `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
+        `<h3>Welcome to Adubiaro Estates Private Portal</h3>
+         <p>Dear ${createdUser.name},</p>
+         <p>An administrative account has been securely setup for you on our private client portal.</p>
+         <p>Your roles permissions: <b>INVESTOR</b></p>
+         <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
+           <tr><td><b>Authorized Username:</b></td><td>${createdUser.username}</td></tr>
+           <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
+           <tr><td><b>Sign-Up Email:</b></td><td>${createdUser.email}</td></tr>
+         </table>
+         <p>You are required to log in and change your temporary password immediately upon landing.</p>
+         <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Access Login Dashboard</a></p>`,
+        'Welcome Registration',
+        {
+          senderId: currentUser.id,
+          recipientId: createdUser.id,
+          relatedType: 'welcome',
+          relatedId: createdUser.id
+        }
+      );
+    });
+  }
+
+  res.status(200).json(results);
+});
+
 // Admin Route to list system users list
 app.get('/api/admin/users', requireAuth, (req, res) => {
   const user = (req as any).user as User;
