@@ -1248,21 +1248,21 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
       </div>
 
       {/* Stats KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div 
           onClick={() => setSubView('investors')}
-          className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center justify-between gap-4.5 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
+          className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center justify-between gap-3 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
           title="Click to view full Investor Directory"
         >
-          <div className="flex items-center gap-4.5">
-            <div className="p-3 bg-[#52B788]/10 rounded-2xl text-[#1B4332] group-hover:bg-[#52B788]/20 transition-all duration-300">
-              <Users className="h-6 w-6 text-[#2D6A4F] group-hover:scale-105 transition duration-300" />
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-[#1B4332] group-hover:bg-[#52B788]/20 transition-all duration-300">
+              <Users className="h-5.5 w-5.5 text-[#2D6A4F] group-hover:scale-105 transition duration-300" />
             </div>
             <div>
               <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider group-hover:text-[#2D6A4F] transition duration-300">Total Investors</div>
-              <div className="text-2xl font-bold text-[#1B4332] font-serif mt-0.5 flex items-center gap-1.5">
+              <div className="text-xl font-bold text-[#1B4332] font-serif mt-0.5 flex items-center gap-1.5">
                 <span>{stats?.totalInvestors}</span>
-                <span className="text-xs font-mono font-bold text-emerald-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition duration-300">→ VIEW</span>
+                <span className="text-[10px] font-mono font-bold text-emerald-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition duration-300">→ VIEW</span>
               </div>
             </div>
           </div>
@@ -1270,53 +1270,50 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
 
         <div 
           onClick={() => setSubView('managers')}
-          className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center justify-between gap-4.5 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
+          className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center justify-between gap-3 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
           title="Click to view full Farm Managers Directory"
         >
-          <div className="flex items-center gap-4.5">
-            <div className="p-3 bg-[#52B788]/10 rounded-2xl text-[#1B4332] group-hover:bg-[#52B788]/20 transition-all duration-300">
-              <Briefcase className="h-6 w-6 text-[#2D6A4F] group-hover:scale-105 transition duration-300" />
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-[#1B4332] group-hover:bg-[#52B788]/20 transition-all duration-300">
+              <Briefcase className="h-5.5 w-5.5 text-[#2D6A4F] group-hover:scale-105 transition duration-300" />
             </div>
             <div>
               <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider group-hover:text-[#2D6A4F] transition duration-300">Farm Managers</div>
-              <div className="text-2xl font-bold text-[#1B4332] font-serif mt-0.5 flex items-center gap-1.5">
+              <div className="text-xl font-bold text-[#1B4332] font-serif mt-0.5 flex items-center gap-1.5">
                 <span>{stats?.totalManagers}</span>
-                <span className="text-xs font-mono font-bold text-emerald-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition duration-300">→ VIEW</span>
+                <span className="text-[10px] font-mono font-bold text-emerald-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition duration-300">→ VIEW</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center gap-4.5">
-          <div className="p-3 bg-amber-500/10 rounded-2xl text-[#D4A017]">
-            <Sprout className="h-6 w-6" />
+        <div className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center gap-3">
+          <div className="p-2.5 bg-amber-500/10 rounded-2xl text-[#D4A017]">
+            <Sprout className="h-5.5 w-5.5" />
           </div>
           <div>
             <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider">Deeded plots</div>
-            <div className="text-xl font-bold text-[#1B4332] font-serif mt-0.5">{stats?.totalPlotsCount} <span className="text-xs text-gray-400">/ {stats?.totalFarms} Farms</span></div>
+            <div className="text-lg font-bold text-[#1B4332] font-serif mt-0.5">{stats?.totalPlotsCount} <span className="text-xs text-gray-400">/ {stats?.totalFarms} Farms</span></div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center gap-4.5">
-          <div className="p-3 bg-[#D4A017]/10 rounded-2xl text-[#D4A017]">
-            <DollarSign className="h-6 w-6" />
+        <div className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center gap-3">
+          <div className="p-2.5 bg-[#D4A017]/10 rounded-2xl text-[#D4A017]">
+            <DollarSign className="h-5.5 w-5.5" />
           </div>
           <div>
             <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider">Invested Capital</div>
-            <div className="text-xl font-bold text-[#1B4332] font-serif mt-0.5">₦{stats?.totalInvestment?.toLocaleString()}</div>
+            <div className="text-lg font-bold text-[#1B4332] font-serif mt-0.5">₦{stats?.totalInvestment?.toLocaleString()}</div>
           </div>
         </div>
       </div>
 
-      {/* Farms Grid & Admin Controls Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Our Managed Estates Section */}
+      <div className="space-y-4">
+        <h2 className="font-sans font-extrabold text-xs text-[#2c3e35]/70 uppercase tracking-wider font-mono">Our Managed Estates</h2>
         
-        {/* Farm Cards List - left 5 cols */}
-        <div className="lg:col-span-5 space-y-4">
-          <h2 className="font-sans font-extrabold text-xs text-[#2c3e35]/70 uppercase tracking-wider font-mono">Our Managed Estates</h2>
-          
-          <div className="space-y-4">
-            {farms.map(farm => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {farms.map(farm => (
               <div 
                 key={farm.id}
                 onClick={() => onSelectFarm(farm.id)}
@@ -1350,12 +1347,12 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+          ))}
         </div>
+      </div>
 
-        {/* Administative Controls Tab Area - right 7 cols */}
-        <div className="lg:col-span-7 bg-white rounded-3xl border border-[#2D6A4F]/10 shadow-premium overflow-hidden">
+      {/* Administrative Controls Tab Area */}
+      <div className="bg-white rounded-3xl border border-[#2D6A4F]/10 shadow-premium overflow-hidden">
           
           {/* Internal tab selector */}
           <div className="flex border-b border-gray-100 bg-[#FBF9F4]/40 overflow-x-auto">
@@ -2914,7 +2911,6 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
           </div>
         </div>
 
-      </div>
     </div>
   );
 }
