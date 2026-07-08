@@ -187,7 +187,7 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
               Total Plots: <b className="text-gray-800 font-bold ml-1">{plots.length} Deeded</b>
             </div>
             <div>
-              Gross Acreage: <b className="text-gray-800 font-bold ml-1">{farm.totalHectares} ha</b>
+              Gross Acreage: <b className="text-gray-800 font-bold ml-1">{farm.totalHectares} acres/plots</b>
             </div>
             <div>
               Security Clearance: <b className="text-emerald-700 font-bold ml-1">AES-256</b>
@@ -402,7 +402,7 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
                   {plots.map((p) => (
                     <tr key={p.id} className="border-b last:border-0 border-gray-50 hover:bg-gray-50/50 transition">
                       <td className="py-4 px-3 font-mono font-bold text-gray-800">{p.plotNumber}</td>
-                      <td className="py-4 px-3 text-center font-mono text-gray-600">{p.sizeHectares} ha</td>
+                      <td className="py-4 px-3 text-center font-mono text-gray-600">{p.sizeHectares} {p.sizeUnit || 'acre'}</td>
                       <td className="py-4 px-3 text-gray-600 font-medium">{p.cropType}</td>
                       <td className="py-4 px-3">
                         <span className={`inline-block px-2.5 py-0.5 text-[9px] font-bold font-mono uppercase rounded-full ${getStatusBadge(p.status)}`}>

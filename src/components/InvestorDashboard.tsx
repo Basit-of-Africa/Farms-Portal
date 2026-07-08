@@ -135,7 +135,7 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
           </div>
           <div>
             <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Land Area</div>
-            <div className="text-xl font-extrabold text-gray-800 font-sans mt-1">{totalHectares.toFixed(1)} ha</div>
+            <div className="text-xl font-extrabold text-gray-800 font-sans mt-1">{totalHectares.toFixed(1)} acres/plots</div>
           </div>
         </div>
 
@@ -220,7 +220,7 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
                         <td className="py-4.5 px-2 font-mono font-bold text-[#1B4332]">{h.plotNumber || 'N/A'}</td>
                         <td className="py-4.5 px-2 text-[#2c3e35] font-semibold">{h.cropType || 'Oil Palm'}</td>
                         <td className="py-4.5 px-2 font-extrabold text-emerald-800 font-sans">₦{h.investmentAmount?.toLocaleString()}</td>
-                        <td className="py-4.5 px-2 text-gray-500 font-mono font-medium">{h.sizeHectares || '1.0'} ha</td>
+                        <td className="py-4.5 px-2 text-gray-500 font-mono font-medium">{h.sizeHectares || '1.0'} {h.sizeUnit || 'acre'}</td>
                         <td className="py-4.5 px-2 font-mono text-gray-400 font-bold">{h.contractRef || 'CON-DEED'}</td>
                       </tr>
                     ))}

@@ -644,6 +644,7 @@ function mapPlotFromDb(row: any): FarmPlot {
     farmId: row.farm_id,
     plotNumber: row.plot_number,
     sizeHectares: Number(row.size_hectares || 0),
+    sizeUnit: row.size_unit || 'acre',
     cropType: row.crop_type,
     status: row.status as PlotStatus
   };
@@ -850,15 +851,16 @@ async function saveDbToPostgres() {
     // 3. Synchronize Plots
     for (const plot of db.plots) {
       await client.query(
-        `INSERT INTO plots (id, farm_id, plot_number, size_hectares, crop_type, status)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO plots (id, farm_id, plot_number, size_hectares, size_unit, crop_type, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            farm_id = EXCLUDED.farm_id,
            plot_number = EXCLUDED.plot_number,
            size_hectares = EXCLUDED.size_hectares,
+           size_unit = EXCLUDED.size_unit,
            crop_type = EXCLUDED.crop_type,
            status = EXCLUDED.status`,
-        [plot.id, plot.farmId, plot.plotNumber, plot.sizeHectares, plot.cropType, plot.status]
+        [plot.id, plot.farmId, plot.plotNumber, plot.sizeHectares, plot.sizeUnit || 'acre', plot.cropType, plot.status]
       );
     }
 
@@ -1145,6 +1147,7 @@ async function initPostgres() {
         farm_id VARCHAR(50) NOT NULL,
         plot_number VARCHAR(50) NOT NULL,
         size_hectares DOUBLE PRECISION NOT NULL,
+        size_unit VARCHAR(50) DEFAULT 'acre',
         crop_type VARCHAR(100) NOT NULL,
         status VARCHAR(50) NOT NULL
       );
@@ -1228,6 +1231,7 @@ async function initPostgres() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
       ALTER TABLE updates ADD COLUMN IF NOT EXISTS updated_at VARCHAR(100);
       ALTER TABLE updates ADD COLUMN IF NOT EXISTS comments JSONB DEFAULT '[]';
+      ALTER TABLE plots ADD COLUMN IF NOT EXISTS size_unit VARCHAR(50) DEFAULT 'acre';
       ALTER TABLE simulated_emails ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
       ALTER TABLE simulated_emails ADD COLUMN IF NOT EXISTS read_at VARCHAR(100);
       ALTER TABLE simulated_emails ADD COLUMN IF NOT EXISTS sender_id VARCHAR(50);
@@ -2998,7 +3002,7 @@ app.post('/api/admin/plots/create', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  const { farmId, plotNumber, sizeHectares, cropType, InvestorId, investmentAmount } = req.body;
+  const { farmId, plotNumber, sizeHectares, sizeUnit, cropType, InvestorId, investmentAmount } = req.body;
 
   const farm = db.farms.find(f => f.id === farmId);
   if (!farm) {
@@ -3011,6 +3015,7 @@ app.post('/api/admin/plots/create', requireAuth, (req, res) => {
     farmId,
     plotNumber,
     sizeHectares: parseFloat(sizeHectares || '1.0'),
+    sizeUnit: sizeUnit || 'acre',
     cropType: cropType || 'Oil Palm',
     status: PlotStatus.ACTIVE
   };

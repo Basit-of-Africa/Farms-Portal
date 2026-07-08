@@ -111,6 +111,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
   const [allocFarmId, setAllocFarmId] = useState('');
   const [allocPlotNumber, setAllocPlotNumber] = useState('');
   const [allocSize, setAllocSize] = useState('');
+  const [allocSizeUnit, setAllocSizeUnit] = useState<'acre' | 'plot'>('acre');
   const [allocCrop, setAllocCrop] = useState('Oil Palm (Tenera Hybrid)');
   const [allocInvestorId, setAllocInvestorId] = useState('');
   const [allocAmount, setAllocAmount] = useState('');
@@ -571,6 +572,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
           farmId: allocFarmId,
           plotNumber: allocPlotNumber,
           sizeHectares: allocSize,
+          sizeUnit: allocSizeUnit,
           cropType: allocCrop,
           InvestorId: allocInvestorId,
           investmentAmount: allocAmount
@@ -1341,7 +1343,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
                   
                   <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4 text-xs font-mono">
                     <span className="text-gray-400 font-bold">Plots: <b className="text-gray-700">{farm.totalPlots}</b></span>
-                    <span className="text-gray-400 font-bold">Hectares: <b className="text-gray-700">{farm.totalHectares} ha</b></span>
+                    <span className="text-gray-400 font-bold">Size: <b className="text-gray-700">{farm.totalHectares} acres/plots</b></span>
                     <span className="text-[#2D6A4F] font-bold flex items-center gap-1 group-hover:underline">
                       Explore Portal <ArrowRight className="h-3 w-3" />
                     </span>
@@ -2071,16 +2073,26 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Plot size (hectares)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="e.g. 1.8"
-                      value={allocSize}
-                      onChange={(e) => setAllocSize(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
-                    />
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Plot size & unit</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="e.g. 1.8"
+                        value={allocSize}
+                        onChange={(e) => setAllocSize(e.target.value)}
+                        className="flex-1 text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                      />
+                      <select
+                        value={allocSizeUnit}
+                        onChange={(e) => setAllocSizeUnit(e.target.value as 'acre' | 'plot')}
+                        className="w-28 text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332] cursor-pointer font-semibold text-gray-700"
+                      >
+                        <option value="acre">acre</option>
+                        <option value="plot">plot</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>

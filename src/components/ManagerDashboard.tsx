@@ -373,7 +373,7 @@ export default function ManagerDashboard({ user, token, onSelectFarm, triggerRef
                       <div className="mt-3 flex items-center gap-3 text-[10px] font-mono text-gray-400 uppercase font-bold">
                         <span>Plots: <b className="text-[#1B4332] font-extrabold">{farm.totalPlots}</b></span>
                         <span>•</span>
-                        <span>{farm.totalHectares} Hectares</span>
+                        <span>{farm.totalHectares} Acres/Plots</span>
                       </div>
                     </div>
                   </div>

@@ -199,7 +199,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
                               Plot {plot.plotNumber}
                             </div>
                             <div className="text-[10px] text-gray-400 dark:text-stone-500 truncate">
-                              {plot.cropType} • {plot.sizeHectares} Hectares ({plot.status})
+                              {plot.cropType} • {plot.sizeHectares} {plot.sizeUnit || 'acre'} ({plot.status})
                             </div>
                           </div>
                         </div>

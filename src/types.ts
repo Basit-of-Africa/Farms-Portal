@@ -78,6 +78,7 @@ export interface FarmPlot {
   farmId: string;
   plotNumber: string;
   sizeHectares: number;
+  sizeUnit?: string;
   cropType: string;
   status: PlotStatus;
 }
