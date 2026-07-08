@@ -121,7 +121,7 @@ export default function DashboardStats({ stats, loading }: DashboardStatsProps) 
             <Sprout className="h-6 w-6" />
           </div>
           <span className="bg-[#52B788]/10 dark:bg-[#52B788]/15 text-emerald-800 dark:text-[#52B788] text-[10px] font-mono font-bold tracking-wider uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
-            Soil Telemetry <MapPin className="h-3 w-3" />
+            Farm Estates <MapPin className="h-3 w-3" />
           </span>
         </div>
         <div className="mt-4">
