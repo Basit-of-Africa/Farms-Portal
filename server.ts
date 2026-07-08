@@ -2599,11 +2599,27 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
   };
 
   const usersToAdd: User[] = [];
+  const plotsToAdd: FarmPlot[] = [];
+  const investorPlotsToAdd: InvestorPlot[] = [];
+  const affectedFarmIds = new Set<string>();
 
   for (let i = 0; i < investors.length; i++) {
     const rowNum = i + 1;
     const item = investors[i];
-    const { username, name, email, phone, password } = item;
+    const { 
+      username, 
+      name, 
+      email, 
+      phone, 
+      password, 
+      farmId, 
+      farmEstate, 
+      sizeHectares, 
+      sizeUnit, 
+      cropType, 
+      investmentAmount, 
+      plotNumber 
+    } = item;
 
     if (!username || !name || !email) {
       results.failCount++;
@@ -2649,6 +2665,29 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
       continue;
     }
 
+    // Resolve Farm if supplied
+    let matchedFarm = null;
+    const farmSearch = farmId || farmEstate;
+    if (farmSearch) {
+      const cleanSearch = String(farmSearch).trim().toLowerCase();
+      matchedFarm = db.farms.find(f => 
+        f.id.toLowerCase() === cleanSearch || 
+        f.name.toLowerCase() === cleanSearch || 
+        f.name.toLowerCase().includes(cleanSearch)
+      );
+
+      if (!matchedFarm) {
+        results.failCount++;
+        results.errors.push({
+          row: rowNum,
+          username: cleanUsername,
+          name: cleanName,
+          error: `Farm Estate "${farmSearch}" not found in the system.`
+        });
+        continue;
+      }
+    }
+
     const newUserId = 'user-' + (Date.now() + i);
     const createdUser: User = {
       id: newUserId,
@@ -2660,6 +2699,47 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
       password: password || undefined
     };
 
+    // Allocate plot if matched farm is found
+    if (matchedFarm) {
+      const pSize = parseFloat(sizeHectares || '1.0');
+      const pUnit = String(sizeUnit || 'acre').trim().toLowerCase() === 'plot' ? 'plot' : 'acre';
+      const pCrop = String(cropType || 'Oil Palm').trim();
+      const pAmount = parseFloat(investmentAmount || '0');
+      
+      let pNum = String(plotNumber || '').trim();
+      if (!pNum) {
+        const existingPlotsCount = db.plots.filter(p => p.farmId === matchedFarm!.id).length;
+        const pendingCount = plotsToAdd.filter(p => p.farmId === matchedFarm!.id).length;
+        pNum = `P-BLK-${matchedFarm.id.replace('farm-', '')}-${existingPlotsCount + pendingCount + 1}`;
+      }
+
+      const plotId = 'plot-' + (Date.now() + i + 1000);
+      const newPlot: FarmPlot = {
+        id: plotId,
+        farmId: matchedFarm.id,
+        plotNumber: pNum,
+        sizeHectares: pSize,
+        sizeUnit: pUnit,
+        cropType: pCrop,
+        status: PlotStatus.ACTIVE
+      };
+
+      const invPlot: InvestorPlot = {
+        id: 'invplot-' + (Date.now() + i + 1000),
+        investorId: createdUser.id,
+        plotId,
+        investmentAmount: pAmount,
+        ownershipPercentage: 100,
+        startDate: new Date().toISOString().split('T')[0],
+        contractRef: 'CON-BLK-' + (Date.now() + i).toString().substring(7),
+        isActive: true
+      };
+
+      plotsToAdd.push(newPlot);
+      investorPlotsToAdd.push(invPlot);
+      affectedFarmIds.add(matchedFarm.id);
+    }
+
     usersToAdd.push(createdUser);
     results.successCount++;
     results.added.push({ id: createdUser.id, username: createdUser.username, name: createdUser.name });
@@ -2668,6 +2748,22 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
   // Save if any succeeded
   if (usersToAdd.length > 0) {
     db.users.push(...usersToAdd);
+    if (plotsToAdd.length > 0) {
+      db.plots.push(...plotsToAdd);
+    }
+    if (investorPlotsToAdd.length > 0) {
+      db.investorPlots.push(...investorPlotsToAdd);
+    }
+
+    // Recompute estate totals for affected farms
+    affectedFarmIds.forEach(fId => {
+      const farm = db.farms.find(f => f.id === fId);
+      if (farm) {
+        farm.totalPlots = db.plots.filter(p => p.farmId === fId).length;
+        farm.totalHectares = db.plots.filter(p => p.farmId === fId).reduce((s, p) => s + p.sizeHectares, 0);
+      }
+    });
+
     saveDb();
 
     // Send notifications/emails for each added user

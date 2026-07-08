@@ -390,11 +390,11 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
   // Download Import Template
   const handleDownloadSampleCsv = () => {
     const csvContent = 
-      "username,name,email,phone,password\n" +
-      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026\n" +
-      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99\n" +
-      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,\n" +
-      "funmi_peaks,Funmilayo Alao,funmi@estatemanager.com,,\n";
+      "username,name,email,phone,password,farmEstate,plotNumber,sizeHectares,sizeUnit,cropType,investmentAmount\n" +
+      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026,Adubiaro Oil Palm Estate,P-101,2.5,acre,Oil Palm,5000000\n" +
+      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99,Ondo Cocoa Hills,,1.2,plot,Cocoa,1800000\n" +
+      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,,Adubiaro Oil Palm Estate,P-102,3.0,acre,Oil Palm,6000000\n" +
+      "funmi_peaks,Funmilayo Alao,funmi@estatemanager.com,,,,,,,,\n";
       
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -425,7 +425,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
           return;
         }
         
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, '').replace(/_/g, ''));
         
         const hasUsername = headers.includes('username');
         const hasName = headers.includes('name');
@@ -465,6 +465,14 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             if (header === 'email') record.email = val;
             if (header === 'phone' || header === 'telephone') record.phone = val;
             if (header === 'password') record.password = val;
+            
+            // Plot allocation fields
+            if (header === 'farmestate' || header === 'farm' || header === 'estate') record.farmEstate = val;
+            if (header === 'plotnumber' || header === 'plotno') record.plotNumber = val;
+            if (header === 'sizehectares' || header === 'plotsize' || header === 'size') record.sizeHectares = val;
+            if (header === 'sizeunit' || header === 'unit' || header === 'plotunit') record.sizeUnit = val;
+            if (header === 'croptype' || header === 'crop') record.cropType = val;
+            if (header === 'investmentamount' || header === 'investment' || header === 'amount') record.investmentAmount = val;
           });
           
           if (record.username || record.name || record.email) {
@@ -1143,8 +1151,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   <code className="bg-stone-200 dark:bg-stone-800 px-1 py-0.5 rounded text-red-700 dark:text-red-400 font-mono">name</code>, and 
                   <code className="bg-stone-200 dark:bg-stone-800 px-1 py-0.5 rounded text-red-700 dark:text-red-400 font-mono">email</code> columns.
                 </p>
+                <p className="text-gray-500 dark:text-stone-400 leading-relaxed text-[11px] bg-white dark:bg-stone-900 p-2.5 rounded-xl border border-stone-200/40">
+                  ⚡ <b>Register User & Link Plot</b>:<br />
+                  Optionally supply <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">farmEstate</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">plotNumber</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">sizeHectares</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">sizeUnit</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">cropType</code>, and <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">investmentAmount</code> columns to automatically create and allocate a deeded plot inside the designated farm.
+                </p>
                 <div className="flex justify-between items-center pt-2">
-                  <span className="text-[10px] text-gray-400 font-mono">Optional: phone, password</span>
+                  <span className="text-[10px] text-gray-400 font-mono">Optional: phone, password, plot fields</span>
                   <button
                     type="button"
                     onClick={handleDownloadSampleCsv}
