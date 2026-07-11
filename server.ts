@@ -2834,6 +2834,256 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
   res.status(200).json(results);
 });
 
+// New endpoint for bulk-importing users, farm estates, and plot assignments from CSV/JSON parsing
+app.post('/api/import/data', requireAuth, (req, res) => {
+  const currentUser = (req as any).user as User;
+  if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.FARM_MANAGER) {
+    return res.status(403).json({ error: 'Restricted to super administrators and managers.' });
+  }
+
+  let investors = req.body.investors || req.body.records || req.body.data;
+  if (!investors && Array.isArray(req.body)) {
+    investors = req.body;
+  }
+
+  if (!Array.isArray(investors)) {
+    return res.status(400).json({ error: 'Payload must contain a list of records in "investors", "records", "data", or as a top-level array.' });
+  }
+
+  const results = {
+    total: investors.length,
+    successCount: 0,
+    failCount: 0,
+    farmsCreatedCount: 0,
+    plotsCreatedCount: 0,
+    added: [] as any[],
+    errors: [] as { row: number; username?: string; name?: string; error: string }[]
+  };
+
+  const usersToAdd: User[] = [];
+  const plotsToAdd: FarmPlot[] = [];
+  const investorPlotsToAdd: InvestorPlot[] = [];
+  const farmsToAdd: Farm[] = [];
+  const affectedFarmIds = new Set<string>();
+
+  for (let i = 0; i < investors.length; i++) {
+    const rowNum = i + 1;
+    const item = investors[i];
+
+    const { 
+      username, 
+      name, 
+      email, 
+      phone, 
+      password, 
+      farmEstate, 
+      sizeHectares, 
+      sizeUnit, 
+      cropType, 
+      investmentAmount, 
+      plotNumber,
+      farmLocation,
+      location,
+      farmState,
+      state,
+      farmDescription,
+      description,
+      farmDateEstablished
+    } = item;
+
+    if (!username || !name || !email) {
+      results.failCount++;
+      results.errors.push({
+        row: rowNum,
+        username: username || undefined,
+        name: name || undefined,
+        error: 'Missing required profile fields (username, name, email are mandatory).'
+      });
+      continue;
+    }
+
+    const cleanUsername = String(username).trim().toLowerCase();
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanName = String(name).trim();
+    const cleanPhone = phone ? String(phone).trim() : '';
+
+    // Guard duplicate user emails or usernames
+    const duplicateUser = db.users.find(u => 
+      u.username.toLowerCase() === cleanUsername || 
+      u.email.toLowerCase() === cleanEmail
+    );
+
+    if (duplicateUser) {
+      results.failCount++;
+      results.errors.push({
+        row: rowNum,
+        username: cleanUsername,
+        name: cleanName,
+        error: `User with username "${cleanUsername}" or email "${cleanEmail}" already exists in system.`
+      });
+      continue;
+    }
+
+    // Resolve or Auto-Create Farm Estate
+    let matchedFarm: Farm | undefined;
+    const farmSearch = farmEstate || farmLocation || location;
+    if (farmSearch) {
+      const cleanSearch = String(farmSearch).trim().toLowerCase();
+      
+      // Look in existing db
+      matchedFarm = db.farms.find(f => 
+        f.id.toLowerCase() === cleanSearch || 
+        f.name.toLowerCase() === cleanSearch || 
+        f.name.toLowerCase().includes(cleanSearch)
+      );
+
+      // Look in local batch farmsToAdd
+      if (!matchedFarm) {
+        matchedFarm = farmsToAdd.find(f => 
+          f.name.toLowerCase() === cleanSearch || 
+          f.name.toLowerCase().includes(cleanSearch)
+        );
+      }
+
+      // If not found, dynamically create the new Farm Estate!
+      if (!matchedFarm) {
+        const farmIdStr = 'farm-' + (Date.now() + i + 5000);
+        const fLoc = farmLocation || location || 'Ondo Region';
+        const fState = farmState || state || 'Ondo';
+        const fDesc = farmDescription || description || `Imported Farm Estate: ${farmSearch}`;
+        const fDate = farmDateEstablished || new Date().toISOString().split('T')[0];
+
+        matchedFarm = {
+          id: farmIdStr,
+          name: String(farmSearch).trim(),
+          location: String(fLoc).trim(),
+          state: String(fState).trim(),
+          totalPlots: 0,
+          totalHectares: 0,
+          description: String(fDesc).trim(),
+          coverImage: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80',
+          dateEstablished: String(fDate).trim(),
+          isActive: true
+        };
+        farmsToAdd.push(matchedFarm);
+        results.farmsCreatedCount++;
+      }
+    }
+
+    const newUserId = 'user-' + (Date.now() + i);
+    const createdUser: User = {
+      id: newUserId,
+      username: cleanUsername,
+      name: cleanName,
+      email: cleanEmail,
+      phone: cleanPhone,
+      role: UserRole.INVESTOR,
+      password: password || undefined
+    };
+
+    // Allocate plot if matched farm is found
+    if (matchedFarm) {
+      const pSize = parseFloat(sizeHectares || '1.0');
+      const pUnit = String(sizeUnit || 'acre').trim().toLowerCase() === 'plot' ? 'plot' : 'acre';
+      const pCrop = String(cropType || 'Oil Palm').trim();
+      const pAmount = parseFloat(investmentAmount || '0');
+      
+      let pNum = String(plotNumber || '').trim();
+      if (!pNum) {
+        const existingPlotsCount = db.plots.filter(p => p.farmId === matchedFarm!.id).length;
+        const pendingCount = plotsToAdd.filter(p => p.farmId === matchedFarm!.id).length;
+        pNum = `P-BLK-${matchedFarm.id.replace('farm-', '')}-${existingPlotsCount + pendingCount + 1}`;
+      }
+
+      const plotId = 'plot-' + (Date.now() + i + 1000);
+      const newPlot: FarmPlot = {
+        id: plotId,
+        farmId: matchedFarm.id,
+        plotNumber: pNum,
+        sizeHectares: pSize,
+        sizeUnit: pUnit,
+        cropType: pCrop,
+        status: PlotStatus.ACTIVE
+      };
+
+      const invPlot: InvestorPlot = {
+        id: 'invplot-' + (Date.now() + i + 1000),
+        investorId: createdUser.id,
+        plotId,
+        investmentAmount: pAmount,
+        ownershipPercentage: 100,
+        startDate: new Date().toISOString().split('T')[0],
+        contractRef: 'CON-BLK-' + (Date.now() + i).toString().substring(7),
+        isActive: true
+      };
+
+      plotsToAdd.push(newPlot);
+      investorPlotsToAdd.push(invPlot);
+      affectedFarmIds.add(matchedFarm.id);
+      results.plotsCreatedCount++;
+    }
+
+    usersToAdd.push(createdUser);
+    results.successCount++;
+    results.added.push({ id: createdUser.id, username: createdUser.username, name: createdUser.name });
+  }
+
+  // Save if any succeeded
+  if (usersToAdd.length > 0) {
+    if (farmsToAdd.length > 0) {
+      db.farms.push(...farmsToAdd);
+    }
+    db.users.push(...usersToAdd);
+    if (plotsToAdd.length > 0) {
+      db.plots.push(...plotsToAdd);
+    }
+    if (investorPlotsToAdd.length > 0) {
+      db.investorPlots.push(...investorPlotsToAdd);
+    }
+
+    // Recompute estate totals for affected farms
+    affectedFarmIds.forEach(fId => {
+      const farm = db.farms.find(f => f.id === fId);
+      if (farm) {
+        farm.totalPlots = db.plots.filter(p => p.farmId === fId).length;
+        farm.totalHectares = db.plots.filter(p => p.farmId === fId).reduce((s, p) => s + p.sizeHectares, 0);
+      }
+    });
+
+    saveDb();
+
+    // Send notifications/emails for each added user
+    usersToAdd.forEach(createdUser => {
+      const tempPassword = createdUser.password || 'Investor@1234';
+      dispatchEmail(
+        createdUser.email,
+        'Welcome to Adubiaro Farm Estates Portal',
+        `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
+        `<h3>Welcome to Adubiaro Estates Private Portal</h3>
+         <p>Dear ${createdUser.name},</p>
+         <p>An administrative account has been securely setup for you on our private client portal.</p>
+         <p>Your roles permissions: <b>INVESTOR</b></p>
+         <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
+           <tr><td><b>Authorized Username:</b></td><td>${createdUser.username}</td></tr>
+           <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
+           <tr><td><b>Sign-Up Email:</b></td><td>${createdUser.email}</td></tr>
+         </table>
+         <p>You are required to log in and change your temporary password immediately upon landing.</p>
+         <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Access Login Dashboard</a></p>`,
+        'Welcome Registration',
+        {
+          senderId: currentUser.id,
+          recipientId: createdUser.id,
+          relatedType: 'welcome',
+          relatedId: createdUser.id
+        }
+      );
+    });
+  }
+
+  res.status(200).json(results);
+});
+
 // Admin Route to list system users list
 app.get('/api/admin/users', requireAuth, (req, res) => {
   const user = (req as any).user as User;
