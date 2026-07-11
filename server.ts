@@ -3216,6 +3216,103 @@ app.post('/api/admin/users/:id/update', requireAuth, (req, res) => {
   res.json({ success: true, user: targetUser });
 });
 
+// Admin Route to perform bulk actions on users
+app.post('/api/admin/users/bulk-action', requireAuth, (req, res) => {
+  const currentUser = (req as any).user as User;
+  if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.FARM_MANAGER) {
+    return res.status(403).json({ error: 'Admin or Manager access required' });
+  }
+
+  const { userIds, action, value } = req.body;
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return res.status(400).json({ error: 'No user IDs selected.' });
+  }
+
+  if (!action) {
+    return res.status(400).json({ error: 'No action selected.' });
+  }
+
+  let updatedCount = 0;
+  const previousStates: Array<{ id: string; role: UserRole; isActive: boolean }> = [];
+
+  userIds.forEach(id => {
+    const targetUser = db.users.find(u => u.id === id);
+    if (targetUser) {
+      // Record original state in case we want to undo
+      const originalState = {
+        id: targetUser.id,
+        role: targetUser.role,
+        isActive: targetUser.isActive !== false
+      };
+
+      let changed = false;
+
+      if (action === 'update-role') {
+        if (targetUser.id === currentUser.id && value !== currentUser.role) {
+          return; // Prevent self-demotion
+        }
+        if (targetUser.role !== value) {
+          targetUser.role = value as UserRole;
+          changed = true;
+        }
+      } else if (action === 'disable-account') {
+        if (targetUser.id === currentUser.id) {
+          return; // Prevent disabling self
+        }
+        if (targetUser.isActive !== false) {
+          targetUser.isActive = false;
+          changed = true;
+        }
+      } else if (action === 'enable-account') {
+        if (targetUser.isActive === false) {
+          targetUser.isActive = true;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        previousStates.push(originalState);
+        updatedCount++;
+      }
+    }
+  });
+
+  if (updatedCount > 0) {
+    saveDb();
+  }
+
+  res.json({ success: true, count: updatedCount, previousStates });
+});
+
+// Admin Route to bulk-undo previous user states
+app.post('/api/admin/users/bulk-undo', requireAuth, (req, res) => {
+  const currentUser = (req as any).user as User;
+  if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.FARM_MANAGER) {
+    return res.status(403).json({ error: 'Admin or Manager access required' });
+  }
+
+  const { previousStates } = req.body;
+  if (!Array.isArray(previousStates) || previousStates.length === 0) {
+    return res.status(400).json({ error: 'No previous states supplied for undo.' });
+  }
+
+  let undoneCount = 0;
+  previousStates.forEach(state => {
+    const targetUser = db.users.find(u => u.id === state.id);
+    if (targetUser) {
+      targetUser.role = state.role;
+      targetUser.isActive = state.isActive;
+      undoneCount++;
+    }
+  });
+
+  if (undoneCount > 0) {
+    saveDb();
+  }
+
+  res.json({ success: true, count: undoneCount });
+});
+
 // Admin Route to message a user directly
 app.post('/api/admin/users/:id/message', requireAuth, upload.single('attachment'), async (req, res) => {
   const currentUser = (req as any).user as User;

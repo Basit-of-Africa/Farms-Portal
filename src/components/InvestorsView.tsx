@@ -21,7 +21,11 @@ import {
   FileVideo,
   Download,
   Upload,
-  FileText
+  FileText,
+  CheckSquare,
+  Square,
+  Undo,
+  RotateCcw
 } from 'lucide-react';
 import { User as UserType, UserRole } from '../types';
 
@@ -89,6 +93,220 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
+  // Batch edit states
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [isBulkMessageModalOpen, setIsBulkMessageModalOpen] = useState<boolean>(false);
+  const [bulkMessageForm, setBulkMessageForm] = useState({
+    subject: '',
+    body: ''
+  });
+  const [bulkMessageAttachment, setBulkMessageAttachment] = useState<File | null>(null);
+  const [bulkMessageAttachmentPreview, setBulkMessageAttachmentPreview] = useState<string | null>(null);
+  const [bulkMessageLoading, setBulkMessageLoading] = useState<boolean>(false);
+  const [isBulkDragging, setIsBulkDragging] = useState<boolean>(false);
+
+  // Recent Action Toast State (for Undo support)
+  const [recentActionToast, setRecentActionToast] = useState<{
+    message: string;
+    previousStates: Array<{ id: string; role: UserRole; isActive: boolean }>;
+    actionLabel: string;
+  } | null>(null);
+  const [undoLoading, setUndoLoading] = useState<boolean>(false);
+
+  // Toggle selection of a single investor
+  const toggleSelectUser = (userId: string) => {
+    setSelectedUserIds(prev => 
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  // Select or Deselect all investors currently shown/filtered
+  const toggleSelectAll = () => {
+    const visibleIds = filteredInvestors.map(inv => inv.id);
+    const allVisibleSelected = visibleIds.every(id => selectedUserIds.includes(id));
+    if (allVisibleSelected) {
+      // Remove visible ones
+      setSelectedUserIds(prev => prev.filter(id => !visibleIds.includes(id)));
+    } else {
+      // Add all visible ones, keeping any already selected outside the current visible set
+      setSelectedUserIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleBulkAction = async (action: 'update-role' | 'disable-account' | 'enable-account', value?: string) => {
+    if (selectedUserIds.length === 0) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users/bulk-action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          userIds: selectedUserIds,
+          action,
+          value
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        showSuccess(`Bulk action completed successfully! Updated ${data.count} investor accounts.`);
+        
+        // Save to Recent Actions Toast for Undo functionality
+        if (data.previousStates && data.previousStates.length > 0) {
+          let actionLabel = 'bulk operation';
+          if (action === 'update-role') actionLabel = `Updated Role to ${value}`;
+          else if (action === 'disable-account') actionLabel = 'Disabled Accounts';
+          else if (action === 'enable-account') actionLabel = 'Enabled Accounts';
+
+          setRecentActionToast({
+            message: `Batch action "${actionLabel}" affected ${data.count} investor accounts.`,
+            previousStates: data.previousStates,
+            actionLabel
+          });
+        } else {
+          setRecentActionToast(null);
+        }
+
+        setSelectedUserIds([]); // Clear selection
+        fetchInvestors(); // Refresh list
+        if (triggerRefreshSignal) triggerRefreshSignal();
+      } else {
+        const errData = await res.json();
+        setError(errData.error || 'Bulk action failed.');
+      }
+    } catch (err) {
+      setError('Failed to execute bulk action.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUndoBulkAction = async () => {
+    if (!recentActionToast || recentActionToast.previousStates.length === 0) return;
+    setUndoLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users/bulk-undo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          previousStates: recentActionToast.previousStates
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        showSuccess(`Reverted batch change! Successfully restored ${data.count} investor accounts to their previous states.`);
+        setRecentActionToast(null); // Clear toast after successful undo
+        fetchInvestors(); // Refresh list
+        if (triggerRefreshSignal) triggerRefreshSignal();
+      } else {
+        const errData = await res.json();
+        setError(errData.error || 'Failed to revert the batch operation.');
+      }
+    } catch (err) {
+      setError('Failed to execute bulk undo operation.');
+    } finally {
+      setUndoLoading(false);
+    }
+  };
+
+  // Bulk attachment handlers
+  const handleBulkFileChange = (file: File) => {
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      setError("File size exceeds 50MB limit. Please choose a file smaller than 50MB.");
+      return;
+    }
+    setBulkMessageAttachment(file);
+    const previewUrl = URL.createObjectURL(file);
+    setBulkMessageAttachmentPreview(previewUrl);
+  };
+
+  const handleBulkDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsBulkDragging(true);
+  };
+
+  const handleBulkDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsBulkDragging(false);
+  };
+
+  const handleBulkDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsBulkDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleBulkFileChange(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleRemoveBulkAttachment = () => {
+    setBulkMessageAttachment(null);
+    if (bulkMessageAttachmentPreview) {
+      if (bulkMessageAttachmentPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(bulkMessageAttachmentPreview);
+      }
+      setBulkMessageAttachmentPreview(null);
+    }
+  };
+
+  const handleSendBulkNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUserIds.length === 0 || !bulkMessageForm.subject || !bulkMessageForm.body) return;
+    setBulkMessageLoading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('recipientIds', selectedUserIds.join(','));
+      formData.append('subject', bulkMessageForm.subject);
+      formData.append('body', bulkMessageForm.body);
+      if (bulkMessageAttachment) {
+        formData.append('attachment', bulkMessageAttachment);
+      }
+
+      const res = await fetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setIsBulkMessageModalOpen(false);
+        setBulkMessageForm({ subject: '', body: '' });
+        setBulkMessageAttachment(null);
+        if (bulkMessageAttachmentPreview) {
+          if (bulkMessageAttachmentPreview.startsWith('blob:')) {
+            URL.revokeObjectURL(bulkMessageAttachmentPreview);
+          }
+          setBulkMessageAttachmentPreview(null);
+        }
+        showSuccess(`Bulk notification broadcasted successfully to ${data.count} selected investors!`);
+        setSelectedUserIds([]); // Clear selection
+        if (triggerRefreshSignal) triggerRefreshSignal();
+      } else {
+        const errData = await res.json();
+        setError(errData.error || 'Failed to dispatch bulk notification.');
+      }
+    } catch (err) {
+      setError('Failed to send bulk notification.');
+    } finally {
+      setBulkMessageLoading(false);
+    }
+  };
+
   // Fetch investors list
   const fetchInvestors = async () => {
     setLoading(true);
@@ -118,6 +336,15 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
   useEffect(() => {
     fetchInvestors();
   }, [refreshSignal, token]);
+
+  // Auto-dismiss recent action toast after 15 seconds
+  useEffect(() => {
+    if (!recentActionToast) return;
+    const timer = setTimeout(() => {
+      setRecentActionToast(null);
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [recentActionToast]);
 
   const showSuccess = (msg: string) => {
     setSuccessMessage(msg);
@@ -620,6 +847,40 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
         </div>
       </div>
 
+      {/* Select All Bar */}
+      {!loading && filteredInvestors.length > 0 && (
+        <div className="flex items-center justify-between bg-stone-50 dark:bg-stone-850 border border-stone-200/50 dark:border-stone-800 px-4.5 py-3 rounded-2xl text-xs">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl hover:bg-stone-100 dark:hover:bg-stone-750 font-semibold text-gray-700 dark:text-stone-300 transition cursor-pointer"
+            >
+              {filteredInvestors.length > 0 && filteredInvestors.every(inv => selectedUserIds.includes(inv.id)) ? (
+                <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <Square className="h-4 w-4 text-gray-400 dark:text-stone-500" />
+              )}
+              <span>
+                {filteredInvestors.length > 0 && filteredInvestors.every(inv => selectedUserIds.includes(inv.id))
+                  ? 'Deselect All'
+                  : 'Select All'}
+              </span>
+            </button>
+            <span className="text-gray-300 dark:text-stone-700 font-mono">|</span>
+            <span className="text-gray-500 dark:text-stone-400">
+              Showing <strong>{filteredInvestors.length}</strong> investors
+            </span>
+          </div>
+
+          {selectedUserIds.length > 0 && (
+            <div className="flex items-center gap-1.5 text-[#2D6A4F] dark:text-[#52B788] font-bold font-mono">
+              <span className="h-2 w-2 rounded-full bg-[#52B788] animate-pulse" />
+              <span>{selectedUserIds.length} selected for batch operations</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Grid List */}
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-3">
@@ -636,34 +897,57 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredInvestors.map((inv) => (
-            <div 
-              key={inv.id}
-              className="bg-white dark:bg-stone-900 border border-gray-100 dark:border-stone-800 rounded-3xl p-5 hover:border-[#52B788]/30 dark:hover:border-[#52B788]/40 hover:shadow-premium transition-all duration-300 flex flex-col justify-between group relative"
-            >
-              <div>
-                {/* Header info */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-xs">
-                      {inv.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div>
-                      <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors">
-                        {inv.name}
-                      </h4>
-                      <p className="text-[10px] font-mono text-gray-400">@{inv.username}</p>
-                    </div>
-                  </div>
+          {filteredInvestors.map((inv) => {
+            const isSelected = selectedUserIds.includes(inv.id);
+            return (
+              <div 
+                key={inv.id}
+                className={`bg-white dark:bg-stone-900 border rounded-3xl p-5 hover:shadow-premium transition-all duration-350 flex flex-col justify-between group relative ${
+                  isSelected
+                    ? 'border-[#52B788] bg-[#52B788]/5 dark:bg-[#52B788]/5 shadow-sm'
+                    : 'border-gray-100 dark:border-stone-800'
+                }`}
+              >
+                <div>
+                  {/* Header info */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      {/* Checkbox */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectUser(inv.id);
+                        }}
+                        className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer"
+                        title={isSelected ? "Deselect user" : "Select user for batch operations"}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        ) : (
+                          <Square className="h-5 w-5 text-gray-300 dark:text-stone-700 shrink-0" />
+                        )}
+                      </button>
 
-                  <span className={`text-[8.5px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border ${
-                    inv.isActive !== false
-                      ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 border-emerald-200 dark:border-emerald-800/40'
-                      : 'bg-stone-100 dark:bg-stone-850 text-stone-500 border-stone-200 dark:border-stone-800'
-                  }`}>
-                    {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
-                  </span>
-                </div>
+                      <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-xs shrink-0">
+                        {inv.name.split(' ').map(n => n[0]).join('')}
+                      </div>
+                      <div>
+                        <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors line-clamp-1">
+                          {inv.name}
+                        </h4>
+                        <p className="text-[10px] font-mono text-gray-400">@{inv.username}</p>
+                      </div>
+                    </div>
+
+                    <span className={`text-[8.5px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border shrink-0 ${
+                      inv.isActive !== false
+                        ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 border-emerald-200 dark:border-emerald-800/40'
+                        : 'bg-stone-100 dark:bg-stone-850 text-stone-500 border-stone-200 dark:border-stone-800'
+                    }`}>
+                      {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </div>
 
                 {/* Body details */}
                 <div className="mt-5 space-y-2.5 text-xs text-gray-500 dark:text-stone-400 border-t border-dashed border-gray-100 dark:border-stone-800 pt-4">
@@ -729,7 +1013,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 </div>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -1301,6 +1585,268 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 {bulkUploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>Import Profiles</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedUserIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-3xl px-4 animate-slide-up">
+          <div className="bg-[#1B4332] dark:bg-stone-900 text-white rounded-3xl shadow-premium border border-[#52B788]/35 p-4.5 flex flex-col md:flex-row items-center justify-between gap-4.5 backdrop-blur-md bg-opacity-95 dark:bg-opacity-95">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 bg-[#52B788]/20 text-[#52B788] rounded-xl flex items-center justify-center font-bold text-xs font-mono">
+                {selectedUserIds.length}
+              </div>
+              <div>
+                <p className="text-xs font-bold leading-none">Batch Actions Active</p>
+                <p className="text-[10px] text-emerald-300/80 mt-1 font-mono">{selectedUserIds.length} selected investors</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Send Bulk Notification */}
+              <button
+                onClick={() => {
+                  setBulkMessageForm({
+                    subject: 'Estate Portal Announcement - Adubiaro Farms',
+                    body: 'Dear Valued Investor,\n\nWe are writing to provide a standard update regarding Adubiaro Farm Estates. Below are the status details...'
+                  });
+                  setIsBulkMessageModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#52B788] hover:bg-[#40916C] text-[#1B4332] hover:text-white rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
+                title="Broadcast notification to selected investors"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                <span>Send Bulk Notification</span>
+              </button>
+
+              {/* Disable Accounts */}
+              <button
+                onClick={() => {
+                  if (confirm(`Are you sure you want to disable accounts for the ${selectedUserIds.length} selected users?`)) {
+                    handleBulkAction('disable-account');
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white rounded-xl text-xs font-bold transition duration-200 cursor-pointer border border-stone-700"
+                title="Disable selected investor accounts"
+              >
+                <ToggleLeft className="h-4 w-4 text-stone-400" />
+                <span>Disable</span>
+              </button>
+
+              {/* Enable Accounts */}
+              <button
+                onClick={() => {
+                  handleBulkAction('enable-account');
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-[#52B788] hover:text-[#74C69D] rounded-xl text-xs font-bold transition duration-200 cursor-pointer border border-[#52B788]/20"
+                title="Enable selected investor accounts"
+              >
+                <ToggleRight className="h-4 w-4 text-emerald-400" />
+                <span>Enable</span>
+              </button>
+
+              {/* Update Role Select/Dropdown */}
+              <div className="relative">
+                <select
+                  onChange={(e) => {
+                    const selectedRole = e.target.value;
+                    if (selectedRole) {
+                      if (confirm(`Change authorization roles to "${selectedRole}" for all ${selectedUserIds.length} selected users?`)) {
+                        handleBulkAction('update-role', selectedRole);
+                      }
+                      e.target.value = ''; // Reset select dropdown
+                    }
+                  }}
+                  className="bg-[#2D6A4F] dark:bg-stone-800 hover:bg-emerald-800 border border-[#52B788]/20 text-white rounded-xl text-xs font-bold px-3 py-2 outline-none cursor-pointer transition duration-200"
+                  defaultValue=""
+                >
+                  <option value="" disabled>Update Role</option>
+                  <option value={UserRole.ADMIN}>Super Admin</option>
+                  <option value={UserRole.FARM_MANAGER}>Farm Manager</option>
+                  <option value={UserRole.INVESTOR}>Investor</option>
+                </select>
+              </div>
+
+              {/* Clear selection */}
+              <button
+                onClick={() => setSelectedUserIds([])}
+                className="text-xs text-emerald-300 hover:text-white px-2 py-1 font-mono cursor-pointer transition duration-200"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Notification Modal */}
+      {isBulkMessageModalOpen && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/20 dark:border-stone-800 max-w-lg w-full shadow-premium p-6 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-stone-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-[#2D6A4F] dark:text-[#52B788]" />
+                <div>
+                  <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Send Bulk Notification</h3>
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">Recipient Group: {selectedUserIds.length} investors</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsBulkMessageModalOpen(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 rounded-lg cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendBulkNotification} className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1.5">
+                  Notification Subject
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={bulkMessageForm.subject}
+                  onChange={(e) => setBulkMessageForm(prev => ({ ...prev, subject: e.target.value }))}
+                  placeholder="e.g. Q3 Farm Estate Yield Distribution Update"
+                  className="w-full px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1.5">
+                  Message Body (Markdown/Text)
+                </label>
+                <textarea
+                  required
+                  rows={6}
+                  value={bulkMessageForm.body}
+                  onChange={(e) => setBulkMessageForm(prev => ({ ...prev, body: e.target.value }))}
+                  placeholder="Write the broadcast message content here..."
+                  className="w-full px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-sans"
+                />
+              </div>
+
+              {/* Drag & Drop Attachment */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1.5">
+                  Optional Document or Media Attachment
+                </label>
+                <div
+                  onDragOver={handleBulkDragOver}
+                  onDragLeave={handleBulkDragLeave}
+                  onDrop={handleBulkDrop}
+                  onClick={() => document.getElementById('bulk-msg-attachment-input')?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all duration-300 ${
+                    isBulkDragging
+                      ? 'border-[#2D6A4F] bg-emerald-50/20 dark:border-[#52B788] dark:bg-stone-800/40'
+                      : 'border-stone-200 hover:border-[#2D6A4F] bg-[#FBF9F4] hover:bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800 dark:hover:border-[#52B788]'
+                  }`}
+                >
+                  <input
+                    id="bulk-msg-attachment-input"
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleBulkFileChange(file);
+                    }}
+                  />
+                  <Paperclip className={`h-6 w-6 mx-auto mb-1.5 transition-transform duration-300 ${isBulkDragging ? 'scale-110 text-[#2D6A4F]' : 'text-stone-400'}`} />
+                  <p className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                    {bulkMessageAttachment ? `Selected: ${bulkMessageAttachment.name}` : 'Drag & drop any PDF, image or spreadsheet here, or click to browse'}
+                  </p>
+                  <p className="text-[9px] text-stone-400 mt-0.5 font-mono">
+                    {bulkMessageAttachment ? `${(bulkMessageAttachment.size / 1024).toFixed(1)} KB` : 'Supports images, documents and media up to 50MB'}
+                  </p>
+                </div>
+
+                {bulkMessageAttachmentPreview && (
+                  <div className="mt-3 p-3 bg-stone-50 dark:bg-stone-850 rounded-xl border border-stone-200/50 dark:border-stone-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <FileText className="h-4 w-4 text-[#2D6A4F] shrink-0" />
+                      <span className="text-[11px] font-mono text-gray-600 dark:text-stone-300 truncate">{bulkMessageAttachment?.name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveBulkAttachment();
+                      }}
+                      className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg cursor-pointer transition"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 dark:border-stone-800 flex justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkMessageModalOpen(false)}
+                  className="px-4 py-2 border border-gray-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-stone-300 hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={bulkMessageLoading || selectedUserIds.length === 0}
+                  className="px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  {bulkMessageLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>Broadcast Email</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Action Undo Toast */}
+      {recentActionToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-white dark:bg-stone-900 border border-emerald-200 dark:border-stone-800 rounded-3xl shadow-2xl p-5 animate-slide-up transition-all duration-300">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 rounded-2xl shrink-0">
+              <RotateCcw className="h-4 w-4 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-extrabold font-mono tracking-widest text-emerald-700 dark:text-emerald-400 uppercase">
+                  Recent Bulk Action
+                </span>
+                <button
+                  onClick={() => setRecentActionToast(null)}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-lg transition cursor-pointer"
+                  title="Dismiss toast"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="text-xs font-bold text-gray-800 dark:text-stone-100 mt-2 leading-relaxed">
+                {recentActionToast.message}
+              </p>
+              
+              <div className="mt-4 flex items-center justify-between gap-3 pt-3 border-t border-dashed border-gray-100 dark:border-stone-800">
+                <span className="text-[10px] text-gray-400 dark:text-stone-500 font-medium">
+                  revert bulk changes
+                </span>
+                <button
+                  onClick={handleUndoBulkAction}
+                  disabled={undoLoading}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] dark:bg-stone-800 dark:hover:bg-stone-750 text-white dark:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-extrabold transition-all duration-200 cursor-pointer shadow-md active:scale-98"
+                >
+                  {undoLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Undo className="h-3.5 w-3.5" />
+                  )}
+                  <span>Undo</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
