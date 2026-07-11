@@ -3084,6 +3084,71 @@ app.post('/api/import/data', requireAuth, (req, res) => {
   res.status(200).json(results);
 });
 
+// Endpoint for exporting all user data, farm estates, and plot assignments as a unified structure
+app.get('/api/export/data', requireAuth, (req, res) => {
+  const currentUser = (req as any).user as User;
+  if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.FARM_MANAGER) {
+    return res.status(403).json({ error: 'Restricted to super administrators and managers.' });
+  }
+
+  const exportData: any[] = [];
+
+  // Loop through all users
+  db.users.forEach(u => {
+    // Find all plots assigned to this user
+    const matchedInvestorPlots = db.investorPlots.filter(ip => ip.investorId === u.id);
+
+    if (matchedInvestorPlots.length === 0) {
+      // Export user profile without plots
+      exportData.push({
+        username: u.username,
+        name: u.name,
+        email: u.email,
+        phone: u.phone || '',
+        password: '', // do not expose actual passwords for security
+        role: u.role,
+        farmEstate: '',
+        farmLocation: '',
+        farmState: '',
+        farmDescription: '',
+        farmDateEstablished: '',
+        plotNumber: '',
+        sizeHectares: '',
+        sizeUnit: '',
+        cropType: '',
+        investmentAmount: ''
+      });
+    } else {
+      // Create a row for each plot assignment
+      matchedInvestorPlots.forEach(ip => {
+        const plot = db.plots.find(p => p.id === ip.plotId);
+        const farm = plot ? db.farms.find(f => f.id === plot.farmId) : undefined;
+
+        exportData.push({
+          username: u.username,
+          name: u.name,
+          email: u.email,
+          phone: u.phone || '',
+          password: '',
+          role: u.role,
+          farmEstate: farm ? farm.name : '',
+          farmLocation: farm ? farm.location : '',
+          farmState: farm ? farm.state : '',
+          farmDescription: farm ? farm.description || '' : '',
+          farmDateEstablished: farm ? farm.dateEstablished || '' : '',
+          plotNumber: plot ? plot.plotNumber : '',
+          sizeHectares: plot ? plot.sizeHectares : '',
+          sizeUnit: plot ? plot.sizeUnit : '',
+          cropType: plot ? plot.cropType : '',
+          investmentAmount: ip.investmentAmount || ''
+        });
+      });
+    }
+  });
+
+  res.status(200).json(exportData);
+});
+
 // Admin Route to list system users list
 app.get('/api/admin/users', requireAuth, (req, res) => {
   const user = (req as any).user as User;
