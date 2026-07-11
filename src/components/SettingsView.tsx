@@ -318,6 +318,71 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
     }
   };
 
+  const handleDownloadWizardCsvTemplate = () => {
+    const csvContent = 
+      "username,name,email,phone,password,farmEstate,farmLocation,farmState,farmDescription,farmDateEstablished,plotNumber,sizeHectares,sizeUnit,cropType,investmentAmount\n" +
+      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,Premium oil palm cultivation estate,2025-01-15,P-101,2.5,acre,Oil Palm,5000000\n" +
+      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99,Ondo Cocoa Hills,Ondo Rural,Ondo,Organic high-yield cocoa farm estate,2024-11-01,P-102,1.2,plot,Cocoa,1800000\n" +
+      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,,,P-103,3.0,acre,Oil Palm,6000000\n";
+      
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'unified_setup_wizard_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadWizardJsonTemplate = () => {
+    const jsonContent = JSON.stringify([
+      {
+        "username": "benson_oil",
+        "name": "Olumide Benson",
+        "email": "benson@oilpalm.com",
+        "phone": "+2348031111111",
+        "password": "BensonSecret2026",
+        "farmEstate": "Adubiaro Oil Palm Estate",
+        "farmLocation": "Adubiaro City",
+        "farmState": "Ondo",
+        "farmDescription": "Premium oil palm cultivation estate",
+        "farmDateEstablished": "2025-01-15",
+        "plotNumber": "P-101",
+        "sizeHectares": 2.5,
+        "sizeUnit": "acre",
+        "cropType": "Oil Palm",
+        "investmentAmount": 5000000
+      },
+      {
+        "username": "chioma_farm",
+        "name": "Chioma Adeleke",
+        "email": "chioma@realestate.com",
+        "phone": "+2348052222222",
+        "password": "ChiomaPass99",
+        "farmEstate": "Ondo Cocoa Hills",
+        "farmLocation": "Ondo Rural",
+        "farmState": "Ondo",
+        "farmDescription": "Organic high-yield cocoa farm estate",
+        "farmDateEstablished": "2024-11-01",
+        "plotNumber": "",
+        "sizeHectares": 1.2,
+        "sizeUnit": "plot",
+        "cropType": "Cocoa",
+        "investmentAmount": 1800000
+      }
+    ], null, 2);
+
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'unified_setup_wizard_template.json');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Export Complete Database (.json)
   const handleExportDatabase = async () => {
     if (exportingDb) return;
@@ -1171,6 +1236,51 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     </label>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Unified Setup CSV/JSON Wizard Templates */}
+            <div className="bg-[#52B788]/5 border border-[#2D6A4F]/20 p-6 rounded-3xl space-y-4 text-left">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-[#2D6A4F] rounded-xl text-white">
+                  <Sparkles className="h-5 w-5 text-[#52B788]" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-[#1B4332] font-sans">Unified Provisioning Templates</h4>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Download the official, standardized CSV and JSON system templates to bulk-onboard investors, establish new farm estates, and allocate agricultural land plot assignments atomically from a single file.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={handleDownloadWizardCsvTemplate}
+                  className="bg-white hover:bg-gray-50 border border-[#2D6A4F]/20 text-gray-700 hover:text-emerald-900 text-xs font-semibold p-4 rounded-2xl transition cursor-pointer flex items-center justify-between shadow-sm"
+                >
+                  <div className="flex items-center gap-3 text-left">
+                    <Download className="h-5 w-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">Unified CSV Setup Template</p>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">CSV spreadsheet format with prefilled headers</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-emerald-50 text-[#1B4332] font-bold font-mono px-2 py-0.5 rounded-md border border-emerald-100">.CSV</span>
+                </button>
+
+                <button
+                  onClick={handleDownloadWizardJsonTemplate}
+                  className="bg-white hover:bg-gray-50 border border-[#2D6A4F]/20 text-gray-700 hover:text-emerald-900 text-xs font-semibold p-4 rounded-2xl transition cursor-pointer flex items-center justify-between shadow-sm"
+                >
+                  <div className="flex items-center gap-3 text-left">
+                    <Download className="h-5 w-5 text-amber-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">Unified JSON Setup Template</p>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">Structured array of investor and plot properties</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-amber-50 text-amber-800 font-bold font-mono px-2 py-0.5 rounded-md border border-amber-100">.JSON</span>
+                </button>
               </div>
             </div>
 

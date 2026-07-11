@@ -2594,6 +2594,8 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
     total: investors.length,
     successCount: 0,
     failCount: 0,
+    farmsCreatedCount: 0,
+    plotsCreatedCount: 0,
     added: [] as any[],
     errors: [] as { row: number; username?: string; name?: string; error: string }[]
   };
@@ -2601,6 +2603,7 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
   const usersToAdd: User[] = [];
   const plotsToAdd: FarmPlot[] = [];
   const investorPlotsToAdd: InvestorPlot[] = [];
+  const farmsToAdd: Farm[] = [];
   const affectedFarmIds = new Set<string>();
 
   for (let i = 0; i < investors.length; i++) {
@@ -2618,7 +2621,14 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
       sizeUnit, 
       cropType, 
       investmentAmount, 
-      plotNumber 
+      plotNumber,
+      farmLocation,
+      location,
+      farmState,
+      state,
+      farmDescription,
+      description,
+      farmDateEstablished
     } = item;
 
     if (!username || !name || !email) {
@@ -2670,21 +2680,43 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
     const farmSearch = farmId || farmEstate;
     if (farmSearch) {
       const cleanSearch = String(farmSearch).trim().toLowerCase();
+      // Look in existing db
       matchedFarm = db.farms.find(f => 
         f.id.toLowerCase() === cleanSearch || 
         f.name.toLowerCase() === cleanSearch || 
         f.name.toLowerCase().includes(cleanSearch)
       );
 
+      // Look in local batch farmsToAdd
       if (!matchedFarm) {
-        results.failCount++;
-        results.errors.push({
-          row: rowNum,
-          username: cleanUsername,
-          name: cleanName,
-          error: `Farm Estate "${farmSearch}" not found in the system.`
-        });
-        continue;
+        matchedFarm = farmsToAdd.find(f => 
+          f.name.toLowerCase() === cleanSearch || 
+          f.name.toLowerCase().includes(cleanSearch)
+        );
+      }
+
+      // If not found, dynamically create the new Farm Estate!
+      if (!matchedFarm) {
+        const farmIdStr = 'farm-' + (Date.now() + i + 5000);
+        const fLoc = farmLocation || location || 'Ondo Region';
+        const fState = farmState || state || 'Ondo';
+        const fDesc = farmDescription || description || `Imported Farm Estate: ${farmSearch}`;
+        const fDate = farmDateEstablished || new Date().toISOString().split('T')[0];
+
+        matchedFarm = {
+          id: farmIdStr,
+          name: String(farmSearch).trim(),
+          location: String(fLoc).trim(),
+          state: String(fState).trim(),
+          totalPlots: 0,
+          totalHectares: 0,
+          description: String(fDesc).trim(),
+          coverImage: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80',
+          dateEstablished: String(fDate).trim(),
+          isActive: true
+        };
+        farmsToAdd.push(matchedFarm);
+        results.farmsCreatedCount++;
       }
     }
 
@@ -2738,6 +2770,7 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
       plotsToAdd.push(newPlot);
       investorPlotsToAdd.push(invPlot);
       affectedFarmIds.add(matchedFarm.id);
+      results.plotsCreatedCount++;
     }
 
     usersToAdd.push(createdUser);
@@ -2747,6 +2780,9 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
 
   // Save if any succeeded
   if (usersToAdd.length > 0) {
+    if (farmsToAdd.length > 0) {
+      db.farms.push(...farmsToAdd);
+    }
     db.users.push(...usersToAdd);
     if (plotsToAdd.length > 0) {
       db.plots.push(...plotsToAdd);

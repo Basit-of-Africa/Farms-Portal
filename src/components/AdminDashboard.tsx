@@ -59,7 +59,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
   const [systemPlots, setSystemPlots] = useState<any[]>([]);
 
   // Form states
-  const [activeFormTab, setActiveFormTab] = useState<'payout' | 'document' | 'user' | 'plot' | 'assign' | 'farms' | 'settings'>('payout');
+  const [activeFormTab, setActiveFormTab] = useState<'payout' | 'document' | 'user' | 'plot' | 'assign' | 'farms' | 'settings' | 'wizard'>('wizard');
 
   // Backups and Maintenance Settings state
   const [backups, setBackups] = useState<any[]>([]);
@@ -106,6 +106,13 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkResults, setBulkResults] = useState<any | null>(null);
   const [isDraggingCsv, setIsDraggingCsv] = useState(false);
+
+  // 1c. Unified Import/Export Wizard States
+  const [wizardFile, setWizardFile] = useState<File | null>(null);
+  const [parsedWizardRecords, setParsedWizardRecords] = useState<any[]>([]);
+  const [wizardUploading, setWizardUploading] = useState(false);
+  const [wizardResults, setWizardResults] = useState<any | null>(null);
+  const [isDraggingWizard, setIsDraggingWizard] = useState(false);
 
   // 2. Allocate Plot
   const [allocFarmId, setAllocFarmId] = useState('');
@@ -555,6 +562,192 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDownloadWizardCsvTemplate = () => {
+    const csvContent = 
+      "username,name,email,phone,password,farmEstate,farmLocation,farmState,farmDescription,farmDateEstablished,plotNumber,sizeHectares,sizeUnit,cropType,investmentAmount\n" +
+      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,Premium oil palm cultivation estate,2025-01-15,P-101,2.5,acre,Oil Palm,5000000\n" +
+      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99,Ondo Cocoa Hills,Ondo Rural,Ondo,Organic high-yield cocoa farm estate,2024-11-01,P-102,1.2,plot,Cocoa,1800000\n" +
+      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,,,P-103,3.0,acre,Oil Palm,6000000\n";
+      
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'unified_setup_wizard_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadWizardJsonTemplate = () => {
+    const jsonContent = JSON.stringify([
+      {
+        "username": "benson_oil",
+        "name": "Olumide Benson",
+        "email": "benson@oilpalm.com",
+        "phone": "+2348031111111",
+        "password": "BensonSecret2026",
+        "farmEstate": "Adubiaro Oil Palm Estate",
+        "farmLocation": "Adubiaro City",
+        "farmState": "Ondo",
+        "farmDescription": "Premium oil palm cultivation estate",
+        "farmDateEstablished": "2025-01-15",
+        "plotNumber": "P-101",
+        "sizeHectares": 2.5,
+        "sizeUnit": "acre",
+        "cropType": "Oil Palm",
+        "investmentAmount": 5000000
+      },
+      {
+        "username": "chioma_farm",
+        "name": "Chioma Adeleke",
+        "email": "chioma@realestate.com",
+        "phone": "+2348052222222",
+        "password": "ChiomaPass99",
+        "farmEstate": "Ondo Cocoa Hills",
+        "farmLocation": "Ondo Rural",
+        "farmState": "Ondo",
+        "farmDescription": "Organic high-yield cocoa farm estate",
+        "farmDateEstablished": "2024-11-01",
+        "plotNumber": "",
+        "sizeHectares": 1.2,
+        "sizeUnit": "plot",
+        "cropType": "Cocoa",
+        "investmentAmount": 1800000
+      }
+    ], null, 2);
+
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'unified_setup_wizard_template.json');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleWizardFileSelect = (file: File) => {
+    if (!file) return;
+    setWizardFile(file);
+    setWizardResults(null);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text) return;
+
+      try {
+        if (file.name.endsWith('.json')) {
+          const parsed = JSON.parse(text);
+          const records = Array.isArray(parsed) ? parsed : (parsed.investors || parsed.records || []);
+          if (!Array.isArray(records)) {
+            alert('JSON must be an array of objects or contain a "records"/"investors" list.');
+            return;
+          }
+          setParsedWizardRecords(records);
+        } else {
+          // CSV Parsing
+          const lines = text.split(/\r?\n/);
+          if (lines.length === 0) {
+            alert('CSV file is empty.');
+            return;
+          }
+
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, '').replace(/_/g, ''));
+          const records: any[] = [];
+
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const values: string[] = [];
+            let current = '';
+            let inQuotes = false;
+            for (let charIndex = 0; charIndex < line.length; charIndex++) {
+              const char = line[charIndex];
+              if (char === '"' || char === "'") {
+                inQuotes = !inQuotes;
+              } else if (char === ',' && !inQuotes) {
+                values.push(current.trim());
+                current = '';
+              } else {
+                current += char;
+              }
+            }
+            values.push(current.trim());
+
+            const record: any = {};
+            headers.forEach((header, index) => {
+              const val = values[index] ? values[index].replace(/^["']|["']$/g, '').trim() : '';
+              if (header === 'username') record.username = val;
+              if (header === 'name') record.name = val;
+              if (header === 'email') record.email = val;
+              if (header === 'phone' || header === 'telephone') record.phone = val;
+              if (header === 'password') record.password = val;
+              
+              if (header === 'farmestate' || header === 'farm' || header === 'estate') record.farmEstate = val;
+              if (header === 'farmlocation' || header === 'location' || header === 'farmcity') record.farmLocation = val;
+              if (header === 'farmstate' || header === 'state') record.farmState = val;
+              if (header === 'farmdescription' || header === 'description') record.farmDescription = val;
+              if (header === 'farmdateestablished' || header === 'dateestablished') record.farmDateEstablished = val;
+              
+              if (header === 'plotnumber' || header === 'plotno') record.plotNumber = val;
+              if (header === 'sizehectares' || header === 'plotsize' || header === 'size') record.sizeHectares = val;
+              if (header === 'sizeunit' || header === 'unit' || header === 'plotunit') record.sizeUnit = val;
+              if (header === 'croptype' || header === 'crop') record.cropType = val;
+              if (header === 'investmentamount' || header === 'investment' || header === 'amount') record.investmentAmount = val;
+            });
+
+            if (record.username || record.name || record.email) {
+              records.push(record);
+            }
+          }
+          setParsedWizardRecords(records);
+        }
+      } catch (err: any) {
+        console.error(err);
+        alert('Failed to parse file. Please verify format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleWizardSubmit = async () => {
+    if (parsedWizardRecords.length === 0) {
+      alert('No parsed records to import.');
+      return;
+    }
+
+    try {
+      setWizardUploading(true);
+      setWizardResults(null);
+
+      const res = await fetch('/api/admin/users/bulk-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ investors: parsedWizardRecords })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unified import wizard failed');
+
+      setWizardResults(data);
+      if (data.successCount > 0) {
+        setWizardFile(null);
+        setParsedWizardRecords([]);
+        triggerRefreshSignal();
+      }
+    } catch (err: any) {
+      alert(err.message || 'An error occurred during wizard import.');
+    } finally {
+      setWizardUploading(false);
+    }
   };
 
   // Submit Plot
@@ -1357,6 +1550,18 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
           {/* Internal tab selector */}
           <div className="flex border-b border-gray-100 bg-[#FBF9F4]/40 overflow-x-auto">
             <button
+              onClick={() => setActiveFormTab('wizard')}
+              className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
+                activeFormTab === 'wizard' 
+                  ? 'border-[#2D6A4F] text-emerald-800 bg-emerald-50/40 font-black' 
+                  : 'border-transparent text-emerald-600/70 hover:text-[#1B4332]'
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-emerald-600 animate-pulse" />
+              <span>Unified Setup Wizard</span>
+            </button>
+
+            <button
               onClick={() => setActiveFormTab('payout')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'payout' 
@@ -1444,6 +1649,249 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
 
           <div className="p-6">
             
+            {/* UNIFIED SETUP WIZARD */}
+            {activeFormTab === 'wizard' && (
+              <div className="space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="text-emerald-600 h-5 w-5 animate-pulse" />
+                      <h3 className="font-sans font-bold text-base text-gray-800">Unified System Provisioning Wizard</h3>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Onboard users, deploy farm estates, and allocate investor plots atomically from a single file.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={handleDownloadWizardCsvTemplate}
+                      className="bg-[#1B4332] text-white hover:bg-[#1B4332]/90 text-[10px] font-mono uppercase tracking-wider py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all"
+                    >
+                      <span>Download CSV Template</span>
+                    </button>
+                    <button
+                      onClick={handleDownloadWizardJsonTemplate}
+                      className="bg-amber-600 text-white hover:bg-amber-700 text-[10px] font-mono uppercase tracking-wider py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all"
+                    >
+                      <span>Download JSON Template</span>
+                    </button>
+                  </div>
+                </div>
+
+                {wizardResults && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <h4 className="font-sans font-bold text-sm text-emerald-900">Import Process Completed!</h4>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                        <span className="block text-[9px] uppercase font-mono text-gray-400">Total Rows Scanned</span>
+                        <span className="text-lg font-black font-mono text-gray-800">{wizardResults.total || 0}</span>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                        <span className="block text-[9px] uppercase font-mono text-emerald-500">Successful Accounts</span>
+                        <span className="text-lg font-black font-mono text-emerald-600">{wizardResults.successCount || 0}</span>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                        <span className="block text-[9px] uppercase font-mono text-amber-500">Estates Created</span>
+                        <span className="text-lg font-black font-mono text-amber-600">{wizardResults.farmsCreatedCount || 0}</span>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                        <span className="block text-[9px] uppercase font-mono text-blue-500">Plots Allocated</span>
+                        <span className="text-lg font-black font-mono text-blue-600">{wizardResults.plotsCreatedCount || 0}</span>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                        <span className="block text-[9px] uppercase font-mono text-rose-400">Failed / Duplicate</span>
+                        <span className="text-lg font-black font-mono text-rose-500">{wizardResults.failCount || 0}</span>
+                      </div>
+                    </div>
+
+                    {wizardResults.errors && wizardResults.errors.length > 0 && (
+                      <div className="mt-3 bg-rose-50/50 border border-rose-100 rounded-xl p-3 max-h-40 overflow-y-auto">
+                        <span className="block text-[10px] uppercase font-mono font-bold text-rose-700 mb-2">Import Error Log</span>
+                        <ul className="space-y-1.5 text-xs text-rose-800 font-mono">
+                          {wizardResults.errors.map((err: any, idx: number) => (
+                            <li key={idx}>
+                              Line {err.row}: <strong>{err.username || 'N/A'}</strong> - {err.error}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Step left rail */}
+                  <div className="lg:col-span-4 space-y-4">
+                    <div className="bg-[#FBF9F4] border border-[#2D6A4F]/10 rounded-2xl p-4 space-y-4">
+                      <span className="block text-[10px] uppercase font-mono font-bold text-gray-400 tracking-wider">How to use the Wizard</span>
+                      
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                          <p className="text-xs text-gray-600">
+                            <strong>Download a Template:</strong> Grab the custom CSV or JSON format on the top right to align variables.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                          <p className="text-xs text-gray-600">
+                            <strong>Prepare Data:</strong> Fill in investor details. If they have custom plots or farm estates, fill them in. If an estate doesn't exist, the system auto-spins it up.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                          <p className="text-xs text-gray-600">
+                            <strong>Upload & Review:</strong> Verify correct column mappings and row count inside the active preview stage.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center shrink-0">4</span>
+                          <p className="text-xs text-gray-600">
+                            <strong>Trigger Provisioning:</strong> Instantly register users, allocate plots, build farms, and dispatch safe portal welcome notifications.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main Drop and Table Panel */}
+                  <div className="lg:col-span-8 space-y-4">
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingWizard(true); }}
+                      onDragLeave={() => setIsDraggingWizard(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingWizard(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) handleWizardFileSelect(file);
+                      }}
+                      className={`border-2 border-dashed rounded-3xl p-6 transition-all duration-200 text-center ${
+                        isDraggingWizard 
+                          ? 'border-emerald-600 bg-emerald-50/20' 
+                          : wizardFile 
+                            ? 'border-emerald-200 bg-emerald-50/10' 
+                            : 'border-gray-200 hover:border-[#2D6A4F]/30 bg-white'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        id="wizard-file-input"
+                        accept=".csv,.json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleWizardFileSelect(file);
+                        }}
+                      />
+                      <label htmlFor="wizard-file-input" className="cursor-pointer block space-y-2">
+                        <div className="w-10 h-10 bg-emerald-50 text-emerald-700 rounded-full flex items-center justify-center mx-auto">
+                          <UploadCloud className="h-5 w-5" />
+                        </div>
+                        {wizardFile ? (
+                          <div>
+                            <p className="text-xs font-mono font-bold text-gray-700">{wizardFile.name}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{(wizardFile.size / 1024).toFixed(1)} KB • Click or drag to replace</p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-xs font-sans font-bold text-gray-700">Drag & drop your CSV or JSON data here</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">or click to browse local files</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+
+                    {parsedWizardRecords.length > 0 && (
+                      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden space-y-3">
+                        <div className="bg-gray-50 px-4 py-2.5 flex items-center justify-between border-b border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="text-[11px] font-mono font-bold text-gray-600">PRE-IMPORT DATA VALIDATION ({parsedWizardRecords.length} Rows)</span>
+                          </div>
+                          <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold uppercase">Ready</span>
+                        </div>
+
+                        <div className="max-h-60 overflow-y-auto px-4">
+                          <table className="w-full text-[11px] font-mono text-left">
+                            <thead className="bg-gray-100 text-gray-400 sticky top-0 uppercase text-[9px] tracking-wider">
+                              <tr>
+                                <th className="p-2">User / Email</th>
+                                <th className="p-2">Farm Estate</th>
+                                <th className="p-2">Plot Details</th>
+                                <th className="p-2">Investment</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {parsedWizardRecords.map((rec, i) => (
+                                <tr key={i} className="hover:bg-gray-50/50">
+                                  <td className="p-2">
+                                    <div className="font-bold text-gray-700">{rec.name || rec.username}</div>
+                                    <div className="text-[10px] text-gray-400">{rec.email}</div>
+                                  </td>
+                                  <td className="p-2 text-gray-600">
+                                    {rec.farmEstate ? (
+                                      <div>
+                                        <span className="font-bold">{rec.farmEstate}</span>
+                                        {rec.farmLocation && <div className="text-[10px] text-gray-400">{rec.farmLocation}, {rec.farmState || 'Ondo'}</div>}
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
+                                  <td className="p-2 text-gray-600">
+                                    {rec.plotNumber || rec.sizeHectares ? (
+                                      <div>
+                                        Plot: <span className="font-bold">{rec.plotNumber || 'Auto'}</span>
+                                        <div>{rec.sizeHectares} {rec.sizeUnit || 'acre'} ({rec.cropType || 'Oil Palm'})</div>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
+                                  <td className="p-2 font-bold text-emerald-700">
+                                    {rec.investmentAmount ? `₦${parseFloat(rec.investmentAmount).toLocaleString()}` : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="p-4 bg-gray-50/50 border-t border-gray-100 flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => { setWizardFile(null); setParsedWizardRecords([]); }}
+                            className="bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 text-[10px] font-mono uppercase tracking-wider py-2 px-4 rounded-xl cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleWizardSubmit}
+                            disabled={wizardUploading}
+                            className="bg-[#2D6A4F] text-white hover:bg-[#1B4332] text-[10px] font-mono uppercase tracking-wider py-2 px-5 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            {wizardUploading ? (
+                              <>
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                <span>Provisioning...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Execute & Onboard</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* PAYOUT FORM */}
             {activeFormTab === 'payout' && (
               <form onSubmit={handleCreateFinancials} className="space-y-4">
