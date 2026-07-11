@@ -32,7 +32,9 @@ import {
   Mail,
   Download,
   Upload,
-  Cloud
+  Cloud,
+  Pencil,
+  Key
 } from 'lucide-react';
 import { User, UserRole, SystemSettings } from '../types';
 
@@ -82,6 +84,17 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
   const [newUserPassword, setNewUserPassword] = useState<string>('');
   const [showUserPassword, setShowUserPassword] = useState<boolean>(false);
   const [creatingUser, setCreatingUser] = useState<boolean>(false);
+
+  // Editing User Form Fields
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editUsername, setEditUsername] = useState<string>('');
+  const [editFullName, setEditFullName] = useState<string>('');
+  const [editUserEmail, setEditUserEmail] = useState<string>('');
+  const [editUserPhone, setEditUserPhone] = useState<string>('');
+  const [editUserRole, setEditUserRole] = useState<UserRole>(UserRole.INVESTOR);
+  const [editUserPassword, setEditUserPassword] = useState<string>('');
+  const [showEditPassword, setShowEditPassword] = useState<boolean>(false);
+  const [updatingUser, setUpdatingUser] = useState<boolean>(false);
 
   // --- Email Configurations States ---
   const [emailServiceType, setEmailServiceType] = useState<'simulation' | 'smtp' | 'brevo'>('simulation');
@@ -544,6 +557,72 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
       setUsersError(err.message || 'Failed to complete role credential registration.');
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  const startEditingUser = (targetUser: User) => {
+    setEditingUser(targetUser);
+    setEditUsername(targetUser.username);
+    setEditFullName(targetUser.name);
+    setEditUserEmail(targetUser.email);
+    setEditUserPhone(targetUser.phone || '');
+    setEditUserRole(targetUser.role);
+    setEditUserPassword('');
+    setShowEditPassword(false);
+    // Hide register form to prevent overlap clutter
+    setShowAddUserForm(false);
+    // Clear alerts
+    setUsersError(null);
+    setNewUserSuccess(null);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    if (!editUsername.trim() || !editFullName.trim() || !editUserEmail.trim()) {
+      setUsersError('Please supply all required profile configuration fields.');
+      return;
+    }
+
+    try {
+      setUpdatingUser(true);
+      setUsersError(null);
+      setNewUserSuccess(null);
+
+      const res = await fetch(`/api/admin/users/${editingUser.id}/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          username: editUsername.trim(),
+          name: editFullName.trim(),
+          email: editUserEmail.trim(),
+          phone: editUserPhone.trim(),
+          role: editUserRole,
+          password: editUserPassword && editUserPassword.trim() !== '' ? editUserPassword : undefined
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update user profile');
+      }
+
+      await res.json();
+      setNewUserSuccess(`User profile for "${editFullName}" updated successfully.`);
+      
+      // Reset editing states
+      setEditingUser(null);
+      
+      // Refresh User List
+      fetchUsersList();
+      if (triggerRefreshSignal) triggerRefreshSignal();
+    } catch (err: any) {
+      setUsersError(err.message || 'Failed to complete user configuration update.');
+    } finally {
+      setUpdatingUser(false);
     }
   };
 
@@ -1503,6 +1582,133 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
               </div>
             )}
 
+            {/* Slide-out Edit User Form */}
+            {editingUser && (
+              <div className="bg-amber-50/10 border border-amber-600/20 rounded-3xl p-6.5 space-y-6 animate-slide-down text-left">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-xs font-bold font-mono uppercase text-amber-900 tracking-wider leading-none flex items-center gap-1.5">
+                      <Pencil className="h-3.5 w-3.5 text-amber-700" />
+                      <span>Edit User Profile & Credentials</span>
+                    </h4>
+                    <p className="text-[10.5px] text-gray-400 mt-1">Configure authorization roles, modify legal profiles, or set a new password securely for <strong>{editingUser.name}</strong>.</p>
+                  </div>
+                  <button
+                    onClick={() => setEditingUser(null)}
+                    className="text-gray-400 hover:text-gray-600 transition p-1 cursor-pointer font-bold"
+                    title="Dismiss form"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleUpdateUser} className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    
+                    <div>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Unique Username ID *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editUsername}
+                        onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Full Legal Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editFullName}
+                        onChange={(e) => setEditFullName(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Electronic Mail Address *</label>
+                      <input
+                        type="email"
+                        required
+                        value={editUserEmail}
+                        onChange={(e) => setEditUserEmail(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Telephone Contact number</label>
+                      <input
+                        type="tel"
+                        value={editUserPhone}
+                        onChange={(e) => setEditUserPhone(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">System Authorization level *</label>
+                      <select
+                        value={editUserRole}
+                        onChange={(e) => setEditUserRole(e.target.value as UserRole)}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans cursor-pointer"
+                      >
+                        <option value={UserRole.ADMIN}>Super Admin (Total Core Access)</option>
+                        <option value={UserRole.FARM_MANAGER}>Farm Manager Supervisor (No Financial Records)</option>
+                        <option value={UserRole.INVESTOR}>Investor Client (Ledger & Progress access)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Set New Password (optional)</label>
+                      <div className="relative">
+                        <input
+                          type={showEditPassword ? 'text' : 'password'}
+                          placeholder="Leave blank to keep current"
+                          value={editUserPassword}
+                          onChange={(e) => setEditUserPassword(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-xl px-3.5 pr-10 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowEditPassword(!showEditPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
+                          title={showEditPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingUser(null)}
+                      className="px-4.5 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-white border border-gray-200 cursor-pointer text-center"
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={updatingUser}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-semibold px-5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow"
+                    >
+                      {updatingUser ? (
+                        <RefreshCw className="animate-spin h-3.5 w-3.5" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      <span>Apply updates</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {/* Users Accounts List */}
             <div className="space-y-4">
               <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Registered credentials index</h4>
@@ -1559,6 +1765,16 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                             </td>
                             <td className="px-5 py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
+                                {/* Edit profile button */}
+                                <button
+                                  onClick={() => startEditingUser(usr)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold font-mono rounded-lg border text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100/70 cursor-pointer transition"
+                                  title="Edit user profile"
+                                >
+                                  <Pencil className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                  <span>EDIT</span>
+                                </button>
+
                                 {/* Toggle active button */}
                                 <button
                                   onClick={() => handleToggleUserActive(usr)}

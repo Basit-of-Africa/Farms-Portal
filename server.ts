@@ -3195,7 +3195,7 @@ app.post('/api/admin/users/:id/update', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
-  const { name, email, phone, username, role, isActive } = req.body;
+  const { name, email, phone, username, role, isActive, password } = req.body;
 
   if (username && username !== targetUser.username) {
     const existingUser = db.users.find(u => u.username === username);
@@ -3210,6 +3210,7 @@ app.post('/api/admin/users/:id/update', requireAuth, (req, res) => {
   if (phone) targetUser.phone = phone;
   if (role) targetUser.role = role as UserRole;
   if (typeof isActive === 'boolean') targetUser.isActive = isActive;
+  if (password && password.trim() !== '') targetUser.password = password;
 
   saveDb();
   res.json({ success: true, user: targetUser });
