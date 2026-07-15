@@ -40,6 +40,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
   const [investors, setInvestors] = useState<UserType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -71,7 +72,8 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
     name: '',
     email: '',
     phone: '',
-    password: ''
+    password: '',
+    role: UserRole.INVESTOR
   });
 
   const [editForm, setEditForm] = useState({
@@ -79,7 +81,9 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
     email: '',
     phone: '',
     username: '',
-    isActive: true
+    isActive: true,
+    role: UserRole.INVESTOR,
+    password: ''
   });
 
   const [messageForm, setMessageForm] = useState({
@@ -319,9 +323,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       });
       if (res.ok) {
         const data: UserType[] = await res.json();
-        // Filter only investors
-        const investorUsers = data.filter(u => u.role === UserRole.INVESTOR);
-        setInvestors(investorUsers);
+        setInvestors(data);
       } else {
         const errData = await res.json();
         setError(errData.error || 'Failed to fetch investors list.');
@@ -367,16 +369,13 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          ...createForm,
-          role: UserRole.INVESTOR
-        })
+        body: JSON.stringify(createForm)
       });
 
       if (res.ok) {
         setIsCreateModalOpen(false);
-        setCreateForm({ username: '', name: '', email: '', phone: '', password: '' });
-        showSuccess('Investor profile provisioned successfully! A welcome notification has been logged.');
+        setCreateForm({ username: '', name: '', email: '', phone: '', password: '', role: UserRole.INVESTOR });
+        showSuccess('User account profile provisioned successfully! A welcome notification has been logged.');
         fetchInvestors();
         if (triggerRefreshSignal) triggerRefreshSignal();
       } else {
@@ -562,7 +561,9 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       email: investor.email,
       phone: investor.phone || '',
       username: investor.username,
-      isActive: investor.isActive !== false
+      isActive: investor.isActive !== false,
+      role: investor.role,
+      password: ''
     });
     setIsEditModalOpen(true);
   };
@@ -758,12 +759,14 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
   // Filtered investors
   const filteredInvestors = investors.filter(inv => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       inv.name.toLowerCase().includes(q) ||
       inv.username.toLowerCase().includes(q) ||
       inv.email.toLowerCase().includes(q) ||
       (inv.phone && inv.phone.includes(q))
     );
+    const matchesRole = roleFilter === 'ALL' || inv.role === roleFilter;
+    return matchesSearch && matchesRole;
   });
 
   return (
@@ -794,22 +797,54 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             <Briefcase className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="font-serif font-extrabold text-base text-[#1B4332] dark:text-[#52B788]">Investors Directory</h2>
-            <p className="text-[10px] font-mono text-gray-400">Total verified active holdings</p>
+            <h2 className="font-serif font-extrabold text-base text-[#1B4332] dark:text-[#52B788]">
+              {roleFilter === 'ALL'
+                ? 'System Accounts & Roles'
+                : roleFilter === 'INVESTOR'
+                ? 'Investors Directory'
+                : roleFilter === 'FARM_MANAGER'
+                ? 'Farm Managers'
+                : 'Super Administrators'}
+            </h2>
+            <p className="text-[10px] font-mono text-gray-400">
+              {roleFilter === 'ALL'
+                ? 'Authorized platform registers'
+                : roleFilter === 'INVESTOR'
+                ? 'Total verified active holdings'
+                : roleFilter === 'FARM_MANAGER'
+                ? 'Farm management credentials'
+                : 'Root administration tier'}
+            </p>
           </div>
         </div>
 
         {/* Search & Actions */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <input
-              type="text"
-              placeholder="Search by name, email, phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 text-xs bg-[#FBF9F4] dark:bg-stone-800 border border-gray-150 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] transition text-gray-800 dark:text-stone-100"
-            />
+          <div className="flex items-center gap-2 flex-1 sm:w-auto">
+            <div className="relative flex-1 sm:w-60">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder="Search accounts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 text-xs bg-[#FBF9F4] dark:bg-stone-800 border border-gray-150 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] transition text-gray-800 dark:text-stone-100"
+              />
+            </div>
+
+            <select
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setSelectedUserIds([]); // Clear selection on filter change
+              }}
+              className="px-3.5 py-2.5 text-xs bg-[#FBF9F4] dark:bg-stone-800 border border-gray-150 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-bold cursor-pointer shrink-0 outline-none shadow-sm"
+            >
+              <option value="ALL">All Roles</option>
+              <option value="INVESTOR">Investors</option>
+              <option value="FARM_MANAGER">Managers</option>
+              <option value="ADMIN">Admins</option>
+            </select>
           </div>
 
           <div className="flex items-center gap-2">
@@ -841,7 +876,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-[#FBF9F4] hover:text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition shrink-0"
             >
               <UserPlus className="h-4 w-4" />
-              <span>Add Investor</span>
+              <span>Add Account</span>
             </button>
           </div>
         </div>
@@ -902,10 +937,10 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             return (
               <div 
                 key={inv.id}
-                className={`bg-white dark:bg-stone-900 border rounded-3xl p-5 hover:shadow-premium transition-all duration-350 flex flex-col justify-between group relative ${
+                className={`bg-white dark:bg-stone-900 border rounded-3xl p-5 hover:shadow-premium transition-all duration-300 flex flex-col justify-between group relative ${
                   isSelected
-                    ? 'border-[#52B788] bg-[#52B788]/5 dark:bg-[#52B788]/5 shadow-sm'
-                    : 'border-gray-100 dark:border-stone-800'
+                    ? 'border-[#52B788] bg-emerald-50/30 dark:bg-emerald-950/10 ring-2 ring-[#52B788]/30 shadow-md scale-[1.015]'
+                    : 'border-gray-150 dark:border-stone-800'
                 }`}
               >
                 <div>
@@ -940,13 +975,24 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                       </div>
                     </div>
 
-                    <span className={`text-[8.5px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border shrink-0 ${
-                      inv.isActive !== false
-                        ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 border-emerald-200 dark:border-emerald-800/40'
-                        : 'bg-stone-100 dark:bg-stone-850 text-stone-500 border-stone-200 dark:border-stone-800'
-                    }`}>
-                      {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <span className={`text-[8.5px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border ${
+                        inv.role === UserRole.ADMIN
+                          ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800/40'
+                          : inv.role === UserRole.FARM_MANAGER
+                          ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/40'
+                          : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
+                      }`}>
+                        {inv.role.toUpperCase()}
+                      </span>
+                      <span className={`text-[8px] font-mono font-extrabold px-2 py-0.5 rounded-full border ${
+                        inv.isActive !== false
+                          ? 'bg-emerald-50/60 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/20'
+                          : 'bg-stone-100 dark:bg-stone-850 text-stone-500 border-stone-200 dark:border-stone-800'
+                      }`}>
+                        {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </div>
                   </div>
 
                 {/* Body details */}
@@ -1024,7 +1070,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-stone-800">
               <div className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-[#2D6A4F] dark:text-[#52B788]" />
-                <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Add Investor Profile</h3>
+                <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Add System Account & Role</h3>
               </div>
               <button 
                 onClick={() => setIsCreateModalOpen(false)}
@@ -1102,6 +1148,21 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
                   className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                  System Role / Permission Tier
+                </label>
+                <select
+                  value={createForm.role}
+                  onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-bold outline-none"
+                >
+                  <option value={UserRole.INVESTOR}>Investor (Default)</option>
+                  <option value={UserRole.FARM_MANAGER}>Farm Manager</option>
+                  <option value={UserRole.ADMIN}>Super Admin</option>
+                </select>
               </div>
 
               <div className="pt-4 border-t border-gray-100 dark:border-stone-800 flex justify-end gap-3">
@@ -1191,6 +1252,34 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   type="text"
                   value={editForm.phone}
                   onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                  System Role
+                </label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-bold outline-none"
+                >
+                  <option value={UserRole.INVESTOR}>Investor</option>
+                  <option value={UserRole.FARM_MANAGER}>Farm Manager</option>
+                  <option value={UserRole.ADMIN}>Super Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                  Set New Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Leave blank to keep current"
+                  value={editForm.password || ''}
+                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                   className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
                 />
               </div>
