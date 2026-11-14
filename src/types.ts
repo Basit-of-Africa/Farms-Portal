@@ -63,6 +63,19 @@ export interface User {
   mustChangePassword?: boolean;
   /** Server-side session version; bumping it revokes all issued tokens */
   tokenVersion?: number;
+  /** Privacy notice acknowledgement and consent records */
+  privacy?: UserPrivacy;
+}
+
+export interface UserPrivacy {
+  /** Version of the privacy notice the user last acknowledged */
+  noticeVersion?: string;
+  noticeAcknowledgedAt?: string;
+  /** Opt-in consent to marketing / promotional messages (never pre-ticked) */
+  marketingConsent?: boolean;
+  marketingConsentAt?: string;
+  /** Set when the account's personal data was erased (anonymised) */
+  anonymisedAt?: string;
 }
 
 export interface Farm {
@@ -171,6 +184,8 @@ export interface Document {
   visibility: DocumentVisibility;
   description: string;
   uploadedAt: string;
+  /** Private cloud storage reference (files are never exposed via a public URL) */
+  storage?: { provider: 'cloudinary'; publicId: string; resourceType: string; format?: string; deliveryType: string };
 }
 
 export interface FinancialSummary {
@@ -206,6 +221,8 @@ export interface SimulatedEmail {
   attachmentUrl?: string;
   attachmentName?: string;
   attachmentType?: string;
+  /** Message contained a credential; real deliveries store a redacted copy */
+  containsCredentials?: boolean;
 }
 
 export interface SystemSettings {
@@ -230,4 +247,82 @@ export interface SystemSettings {
   brevoApiKey?: string;
   brevoSenderEmail?: string;
   brevoSenderName?: string;
+  privacy?: PrivacySettings;
+}
+
+/** Data-protection configuration (NDPA 2023 / GAID 2025, GDPR and similar laws). */
+export interface PrivacySettings {
+  controllerName: string;
+  controllerAddress: string;
+  controllerEmail: string;
+  dpoName: string;
+  dpoEmail: string;
+  dpoPhone: string;
+  /** Bump to require every user to re-acknowledge the notice */
+  noticeVersion: string;
+  noticeLastUpdated: string;
+  /** Where data is hosted / transferred, shown in the notice */
+  hostingDescription: string;
+  /** Extra organisation-specific text appended to the notice */
+  additionalNoticeText: string;
+  /** Days to answer a data subject request */
+  dsrResponseDays: number;
+  /** Retention periods */
+  retentionEmailLogDays: number;
+  retentionAuditLogDays: number;
+  retentionFinancialRecordsYears: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  at: string;
+  actorId: string | null;
+  actorRole: string | null;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  /** Non-identifying context only (ids, counts) - never names, emails or phone numbers */
+  details?: string;
+  ip?: string;
+}
+
+export type DataSubjectRequestType =
+  | 'access'
+  | 'rectification'
+  | 'erasure'
+  | 'restriction'
+  | 'objection'
+  | 'portability'
+  | 'withdraw_consent'
+  | 'other';
+
+export interface DataSubjectRequest {
+  id: string;
+  userId: string;
+  type: DataSubjectRequestType;
+  details: string;
+  status: 'open' | 'in_progress' | 'completed' | 'rejected';
+  createdAt: string;
+  dueAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionNote?: string;
+}
+
+export interface BreachIncident {
+  id: string;
+  title: string;
+  description: string;
+  /** When the organisation became aware of the breach (starts the 72-hour clock) */
+  detectedAt: string;
+  reportedBy: string;
+  dataCategories: string;
+  estimatedAffected: number;
+  likelyHighRisk: boolean;
+  containmentActions: string;
+  regulatorNotifiedAt?: string;
+  subjectsNotifiedAt?: string;
+  status: 'open' | 'contained' | 'closed';
+  createdAt: string;
+  updatedAt: string;
 }

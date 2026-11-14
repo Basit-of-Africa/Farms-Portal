@@ -20,6 +20,9 @@ import OnboardingTour from './components/OnboardingTour';
 import InvestorsView from './components/InvestorsView';
 import InvestorProfileView from './components/InvestorProfileView';
 import ChangePasswordModal from './components/ChangePasswordModal';
+import PrivacyNoticePage, { usePrivacyNotice } from './components/PrivacyNotice';
+import PrivacyAcknowledgeModal from './components/PrivacyAcknowledgeModal';
+import PrivacyCenter from './components/PrivacyCenter';
 import { User, UserRole } from './types';
 import { 
   Sprout, 
@@ -43,6 +46,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [privacyRefresh, setPrivacyRefresh] = useState(0);
+  const privacyNotice = usePrivacyNotice(privacyRefresh);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
   const [selectedInvestorId, setSelectedInvestorId] = useState<string | null>(null);
@@ -198,6 +203,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Clear the HttpOnly file-download session cookie
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     localStorage.removeItem('adubiaro_token');
     localStorage.removeItem('adubiaro_user');
     setAuthToken(null);
@@ -215,6 +222,11 @@ export default function App() {
     setCurrentUser(user);
     setIsChangePasswordOpen(false);
     triggerRefreshSignal();
+  };
+
+  const handleUserUpdated = (user: User) => {
+    localStorage.setItem('adubiaro_user', JSON.stringify(user));
+    setCurrentUser(user);
   };
 
   // Switch to selected farm in detail tabs
@@ -253,6 +265,11 @@ export default function App() {
     setActiveTab(investorProfileReturnTab || 'investors');
   };
 
+  // Public privacy notice page
+  if (window.location.pathname === '/privacy') {
+    return <PrivacyNoticePage />;
+  }
+
   if (!currentUser || !authToken) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
@@ -266,6 +283,21 @@ export default function App() {
           forced
           onSuccess={handlePasswordChanged}
           onClose={() => {}}
+          onLogout={handleLogout}
+        />
+      </div>
+    );
+  }
+
+  // The current privacy notice must be acknowledged before using the portal
+  if (privacyNotice && currentUser.privacy?.noticeVersion !== privacyNotice.noticeVersion && !currentUser.privacy?.anonymisedAt) {
+    return (
+      <div className="min-h-screen bg-[#FBF9F4] dark:bg-stone-950">
+        <PrivacyAcknowledgeModal
+          token={authToken}
+          notice={privacyNotice}
+          isUpdate={!!currentUser.privacy?.noticeVersion}
+          onAcknowledged={handleUserUpdated}
           onLogout={handleLogout}
         />
       </div>
@@ -492,6 +524,18 @@ export default function App() {
           <EmailOutbox 
             token={authToken} 
             refreshSignal={refreshSignal} 
+          />
+        )}
+
+        {/* PRIVACY & DATA PROTECTION CENTRE (all roles) */}
+        {activeTab === 'privacy' && (
+          <PrivacyCenter
+            user={currentUser}
+            token={authToken}
+            onUserUpdated={user => {
+              handleUserUpdated(user);
+              setPrivacyRefresh(n => n + 1);
+            }}
           />
         )}
 

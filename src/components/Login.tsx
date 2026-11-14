@@ -130,6 +130,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         <p className="text-[11px] text-gray-400 font-mono tracking-wider">
           ADUBIARO FARM ESTATE PORTAL • ENFORCED RBAC SECURITY PROTOCOL
         </p>
+        <a href="/privacy" className="inline-block mt-2 text-[11px] text-[#2D6A4F] underline font-semibold">Privacy notice</a>
       </div>
     </div>
   );

@@ -113,6 +113,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
   // Batch edit states
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [isBulkMessageModalOpen, setIsBulkMessageModalOpen] = useState<boolean>(false);
+  const [isMarketingBulk, setIsMarketingBulk] = useState(false);
   const [bulkMessageForm, setBulkMessageForm] = useState({
     subject: '',
     body: ''
@@ -287,6 +288,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       formData.append('recipientIds', selectedUserIds.join(','));
       formData.append('subject', bulkMessageForm.subject);
       formData.append('body', bulkMessageForm.body);
+      formData.append('isMarketing', String(isMarketingBulk));
       if (bulkMessageAttachment) {
         formData.append('attachment', bulkMessageAttachment);
       }
@@ -310,7 +312,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
           }
           setBulkMessageAttachmentPreview(null);
         }
-        showSuccess(`Bulk notification broadcasted successfully to ${data.count} selected investors!`);
+        showSuccess(`Message sent to ${data.count} selected investor(s).${data.skippedNoConsent ? ` ${data.skippedNoConsent} skipped (no marketing consent).` : ''}`);
         setSelectedUserIds([]); // Clear selection
         if (triggerRefreshSignal) triggerRefreshSignal();
       } else {
@@ -2027,6 +2029,11 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   className="w-full px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-sans"
                 />
               </div>
+
+              <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-stone-300 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={isMarketingBulk} onChange={(e) => setIsMarketingBulk(e.target.checked)} />
+                <span>Promotional / marketing message (only sent to people who opted in to marketing)</span>
+              </label>
 
               {/* Drag & Drop Attachment */}
               <div>

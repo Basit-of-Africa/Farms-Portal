@@ -44,6 +44,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
   const [selectedInvestorIds, setSelectedInvestorIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
+  const [isMarketingBroadcast, setIsMarketingBroadcast] = useState(false);
   const [broadcastForm, setBroadcastForm] = useState({
     subject: '',
     body: ''
@@ -182,6 +183,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
       formData.append('recipientIds', selectedInvestorIds.join(','));
       formData.append('subject', broadcastForm.subject);
       formData.append('body', broadcastForm.body);
+      formData.append('isMarketing', String(isMarketingBroadcast));
       if (broadcastAttachment) {
         formData.append('attachment', broadcastAttachment);
       }
@@ -196,7 +198,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
 
       if (res.ok) {
         const data = await res.json();
-        setBroadcastSuccess(`Broadcast successfully delivered to ${data.count} investor(s)!`);
+        setBroadcastSuccess(`Broadcast delivered to ${data.count} investor(s).${data.skippedNoConsent ? ` ${data.skippedNoConsent} skipped (no marketing consent).` : ''}`);
         
         // Reset form
         setBroadcastForm({ subject: '', body: '' });
@@ -412,6 +414,11 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                   required
                 />
               </div>
+
+              <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-stone-300 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={isMarketingBroadcast} onChange={(e) => setIsMarketingBroadcast(e.target.checked)} />
+                <span>Promotional / marketing message (only sent to people who opted in to marketing)</span>
+              </label>
 
               {/* Attachment Drag & Drop */}
               <div className="space-y-1.5">

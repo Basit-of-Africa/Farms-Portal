@@ -83,6 +83,12 @@ The application is engineered with a modular, highly resilient backend that dyna
 
 ---
 
+## 🛡️ Data Protection & Privacy
+
+The portal includes technical controls for the **Nigeria Data Protection Act 2023 / GAID 2025**, the **GDPR** and similar laws: a public privacy notice (`/privacy`) with versioned acknowledgement, opt-in marketing consent, self-service data export and correction, a data subject request queue with deadlines, erasure by anonymisation, an audit trail, retention purges, a breach register with the 72-hour NDPC deadline, and protected file downloads. See **[docs/compliance](docs/compliance/README.md)** for the requirement map, ROPA, breach plan, request procedure, DPIA template and the organisational steps still required.
+
+---
+
 ## 🛠️ Technology Stack & Dependencies
 
 -   **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Recharts (Data Charts), Lucide React (Icons), Motion / Framer Motion (Animations).
