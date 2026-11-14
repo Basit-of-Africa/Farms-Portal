@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import AdminDashboard from './components/AdminDashboard';
@@ -19,6 +19,7 @@ import GlobalSearch from './components/GlobalSearch';
 import OnboardingTour from './components/OnboardingTour';
 import InvestorsView from './components/InvestorsView';
 import InvestorProfileView from './components/InvestorProfileView';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import { User, UserRole } from './types';
 import { 
   Sprout, 
@@ -41,6 +42,7 @@ import {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
   const [selectedInvestorId, setSelectedInvestorId] = useState<string | null>(null);
@@ -145,13 +147,45 @@ export default function App() {
   }, [refreshSignal]);
 
   useEffect(() => {
-    // Session restore check
+    // Session restore check: re-validate the stored token with the server
     const token = localStorage.getItem('adubiaro_token');
     const userJson = localStorage.getItem('adubiaro_user');
     if (token && userJson) {
-      setAuthToken(token);
-      setCurrentUser(JSON.parse(userJson));
+      try {
+        setAuthToken(token);
+        setCurrentUser(JSON.parse(userJson));
+      } catch {
+        handleLogout();
+        return;
+      }
+      fetch('/api/user/me', { headers: { Authorization: `Bearer ${token}` } })
+        .then(async res => {
+          if (!res.ok) return; // 401 is handled by the global interceptor below
+          const data = await res.json();
+          if (data?.user) {
+            localStorage.setItem('adubiaro_user', JSON.stringify(data.user));
+            setCurrentUser(data.user);
+          }
+        })
+        .catch(() => { /* offline: keep the cached session */ });
     }
+  }, []);
+
+  // End the session whenever the server rejects our token (expired or revoked)
+  const logoutRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await originalFetch(input, init);
+      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+      if (response.status === 401 && headers.get('Authorization')?.startsWith('Bearer ')) {
+        logoutRef.current();
+      }
+      return response;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
   }, []);
 
   const handleLoginSuccess = (token: string, user: User) => {
@@ -168,8 +202,19 @@ export default function App() {
     localStorage.removeItem('adubiaro_user');
     setAuthToken(null);
     setCurrentUser(null);
+    setIsChangePasswordOpen(false);
     setActiveTab('dashboard');
     setSelectedFarmId(null);
+  };
+  logoutRef.current = handleLogout;
+
+  const handlePasswordChanged = (token: string, user: User) => {
+    localStorage.setItem('adubiaro_token', token);
+    localStorage.setItem('adubiaro_user', JSON.stringify(user));
+    setAuthToken(token);
+    setCurrentUser(user);
+    setIsChangePasswordOpen(false);
+    triggerRefreshSignal();
   };
 
   // Switch to selected farm in detail tabs
@@ -210,6 +255,21 @@ export default function App() {
 
   if (!currentUser || !authToken) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // A temporary password must be replaced before the portal can be used
+  if (currentUser.mustChangePassword) {
+    return (
+      <div className="min-h-screen bg-[#FBF9F4] dark:bg-stone-950">
+        <ChangePasswordModal
+          token={authToken}
+          forced
+          onSuccess={handlePasswordChanged}
+          onClose={() => {}}
+          onLogout={handleLogout}
+        />
+      </div>
+    );
   }
 
   return (
@@ -286,6 +346,10 @@ export default function App() {
           setIsSidebarOpen(false);
         }} 
         onLogout={handleLogout} 
+        onChangePassword={() => {
+          setIsSidebarOpen(false);
+          setIsChangePasswordOpen(true);
+        }}
         logoText={portalSettings?.logoText}
         deferredPrompt={deferredPrompt}
         onInstallApp={handleInstallApp}
@@ -522,6 +586,16 @@ export default function App() {
         isOpen={isTourOpen} 
         onClose={() => setIsTourOpen(false)} 
       />
+
+      {isChangePasswordOpen && (
+        <ChangePasswordModal
+          token={authToken}
+          forced={false}
+          onSuccess={handlePasswordChanged}
+          onClose={() => setIsChangePasswordOpen(false)}
+          onLogout={handleLogout}
+        />
+      )}
 
       {/* PWA Installation Guide Dialog */}
       {isInstallModalOpen && (

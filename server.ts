@@ -14,8 +14,22 @@ import pg from 'pg';
 import { v2 as cloudinary } from 'cloudinary';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
-import { initializeApp as initializeFirebaseApp } from 'firebase/app';
-import { initializeFirestore, doc, setDoc, getDoc, getDocs, collection } from 'firebase/firestore/lite';
+import { Firestore } from '@google-cloud/firestore';
+import {
+  hashPassword,
+  verifyPassword,
+  needsRehash,
+  isPasswordHash,
+  validatePasswordStrength,
+  generateTempPassword,
+  initAuthSecret,
+  issueToken,
+  verifyToken,
+  loginRetryAfter,
+  recordLoginFailure,
+  clearLoginFailures,
+  secretStrippingReplacer
+} from './server/auth';
 import {
   User,
   UserRole,
@@ -62,7 +76,17 @@ const upload = multer({ storage });
 
 // Initialize express
 const app = express();
+
+// The Google Cloud SDK can surface internal retry failures as unhandled
+// rejections; log them instead of letting them terminate the portal.
+process.on('unhandledRejection', (reason: any) => {
+  console.error('⚠️ Unhandled promise rejection:', reason?.message || reason);
+});
 app.use(express.json({ limit: '10mb' }));
+// Never serialise password hashes or session versions in API responses
+app.set('json replacer', secretStrippingReplacer);
+// Behind a reverse proxy (Cloud Run, Railway, ...) so req.ip reflects the client
+app.set('trust proxy', process.env.TRUST_PROXY ? (isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY)) : 1);
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Super Admin Latency Injection Middleware
@@ -277,7 +301,7 @@ try {
     } catch (err) {
       console.error('❌ Failed to parse FIREBASE_CONFIG environment variable:', err);
     }
-  } else if (process.env.FIREBASE_API_KEY && process.env.FIREBASE_PROJECT_ID) {
+  } else if (process.env.FIREBASE_PROJECT_ID) {
     console.log('🔄 Initializing Firebase using individual environment variables...');
     firebaseConfig = {
       apiKey: process.env.FIREBASE_API_KEY,
@@ -293,11 +317,38 @@ try {
     console.log('🔄 Initializing Firebase using firebase-applet-config.json file...');
   }
 
-  if (firebaseConfig) {
-    const fApp = initializeFirebaseApp(firebaseConfig);
+  // The server SDK needs Google credentials; without them it cannot connect.
+  const hasGoogleCredentials = !!(
+    process.env.FIREBASE_SERVICE_ACCOUNT ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    process.env.K_SERVICE || // Cloud Run provides a runtime service account
+    process.env.FIRESTORE_USE_ADC === 'true'
+  );
+
+  if (firebaseConfig && !hasGoogleCredentials) {
+    console.warn('⚠️ Firebase config found but no Google service-account credentials (FIREBASE_SERVICE_ACCOUNT, GOOGLE_APPLICATION_CREDENTIALS, or Cloud Run). Firestore cloud backing disabled.');
+  } else if (firebaseConfig) {
+    // Server-side Firestore SDK: authenticates with a Google service account
+    // (FIREBASE_SERVICE_ACCOUNT JSON, GOOGLE_APPLICATION_CREDENTIALS, or the
+    // runtime's default credentials on Cloud Run). It is not subject to
+    // firestore.rules, which deny all direct client access.
     const dbId = firebaseConfig.firestoreDatabaseId || process.env.FIREBASE_DATABASE_ID || '(default)';
-    firestoreDb = initializeFirestore(fApp, {}, dbId);
-    console.log(`✅ Firebase Firestore client (Lite mode) successfully initialized on database: "${dbId}".`);
+    const firestoreOptions: any = {
+      projectId: firebaseConfig.projectId,
+      ignoreUndefinedProperties: true
+    };
+    if (dbId && dbId !== '(default)') firestoreOptions.databaseId = dbId;
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        firestoreOptions.credentials = { client_email: sa.client_email, private_key: sa.private_key };
+        if (!firestoreOptions.projectId) firestoreOptions.projectId = sa.project_id;
+      } catch (err) {
+        console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable:', err);
+      }
+    }
+    firestoreDb = new Firestore(firestoreOptions);
+    console.log(`✅ Firestore server client initialized on database: "${dbId}".`);
   } else {
     console.warn('⚠️ No Firebase configuration found (neither env vars nor JSON config). Firestore cloud backing disabled.');
   }
@@ -325,7 +376,7 @@ async function runFirebaseDiagnostics(config: any): Promise<{
   }
 
   // 1. Verify required keys
-  const requiredFields = ['apiKey', 'projectId'];
+  const requiredFields = ['projectId'];
   const missingFields = requiredFields.filter(f => !config[f]);
   if (missingFields.length > 0) {
     const msg = `Configuration lacks necessary Firebase fields: ${missingFields.join(', ')}`;
@@ -346,8 +397,7 @@ async function runFirebaseDiagnostics(config: any): Promise<{
   try {
     console.log('⚡ [Firebase Diagnostic] Performing diagnostic connectivity probe to Firestore...');
     // We attempt to read the settings document. In Firestore Lite, this goes directly to the server.
-    const testDocRef = doc(firestoreDb, 'settings', 'standalone');
-    await getDoc(testDocRef);
+    await firestoreDb.collection('settings').doc('standalone').get();
     console.log('🎉 [Firebase Diagnostic] Connectivity probe succeeded! Firestore client is fully online and responsive.');
     return { isValidConfig: true, canConnect: true, errorType: 'none', errorMessage: null };
   } catch (error: any) {
@@ -440,9 +490,9 @@ async function loadDbFromFirestore() {
 
     let loadedSomething = false;
     for (const col of collectionsToLoad) {
-      const querySnapshot = await retryWithBackoff(() => getDocs(collection(firestoreDb, col.name)), 4, 1000);
+      const querySnapshot = await retryWithBackoff<any>(() => firestoreDb.collection(col.name).get(), 4, 1000);
       const items: any[] = [];
-      querySnapshot.forEach((docSnapshot) => {
+      querySnapshot.forEach((docSnapshot: any) => {
         items.push({ id: docSnapshot.id, ...docSnapshot.data() });
       });
       if (items.length > 0) {
@@ -454,8 +504,8 @@ async function loadDbFromFirestore() {
     }
 
     // Load settings
-    const settingsDoc = await retryWithBackoff(() => getDoc(doc(firestoreDb, 'settings', 'standalone')), 4, 1000);
-    if (settingsDoc.exists()) {
+    const settingsDoc = await retryWithBackoff<any>(() => firestoreDb.collection('settings').doc('standalone').get(), 4, 1000);
+    if (settingsDoc.exists) {
       db.settings = settingsDoc.data() as SystemSettings;
       loadedSomething = true;
     }
@@ -496,14 +546,14 @@ async function saveDbToFirestore() {
           const { id, ...data } = item;
           // Prevent setting undefined values in Firestore
           const cleanData = JSON.parse(JSON.stringify(data));
-          await retryWithBackoff(() => setDoc(doc(firestoreDb, col.name, item.id), cleanData), 3, 1000);
+          await retryWithBackoff(() => firestoreDb.collection(col.name).doc(item.id).set(cleanData), 3, 1000);
         }
       }
     }
 
     if (db.settings) {
       const cleanSettings = JSON.parse(JSON.stringify(db.settings));
-      await retryWithBackoff(() => setDoc(doc(firestoreDb, 'settings', 'standalone'), cleanSettings), 3, 1000);
+      await retryWithBackoff(() => firestoreDb.collection('settings').doc('standalone').set(cleanSettings), 3, 1000);
     }
     console.log('✅ Synchronized memory DB state to Firestore successfully.');
   } catch (err) {
@@ -569,8 +619,8 @@ async function initFirestore() {
     // Check if the settings doc exists in Firestore to see if we should seed
     let settingsDocExists = false;
     try {
-      const settingsDoc = await retryWithBackoff(() => getDoc(doc(firestoreDb, 'settings', 'standalone')), 4, 1000);
-      settingsDocExists = settingsDoc.exists();
+      const settingsDoc = await retryWithBackoff<any>(() => firestoreDb.collection('settings').doc('standalone').get(), 4, 1000);
+      settingsDocExists = settingsDoc.exists;
     } catch (err) {
       console.error('❌ Could not verify settings doc in Firestore:', err);
     }
@@ -624,7 +674,9 @@ function mapUserFromDb(row: any): User {
     email: row.email,
     name: row.name,
     password: row.password || undefined,
-    isActive: row.is_active !== false
+    isActive: row.is_active !== false,
+    mustChangePassword: row.must_change_password === true,
+    tokenVersion: row.token_version || 0
   };
 }
 
@@ -834,8 +886,8 @@ async function saveDbToPostgres() {
     // 1. Synchronize Users
     for (const user of db.users) {
       await client.query(
-        `INSERT INTO users (id, username, role, phone, email, name, password, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO users (id, username, role, phone, email, name, password, is_active, must_change_password, token_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (id) DO UPDATE SET
            username = EXCLUDED.username,
            role = EXCLUDED.role,
@@ -843,8 +895,10 @@ async function saveDbToPostgres() {
            email = EXCLUDED.email,
            name = EXCLUDED.name,
            password = EXCLUDED.password,
-           is_active = EXCLUDED.is_active`,
-        [user.id, user.username, user.role, user.phone || null, user.email, user.name, user.password || null, user.isActive !== false]
+           is_active = EXCLUDED.is_active,
+           must_change_password = EXCLUDED.must_change_password,
+           token_version = EXCLUDED.token_version`,
+        [user.id, user.username, user.role, user.phone || null, user.email, user.name, user.password || null, user.isActive !== false, user.mustChangePassword === true, user.tokenVersion || 0]
       );
     }
 
@@ -1169,8 +1223,10 @@ async function initPostgres() {
         phone VARCHAR(50),
         email VARCHAR(100) NOT NULL,
         name VARCHAR(100) NOT NULL,
-        password VARCHAR(100),
-        is_active BOOLEAN DEFAULT TRUE
+        password VARCHAR(255),
+        is_active BOOLEAN DEFAULT TRUE,
+        must_change_password BOOLEAN DEFAULT FALSE,
+        token_version INTEGER DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS farms (
@@ -1283,8 +1339,11 @@ async function initPostgres() {
 
     // Ensure legacy schemas have the password and is_active columns
     await pgPool.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(100);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
+      ALTER TABLE users ALTER COLUMN password TYPE VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 0;
       ALTER TABLE updates ADD COLUMN IF NOT EXISTS updated_at VARCHAR(100);
       ALTER TABLE updates ADD COLUMN IF NOT EXISTS comments JSONB DEFAULT '[]';
       ALTER TABLE plots ADD COLUMN IF NOT EXISTS size_unit VARCHAR(50) DEFAULT 'acre';
@@ -1502,13 +1561,20 @@ async function dispatchEmail(
 // AUTHENTICATION MIDDLEWARE
 function getAuthenticatedUser(req: express.Request): User | null {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer mock-token-')) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
   }
-  const username = authHeader.replace('Bearer mock-token-', '').trim();
-  const foundUser = db.users.find(u => u.username === username);
-  return foundUser || null;
+  const payload = verifyToken(authHeader.slice('Bearer '.length).trim());
+  if (!payload) return null;
+  const foundUser = db.users.find(u => u.id === payload.sub);
+  if (!foundUser) return null;
+  // Tokens are revoked by bumping the user's tokenVersion (password change/reset)
+  if ((foundUser.tokenVersion || 0) !== payload.tv) return null;
+  return foundUser;
 }
+
+// Routes a user with a pending forced password change may still call
+const PASSWORD_CHANGE_ALLOWED_PATHS = new Set(['/api/auth/change-password', '/api/user/me']);
 
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = getAuthenticatedUser(req);
@@ -1518,20 +1584,97 @@ function requireAuth(req: express.Request, res: express.Response, next: express.
   if (user.isActive === false) {
     return res.status(403).json({ error: 'This account has been deactivated. Please contact support.' });
   }
+  if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED_PATHS.has(req.path)) {
+    return res.status(403).json({ error: 'You must change your temporary password before continuing.', code: 'PASSWORD_CHANGE_REQUIRED' });
+  }
   // Attach user to req as custom property
   (req as any).user = user;
   next();
+}
+
+/** User object safe to send to the client. */
+function publicUser(user: User) {
+  const { password: _password, tokenVersion: _tv, ...rest } = user as any;
+  return rest;
+}
+
+/**
+ * Whether `actor` may modify `target`'s account. Admins may manage anyone;
+ * farm managers may only manage investor accounts.
+ */
+function canManageUser(actor: User, target: User): boolean {
+  if (actor.role === UserRole.ADMIN) return true;
+  if (actor.role === UserRole.FARM_MANAGER) return target.role === UserRole.INVESTOR;
+  return false;
+}
+
+/** Sets a new (hashed) password and revokes the user's existing sessions. */
+function setUserPassword(user: User, plain: string, mustChange: boolean) {
+  user.password = hashPassword(plain);
+  user.mustChangePassword = mustChange;
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+}
+
+/**
+ * Credential migration, run after the database is loaded or replaced:
+ *  - hashes any legacy plaintext passwords
+ *  - guarantees at least one admin can sign in (ADMIN_INITIAL_PASSWORD, or a
+ *    generated one-time password printed to the server log)
+ * Returns true if anything changed.
+ */
+function migrateUserCredentials(): boolean {
+  let changed = false;
+  for (const u of db.users) {
+    if (needsRehash(u.password)) {
+      u.password = hashPassword(u.password as string);
+      changed = true;
+    }
+  }
+
+  const activeAdmins = db.users.filter(u => u.role === UserRole.ADMIN && u.isActive !== false);
+  if (activeAdmins.length > 0 && !activeAdmins.some(u => isPasswordHash(u.password))) {
+    const admin = activeAdmins[0];
+    const envPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    const initial = envPassword && !validatePasswordStrength(envPassword) ? envPassword : generateTempPassword();
+    setUserPassword(admin, initial, true);
+    changed = true;
+    if (envPassword && initial === envPassword) {
+      console.warn(`🔐 Admin "${admin.username}" had no password; set it from ADMIN_INITIAL_PASSWORD. It must be changed at first login.`);
+    } else {
+      if (envPassword) console.warn('⚠️ ADMIN_INITIAL_PASSWORD is too weak (min 8 chars, letters and numbers); ignoring it.');
+      console.warn('================================================================');
+      console.warn(`🔐 Admin "${admin.username}" had no password. One-time password: ${initial}`);
+      console.warn('   Sign in with it and you will be asked to choose a new one.');
+      console.warn('================================================================');
+    }
+  }
+
+  const locked = db.users.filter(u => !isPasswordHash(u.password));
+  if (locked.length > 0) {
+    console.warn(`🔒 ${locked.length} account(s) have no password and cannot sign in until an admin sets one: ${locked.map(u => u.username).join(', ')}`);
+  }
+  return changed;
 }
 
 // API ROUTING
 
 // Auth - Login
 app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  
-  // Accept standard demo passwords
+  const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+  const password = req.body?.password;
+  const ip = req.ip || 'unknown';
+
+  const retryAfter = loginRetryAfter(ip, username);
+  if (retryAfter > 0) {
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: `Too many failed sign-in attempts. Try again in ${Math.ceil(retryAfter / 60)} minute(s).` });
+  }
+
   const user = db.users.find(u => u.username === username);
-  if (!user) {
+  const isMatch = verifyPassword(password, user?.password);
+
+  if (!user || !isMatch) {
+    recordLoginFailure(ip, username);
     return res.status(400).json({ error: 'Invalid login credentials' });
   }
 
@@ -1539,26 +1682,44 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(403).json({ error: 'This account has been deactivated. Please contact support.' });
   }
 
-  let isMatch = false;
-  if (user.password && password === user.password) {
-    isMatch = true;
-  } else {
-    if (user.role === UserRole.ADMIN && password === 'Admin@1234') isMatch = true;
-    if (user.role === UserRole.FARM_MANAGER && password === 'Manager@1234') isMatch = true;
-    if (user.role === UserRole.INVESTOR && password === 'Investor@1234') isMatch = true;
+  clearLoginFailures(ip, username);
+
+  if (needsRehash(user.password)) {
+    user.password = hashPassword(password);
+    saveDb();
   }
 
-  if (!isMatch) {
-    return res.status(400).json({ error: 'Invalid login credentials' });
+  const token = issueToken(user.id, user.tokenVersion || 0);
+  res.json({ token, user: publicUser(user), mustChangePassword: !!user.mustChangePassword });
+});
+
+// Auth - Change own password (also completes a forced temporary-password change)
+app.post('/api/auth/change-password', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const { currentPassword, newPassword } = req.body || {};
+
+  if (!verifyPassword(currentPassword, user.password)) {
+    return res.status(400).json({ error: 'Current password is incorrect.' });
+  }
+  const weakness = validatePasswordStrength(newPassword);
+  if (weakness) {
+    return res.status(400).json({ error: weakness });
+  }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ error: 'New password must be different from the current password.' });
   }
 
-  const token = `mock-token-${user.username}`;
-  res.json({ token, user });
+  setUserPassword(user, newPassword, false);
+  saveDb();
+
+  // Existing sessions were revoked; hand back a fresh token for this one
+  const token = issueToken(user.id, user.tokenVersion || 0);
+  res.json({ success: true, token, user: publicUser(user) });
 });
 
 // Auth - Current User Status
 app.get('/api/user/me', requireAuth, (req, res) => {
-  res.json({ user: (req as any).user });
+  res.json({ user: publicUser((req as any).user) });
 });
 
 // Admin System Stats Dashboard
@@ -2821,11 +2982,23 @@ app.post('/api/users/create', requireAuth, (req, res) => {
 
   const { username, name, email, phone, role, password } = req.body;
 
+  if (!username || !name || !email) {
+    return res.status(400).json({ error: 'Username, name and email are required.' });
+  }
+
   // Unique username validation
   const existingUser = db.users.find(u => u.username === username);
   if (existingUser) {
     return res.status(400).json({ error: 'Username already exists' });
   }
+
+  const providedPassword = typeof password === 'string' && password.trim() !== '' ? password.trim() : null;
+  if (providedPassword) {
+    const weakness = validatePasswordStrength(providedPassword);
+    if (weakness) return res.status(400).json({ error: weakness });
+  }
+  // Temporary password: either the one the admin chose, or a random one
+  const tempPassword = providedPassword || generateTempPassword();
 
   const newUserId = 'user-' + Date.now();
   const createdUser: User = {
@@ -2835,19 +3008,13 @@ app.post('/api/users/create', requireAuth, (req, res) => {
     email,
     phone,
     role: (role as UserRole) || UserRole.INVESTOR,
-    password: password || undefined
+    password: hashPassword(tempPassword),
+    mustChangePassword: true,
+    tokenVersion: 0
   };
 
   db.users.push(createdUser);
   saveDb();
-
-  // Set default temporary password for welcome notification
-  let tempPassword = password || 'User@1234';
-  if (!password) {
-    if (role === UserRole.FARM_MANAGER) tempPassword = 'Manager@1234';
-    if (role === UserRole.INVESTOR) tempPassword = 'Investor@1234';
-    if (role === UserRole.ADMIN) tempPassword = 'Admin@1234';
-  }
 
   // EMAIL TRIGGER 4: New user / investor account created → welcome email
   dispatchEmail(
@@ -2874,7 +3041,8 @@ app.post('/api/users/create', requireAuth, (req, res) => {
     }
   );
 
-  res.status(201).json(createdUser);
+  // The temporary password is shown once to the admin (it is also emailed)
+  res.status(201).json({ ...publicUser(createdUser), temporaryPassword: tempPassword });
 });
 
 function parseCleanImportNumber(val: unknown, fallback = 0): number {
@@ -2886,6 +3054,8 @@ function parseCleanImportNumber(val: unknown, fallback = 0): number {
 }
 
 function executeBulkInvestorImport(investors: any[], currentUser: User) {
+  // Plaintext temporary passwords for new accounts, kept only long enough to email them
+  const tempPasswords = new Map<string, string>();
   const results = {
     total: investors.length,
     successCount: 0,
@@ -3007,6 +3177,9 @@ function executeBulkInvestorImport(investors: any[], currentUser: User) {
       }
     } else {
       const uidSuffix = `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+      const suppliedPassword = password ? String(password).trim() : '';
+      const tempPassword = suppliedPassword && !validatePasswordStrength(suppliedPassword) ? suppliedPassword : generateTempPassword();
+      tempPasswords.set(`user-${uidSuffix}`, tempPassword);
       targetUser = {
         id: `user-${uidSuffix}`,
         username: cleanUsername,
@@ -3014,7 +3187,9 @@ function executeBulkInvestorImport(investors: any[], currentUser: User) {
         email: cleanEmail,
         phone: cleanPhone,
         role: UserRole.INVESTOR,
-        password: password ? String(password).trim() : undefined,
+        password: hashPassword(tempPassword),
+        mustChangePassword: true,
+        tokenVersion: 0,
         isActive: true
       };
       usersToAdd.push(targetUser);
@@ -3184,7 +3359,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User) {
 
     // Send notifications/emails for each newly added user
     usersToAdd.forEach(createdUser => {
-      const tempPassword = createdUser.password || 'Investor@1234';
+      const tempPassword = tempPasswords.get(createdUser.id) || '(contact your administrator)';
       dispatchEmail(
         createdUser.email,
         'Welcome to Adubiaro Farm Estates Portal',
@@ -3484,11 +3659,15 @@ app.post('/api/admin/users/:id/toggle-active', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
+  if (!canManageUser(currentUser, targetUser)) {
+    return res.status(403).json({ error: 'Farm managers can only activate or deactivate investor accounts.' });
+  }
+
   // Toggle active
   targetUser.isActive = targetUser.isActive === false ? true : false;
   saveDb();
 
-  res.json({ success: true, user: targetUser });
+  res.json({ success: true, user: publicUser(targetUser) });
 });
 
 // Admin Route to update a user's details
@@ -3503,8 +3682,26 @@ app.post('/api/admin/users/:id/update', requireAuth, (req, res) => {
   if (!targetUser) {
     return res.status(404).json({ error: 'User not found' });
   }
+  if (!canManageUser(currentUser, targetUser)) {
+    return res.status(403).json({ error: 'Farm managers can only edit investor accounts.' });
+  }
 
   const { name, email, phone, username, role, isActive, password } = req.body;
+
+  if (role && currentUser.role !== UserRole.ADMIN && role !== UserRole.INVESTOR) {
+    return res.status(403).json({ error: 'Only administrators can assign staff roles.' });
+  }
+  if (targetUser.id === currentUser.id && role && role !== currentUser.role) {
+    return res.status(400).json({ error: 'You cannot change your own role.' });
+  }
+  if (targetUser.id === currentUser.id && isActive === false) {
+    return res.status(400).json({ error: 'You cannot deactivate your own account.' });
+  }
+  const newPassword = typeof password === 'string' ? password.trim() : '';
+  if (newPassword) {
+    const weakness = validatePasswordStrength(newPassword);
+    if (weakness) return res.status(400).json({ error: weakness });
+  }
 
   if (username && username !== targetUser.username) {
     const existingUser = db.users.find(u => u.username === username);
@@ -3519,10 +3716,11 @@ app.post('/api/admin/users/:id/update', requireAuth, (req, res) => {
   if (phone) targetUser.phone = phone;
   if (role) targetUser.role = role as UserRole;
   if (typeof isActive === 'boolean') targetUser.isActive = isActive;
-  if (password && password.trim() !== '') targetUser.password = password;
+  // A password set by someone else is temporary: the user must change it at next sign-in.
+  if (newPassword) setUserPassword(targetUser, newPassword, targetUser.id !== currentUser.id);
 
   saveDb();
-  res.json({ success: true, user: targetUser });
+  res.json({ success: true, user: publicUser(targetUser) });
 });
 
 // Admin Route to perform bulk actions on users
@@ -3544,9 +3742,16 @@ app.post('/api/admin/users/bulk-action', requireAuth, (req, res) => {
   let updatedCount = 0;
   const previousStates: Array<{ id: string; role: UserRole; isActive: boolean }> = [];
 
+  if (action === 'update-role' && currentUser.role !== UserRole.ADMIN && value !== UserRole.INVESTOR) {
+    return res.status(403).json({ error: 'Only administrators can assign staff roles.' });
+  }
+  if (action === 'update-role' && !Object.values(UserRole).includes(value)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+
   userIds.forEach(id => {
     const targetUser = db.users.find(u => u.id === id);
-    if (targetUser) {
+    if (targetUser && canManageUser(currentUser, targetUser)) {
       // Record original state in case we want to undo
       const originalState = {
         id: targetUser.id,
@@ -3607,10 +3812,14 @@ app.post('/api/admin/users/bulk-undo', requireAuth, (req, res) => {
 
   let undoneCount = 0;
   previousStates.forEach(state => {
-    const targetUser = db.users.find(u => u.id === state.id);
-    if (targetUser) {
+    const targetUser = db.users.find(u => u.id === state?.id);
+    if (!targetUser || !canManageUser(currentUser, targetUser)) return;
+    if (!Object.values(UserRole).includes(state.role)) return;
+    if (currentUser.role !== UserRole.ADMIN && state.role !== UserRole.INVESTOR) return;
+    if (targetUser.id === currentUser.id && (state.role !== currentUser.role || state.isActive === false)) return;
+    {
       targetUser.role = state.role;
-      targetUser.isActive = state.isActive;
+      targetUser.isActive = state.isActive !== false;
       undoneCount++;
     }
   });
@@ -3843,10 +4052,13 @@ app.delete('/api/admin/users/:id', requireAuth, (req, res) => {
   }
 
   const deletedUser = db.users[userIndex];
+  if (!canManageUser(currentUser, deletedUser)) {
+    return res.status(403).json({ error: 'Farm managers can only delete investor accounts.' });
+  }
   db.users.splice(userIndex, 1);
   saveDb();
 
-  res.json({ success: true, deletedUser });
+  res.json({ success: true, deletedUser: publicUser(deletedUser) });
 });
 
 // Admin route to manage plots, link to farms, assign plots to investors
@@ -4370,6 +4582,9 @@ app.post('/api/admin/reset-db', requireAuth, async (req, res) => {
     await resetPostgresDb();
   }
   db = getInitialDb();
+  // Keep the admin performing the reset so they are not locked out
+  db.users = [user];
+  migrateUserCredentials();
   saveDb();
   res.json({ message: 'Database successfully restored to original seed demo values.' });
 });
@@ -4691,6 +4906,7 @@ app.post('/api/admin/database/import', requireAuth, async (req, res) => {
 
     // Replace in-memory database
     db = importedDb;
+    migrateUserCredentials();
 
     // Persist immediately across active channels
     saveDb();
@@ -4749,6 +4965,7 @@ app.get('/api/portal/settings', (req, res) => {
 
 // INTEGRATE VITE NODE DEV SERVER MIDDLEWARE
 async function startServer() {
+  initAuthSecret(DATA_DIR);
   await initFirestore();
   await initPostgres();
 
@@ -4795,9 +5012,14 @@ async function startServer() {
 
   if (dataRemoved) {
     console.log('🧹 Demo data records detected. Purging from database and saving clean slate...');
-    saveDb();
   } else {
     console.log('✨ No pre-seeded demo data records found on startup.');
+  }
+
+  // Hash legacy plaintext passwords and make sure an admin can sign in
+  const credentialsChanged = migrateUserCredentials();
+  if (dataRemoved || credentialsChanged) {
+    saveDb();
   }
 
   if (process.env.NODE_ENV !== 'production') {

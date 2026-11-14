@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Sprout, Key, LogIn, ShieldCheck, Mail, Lock, Sparkles } from 'lucide-react';
+import { Sprout, LogIn, Mail, Lock } from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -16,15 +16,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [showSwitcher, setShowSwitcher] = useState(false);
-
-  const handleLogin = async (e?: React.FormEvent, directUser?: string, directPass?: string) => {
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const u = directUser || username;
-    const p = directPass || password;
+    const u = username.trim();
+    const p = password;
 
     try {
       const response = await fetch('/api/auth/login', {
@@ -46,36 +44,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  const handleDemoLogin = (role: 'admin' | 'manager' | 'investor1' | 'investor2') => {
-    let u = '';
-    let p = '';
-    if (role === 'admin') {
-      u = 'admin';
-      p = 'Admin@1234';
-    } else if (role === 'manager') {
-      u = 'manager1';
-      p = 'Manager@1234';
-    } else if (role === 'investor1') {
-      u = 'investor1';
-      p = 'Investor@1234';
-    } else if (role === 'investor2') {
-      u = 'investor2';
-      p = 'Investor@1234';
-    }
-    setUsername(u);
-    setPassword(p);
-    handleLogin(undefined, u, p);
-  };
-
   return (
     <div id="login-stage" className="min-h-screen bg-[#FBF9F4] flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-premium overflow-hidden border border-[#2D6A4F]/10">
         {/* Banner */}
         <div className="bg-gradient-to-b from-[#143427] to-[#0E251B] p-10 text-center text-white relative">
           <div 
-            onClick={() => setShowSwitcher(!showSwitcher)}
-            title="Toggle Developer Assistant options"
-            className="absolute top-4 right-4 bg-[#D4A017] hover:bg-[#D4A017]/80 text-[#0A2619] text-[8px] uppercase font-mono font-black px-2 py-0.5 rounded-md border border-[#D4A017]/30 cursor-pointer select-none transition"
+            className="absolute top-4 right-4 bg-[#D4A017] text-[#0A2619] text-[8px] uppercase font-mono font-black px-2 py-0.5 rounded-md border border-[#D4A017]/30 select-none"
           >
             SECURE PORTAL TLS
           </div>
@@ -105,7 +80,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   id="id-username"
                   type="text"
                   required
-                  placeholder="Username (e.g. admin, manager1)"
+                  placeholder="Your username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1B4332]/20 focus:border-[#1B4332] text-sm bg-white font-medium transition-all duration-200 outline-none shadow-sm focus:shadow-md"
@@ -114,7 +89,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </div>
 
             <div>
-              <label className="block text-xs font-mono text-gray-400 uppercase mb-1.5 font-bold tracking-wider">Secure PIN / Access Key</label>
+              <label className="block text-xs font-mono text-gray-400 uppercase mb-1.5 font-bold tracking-wider">Password</label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
                   <Lock className="h-4 w-4 text-[#2D6A4F]/50" />
@@ -148,56 +123,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </button>
           </form>
 
-          {/* Quick Mock demo selector - hidden by default, accessible by clicking SECURE PORTAL TLS badge above */}
-          {showSwitcher && (
-            <div className="mt-8 border-t border-gray-100 pt-6 animate-fadeIn">
-              <div className="flex items-center gap-2 mb-4 justify-center">
-                <Sparkles className="h-3.5 w-3.5 text-[#D4A017]" />
-                <h3 className="text-[10px] font-mono font-bold uppercase text-gray-400 tracking-widest text-center">Interactive Role Switcher</h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  id="btn-demo-admin"
-                  type="button"
-                  onClick={() => handleDemoLogin('admin')}
-                  className="p-3 bg-gray-50 hover:bg-neutral-100 border border-gray-150 hover:border-gray-300 rounded-xl text-left cursor-pointer transition duration-200"
-                >
-                  <div className="text-[11px] font-bold text-gray-700">Super Admin</div>
-                  <div className="text-[9px] font-mono text-gray-400 truncate font-semibold mt-0.5">admin / Admin@1234</div>
-                </button>
-
-                <button
-                  id="btn-demo-manager"
-                  type="button"
-                  onClick={() => handleDemoLogin('manager')}
-                  className="p-3 bg-gray-50 hover:bg-neutral-100 border border-gray-150 hover:border-gray-300 rounded-xl text-left cursor-pointer transition duration-200"
-                >
-                  <div className="text-[11px] font-bold text-gray-700">Farm Manager</div>
-                  <div className="text-[9px] font-mono text-gray-400 truncate font-semibold mt-0.5">manager1 / Manager@1234</div>
-                </button>
-
-                <button
-                  id="btn-demo-investor1"
-                  type="button"
-                  onClick={() => handleDemoLogin('investor1')}
-                  className="p-3 bg-gray-50 hover:bg-neutral-100 border border-gray-150 hover:border-gray-300 rounded-xl text-left cursor-pointer transition duration-200"
-                >
-                  <div className="text-[11px] font-bold text-gray-700">Investor One</div>
-                  <div className="text-[9px] font-mono text-gray-400 truncate font-semibold mt-0.5">investor1 / Investor@1234</div>
-                </button>
-
-                <button
-                  id="btn-demo-investor2"
-                  type="button"
-                  onClick={() => handleDemoLogin('investor2')}
-                  className="p-3 bg-gray-50 hover:bg-neutral-100 border border-gray-150 hover:border-gray-300 rounded-xl text-left cursor-pointer transition duration-200"
-                >
-                  <div className="text-[11px] font-bold text-gray-700">Investor Two</div>
-                  <div className="text-[9px] font-mono text-gray-400 truncate font-semibold mt-0.5">investor2 / Investor@1234</div>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

@@ -426,7 +426,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'User setup error');
 
-      setUserSuccessMessage(`Account for ${data.name} (${data.role.toUpperCase()}) provisioned successfully! Signals triggered a welcome notification.`);
+      setUserSuccessMessage(`Account for ${data.name} (${data.role.toUpperCase()}) provisioned. Temporary password: ${data.temporaryPassword} (also sent in the welcome email; the user must change it at first sign-in).`);
       setNewUsername('');
       setNewName('');
       setNewEmail('');

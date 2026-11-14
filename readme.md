@@ -70,6 +70,19 @@ The application is engineered with a modular, highly resilient backend that dyna
 
 ---
 
+## 🔐 Authentication & Security
+
+- **Passwords** are hashed with scrypt (Node `crypto`). Legacy plaintext passwords are hashed automatically on startup.
+- **Sessions** use HMAC-signed tokens that expire (default 12h, `AUTH_TOKEN_TTL_SECONDS`). Set `AUTH_SECRET` in production; otherwise one is generated in `data/.auth-secret`. Changing a password revokes that user's other sessions.
+- **Temporary passwords**: new accounts get a random temporary password (shown once to the admin and emailed). Users must choose their own password at first sign-in.
+- **First admin login**: if no admin has a password, the server uses `ADMIN_INITIAL_PASSWORD` or prints a one-time password to the server log.
+- **Accounts without a password** cannot sign in until an admin sets one (Investors → edit → *Set New Password*).
+- **Login throttling**: 10 failed attempts per IP + username per 15 minutes.
+- **Role limits**: farm managers can only edit, (de)activate or delete investor accounts.
+- **Firestore** is accessed only by the server through the server-side SDK with a service account (`FIREBASE_SERVICE_ACCOUNT`, `GOOGLE_APPLICATION_CREDENTIALS`, or Cloud Run's runtime account). `firestore.rules` denies all direct client access. Deploy the rules with `firebase deploy --only firestore:rules`.
+
+---
+
 ## 🛠️ Technology Stack & Dependencies
 
 -   **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Recharts (Data Charts), Lucide React (Icons), Motion / Framer Motion (Animations).

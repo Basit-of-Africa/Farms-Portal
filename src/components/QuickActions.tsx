@@ -254,7 +254,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Setup profile failed');
 
-      setSuccessText(`System account for "${data.name}" (Role: ${newRole}) successfully configured!`);
+      setSuccessText(`Account for "${data.name}" (Role: ${newRole}) created. Temporary password: ${data.temporaryPassword}`);
       setNewUsername('');
       setNewName('');
       setNewEmail('');
@@ -867,8 +867,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                     </div>
 
                     <div className="p-3 bg-[#FBF9F4] rounded-2xl border text-[11px] leading-relaxed text-gray-500 font-sans">
-                      💡 Note: Provisioning generates safe static credential access keys (<b className="font-bold text-gray-800">Password: {newUsername && newUsername.length > 3 ? newUsername.charAt(0).toUpperCase() + newUsername.slice(1) + '@1234' : 'Username@1234'}</b>) enabling user dashboard audits immediately.
-                    </div>
+                      💡 A random temporary password is generated and emailed to the user. They must choose their own password at first sign-in.</div>
 
                     <button
                       type="submit"

@@ -537,8 +537,8 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         throw new Error(errData.error || 'Failed to generate user credential profile');
       }
 
-      await res.json();
-      setNewUserSuccess(`User "${newFullName}" provisioned successfully. Temporary credentials dispatched to notifications list.`);
+      const created = await res.json();
+      setNewUserSuccess(`User "${newFullName}" provisioned. Temporary password: ${created.temporaryPassword} (also sent in the welcome email; the user must change it at first sign-in).`);
       
       // Reset Fields
       setNewUsername('');

@@ -56,8 +56,13 @@ export interface User {
   profilePhoto?: string;
   email: string;
   name: string;
+  /** scrypt hash on the server; never sent to the client */
   password?: string;
   isActive?: boolean;
+  /** Set when the user signs in with a temporary password and must choose a new one */
+  mustChangePassword?: boolean;
+  /** Server-side session version; bumping it revokes all issued tokens */
+  tokenVersion?: number;
 }
 
 export interface Farm {

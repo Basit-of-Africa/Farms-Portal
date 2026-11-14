@@ -386,9 +386,10 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       });
 
       if (res.ok) {
+        const created = await res.json();
         setIsCreateModalOpen(false);
         setCreateForm({ username: '', name: '', email: '', phone: '', password: '', role: UserRole.INVESTOR });
-        showSuccess('User account profile provisioned successfully! A welcome notification has been logged.');
+        showSuccess(`Account created. Temporary password: ${created.temporaryPassword} (also sent in the welcome email; must be changed at first sign-in).`);
         fetchInvestors();
         if (triggerRefreshSignal) triggerRefreshSignal();
       } else {

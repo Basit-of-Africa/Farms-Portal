@@ -16,7 +16,8 @@ import {
   Users,
   Settings,
   X,
-  Smartphone
+  Smartphone,
+  KeyRound
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -24,6 +25,7 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  onChangePassword?: () => void;
   isOpen?: boolean;
   onClose?: () => void;
   logoText?: string;
@@ -36,6 +38,7 @@ export default function Sidebar({
   activeTab, 
   setActiveTab, 
   onLogout, 
+  onChangePassword,
   isOpen, 
   onClose, 
   logoText,
@@ -218,6 +221,17 @@ export default function Sidebar({
           <Smartphone className="h-4.5 w-4.5 shrink-0" />
           <span>Install App Portal</span>
         </button>
+
+        {onChangePassword && (
+          <button
+            id="nav-change-password"
+            onClick={onChangePassword}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-[#F8F4EC]/60 hover:bg-white/5 hover:text-[#52B788] transition-all duration-150 cursor-pointer border border-transparent"
+          >
+            <KeyRound className="h-4.5 w-4.5" />
+            <span>Change password</span>
+          </button>
+        )}
 
         <button
           id="nav-logout"
