@@ -12,6 +12,7 @@ import {
   FileSpreadsheet, 
   Filter 
 } from 'lucide-react';
+import { parseCsvRecords } from '../utils/csvParser';
 
 interface CSVDataImporterProps {
   token: string;
@@ -198,61 +199,10 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
       if (!text) return;
 
       try {
-        const lines = text.split(/\r?\n/);
-        if (lines.length === 0) {
+        const { headers, records: parsed } = parseCsvRecords(text);
+        if (headers.length === 0) {
           alert('CSV file is empty.');
           return;
-        }
-
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, '').replace(/_/g, ''));
-        const parsed: any[] = [];
-
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-
-          // Parse commas correctly considering quotes
-          const values: string[] = [];
-          let current = '';
-          let inQuotes = false;
-          for (let charIndex = 0; charIndex < line.length; charIndex++) {
-            const char = line[charIndex];
-            if (char === '"' || char === "'") {
-              inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-              values.push(current.trim());
-              current = '';
-            } else {
-              current += char;
-            }
-          }
-          values.push(current.trim());
-
-          const record: any = {};
-          headers.forEach((header, index) => {
-            const val = values[index] ? values[index].replace(/^["']|["']$/g, '').trim() : '';
-            if (header === 'username') record.username = val;
-            if (header === 'name') record.name = val;
-            if (header === 'email') record.email = val;
-            if (header === 'phone' || header === 'telephone') record.phone = val;
-            if (header === 'password') record.password = val;
-            
-            if (header === 'farmestate' || header === 'farm' || header === 'estate') record.farmEstate = val;
-            if (header === 'farmlocation' || header === 'location' || header === 'farmcity') record.farmLocation = val;
-            if (header === 'farmstate' || header === 'state') record.farmState = val;
-            if (header === 'farmdescription' || header === 'description') record.farmDescription = val;
-            if (header === 'farmdateestablished' || header === 'dateestablished') record.farmDateEstablished = val;
-            
-            if (header === 'plotnumber' || header === 'plotno') record.plotNumber = val;
-            if (header === 'sizehectares' || header === 'plotsize' || header === 'size') record.sizeHectares = val;
-            if (header === 'sizeunit' || header === 'unit' || header === 'plotunit') record.sizeUnit = val;
-            if (header === 'croptype' || header === 'crop') record.cropType = val;
-            if (header === 'investmentamount' || header === 'investment' || header === 'amount') record.investmentAmount = val;
-          });
-
-          if (record.username || record.name || record.email) {
-            parsed.push(record);
-          }
         }
         setRecords(parsed);
       } catch (err: any) {
@@ -494,17 +444,19 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                             )}
                           </td>
                           <td className="p-2 text-gray-600">
-                            {rec.plotNumber || rec.sizeHectares ? (
+                            {rec.plotNumber || rec.sizeHectares || rec.farmEstate || rec.farmLocation ? (
                               <div>
-                                Plot No: <span className="font-semibold text-gray-800">{rec.plotNumber || 'Auto'}</span>
-                                <div>{rec.sizeHectares} {rec.sizeUnit || 'acre'} ({rec.cropType || 'Oil Palm'})</div>
+                                Plot No: <span className="font-semibold text-gray-800">{rec.plotNumber || 'Auto-assigned'}</span>
+                                <div>{rec.sizeHectares || '1.0'} {rec.sizeUnit || 'acre'} ({rec.cropType || 'Oil Palm'})</div>
                               </div>
                             ) : (
                               <span className="text-gray-300">—</span>
                             )}
                           </td>
                           <td className="p-2 font-bold text-emerald-700">
-                            {rec.investmentAmount ? `₦${parseFloat(rec.investmentAmount).toLocaleString()}` : '—'}
+                            {rec.investmentAmount && !isNaN(parseFloat(rec.investmentAmount))
+                              ? `₦${parseFloat(rec.investmentAmount).toLocaleString()}`
+                              : '—'}
                           </td>
                         </tr>
                       ))}

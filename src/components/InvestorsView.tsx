@@ -30,15 +30,17 @@ import {
   Table as TableIcon
 } from 'lucide-react';
 import { User as UserType, UserRole } from '../types';
+import { parseCsvRecords } from '../utils/csvParser';
 
 interface InvestorsViewProps {
   user: UserType;
   token: string;
   refreshSignal: number;
   triggerRefreshSignal?: () => void;
+  onSelectInvestor?: (investorId: string) => void;
 }
 
-export default function InvestorsView({ user, token, refreshSignal, triggerRefreshSignal }: InvestorsViewProps) {
+export default function InvestorsView({ user, token, refreshSignal, triggerRefreshSignal, onSelectInvestor }: InvestorsViewProps) {
   const [investors, setInvestors] = useState<UserType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -658,65 +660,19 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       if (!text) return;
       
       try {
-        const lines = text.split(/\r?\n/);
-        if (lines.length === 0) {
+        const { headers, records } = parseCsvRecords(text);
+        if (headers.length === 0) {
           setError('CSV file is empty.');
           return;
         }
         
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, '').replace(/_/g, ''));
-        
-        const hasUsername = headers.includes('username');
-        const hasName = headers.includes('name');
-        const hasEmail = headers.includes('email');
+        const hasUsername = headers.some(h => h === 'username' || h === 'user' || h === 'handle');
+        const hasName = headers.some(h => h === 'name' || h === 'fullname' || h === 'investorname');
+        const hasEmail = headers.some(h => h === 'email' || h === 'emailaddress');
         
         if (!hasUsername || !hasName || !hasEmail) {
           setError('CSV file must have at least "username", "name", and "email" columns.');
           return;
-        }
-        
-        const records: any[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-          
-          const values: string[] = [];
-          let current = '';
-          let inQuotes = false;
-          for (let charIndex = 0; charIndex < line.length; charIndex++) {
-            const char = line[charIndex];
-            if (char === '"' || char === "'") {
-              inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-              values.push(current.trim());
-              current = '';
-            } else {
-              current += char;
-            }
-          }
-          values.push(current.trim());
-
-          const record: any = {};
-          headers.forEach((header, index) => {
-            const val = values[index] ? values[index].replace(/^["']|["']$/g, '').trim() : '';
-            if (header === 'username') record.username = val;
-            if (header === 'name') record.name = val;
-            if (header === 'email') record.email = val;
-            if (header === 'phone' || header === 'telephone') record.phone = val;
-            if (header === 'password') record.password = val;
-            
-            // Plot allocation fields
-            if (header === 'farmestate' || header === 'farm' || header === 'estate') record.farmEstate = val;
-            if (header === 'plotnumber' || header === 'plotno') record.plotNumber = val;
-            if (header === 'sizehectares' || header === 'plotsize' || header === 'size') record.sizeHectares = val;
-            if (header === 'sizeunit' || header === 'unit' || header === 'plotunit') record.sizeUnit = val;
-            if (header === 'croptype' || header === 'crop') record.cropType = val;
-            if (header === 'investmentamount' || header === 'investment' || header === 'amount') record.investmentAmount = val;
-          });
-          
-          if (record.username || record.name || record.email) {
-            records.push(record);
-          }
         }
         
         setParsedInvestors(records);
@@ -1043,17 +999,36 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                         </button>
                       </td>
                       <td className="py-3.5 px-3 align-middle">
-                        <div className="flex items-center gap-3 min-w-[180px]">
-                          <div className="w-9 h-9 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-[11px] shrink-0">
-                            {initials}
+                        {user.role === UserRole.ADMIN && onSelectInvestor && inv.role === UserRole.INVESTOR ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectInvestor(inv.id)}
+                            className="flex items-center gap-3 min-w-[180px] text-left group/profile cursor-pointer"
+                            title={`View ${inv.name}'s portfolio & returns`}
+                          >
+                            <div className="w-9 h-9 rounded-full bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] text-[#1B4332] dark:text-[#52B788] group-hover/profile:text-white flex items-center justify-center font-bold text-[11px] shrink-0 transition-colors">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-sans font-bold text-xs text-gray-800 dark:text-stone-100 group-hover/profile:text-[#2D6A4F] dark:group-hover/profile:text-[#52B788] group-hover/profile:underline truncate transition-colors">
+                                {inv.name}
+                              </p>
+                              <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
+                            </div>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-3 min-w-[180px]">
+                            <div className="w-9 h-9 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-[11px] shrink-0">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-sans font-bold text-xs text-gray-800 dark:text-stone-100 truncate">
+                                {inv.name}
+                              </p>
+                              <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-sans font-bold text-xs text-gray-800 dark:text-stone-100 truncate">
-                              {inv.name}
-                            </p>
-                            <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
-                          </div>
-                        </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-3 align-middle">
                         <div className="space-y-1 min-w-[180px]">
@@ -1176,15 +1151,36 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                       )}
                     </button>
 
-                    <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-xs shrink-0">
-                      {inv.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors truncate">
-                        {inv.name}
-                      </h4>
-                      <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
-                    </div>
+                    {user.role === UserRole.ADMIN && onSelectInvestor && inv.role === UserRole.INVESTOR ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelectInvestor(inv.id)}
+                        className="flex items-center gap-2.5 min-w-0 flex-1 text-left group/profile cursor-pointer"
+                        title={`View ${inv.name}'s portfolio & returns`}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] text-[#1B4332] dark:text-[#52B788] group-hover/profile:text-white flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
+                          {inv.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover/profile:text-[#2D6A4F] dark:group-hover/profile:text-[#52B788] group-hover/profile:underline transition-colors truncate">
+                            {inv.name}
+                          </h4>
+                          <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-xs shrink-0">
+                          {inv.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors truncate">
+                            {inv.name}
+                          </h4>
+                          <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Role & Status Badges */}

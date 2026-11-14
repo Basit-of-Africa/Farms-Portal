@@ -25,7 +25,10 @@ import {
   Plus,
   Trash2,
   Compass,
-  Tag
+  Tag,
+  Users,
+  DollarSign,
+  ChevronRight
 } from 'lucide-react';
 import { User as UserType, Farm, FarmPlot, FarmMapNote, FarmUpdate, Document, UserRole, PlotStatus } from '../types';
 import CommentsSection from './CommentsSection';
@@ -36,22 +39,25 @@ interface FarmDetailProps {
   token: string;
   farmId: string;
   onBack: () => void;
+  onSelectInvestor?: (investorId: string) => void;
   refreshSignal: number;
 }
 
-export default function FarmDetail({ user, token, farmId, onBack, refreshSignal }: FarmDetailProps) {
+export default function FarmDetail({ user, token, farmId, onBack, onSelectInvestor, refreshSignal }: FarmDetailProps) {
   const [data, setData] = useState<{
     farm: Farm;
     plots: FarmPlot[];
     updates: FarmUpdate[];
     documents: Document[];
     investorHoldings?: any[];
+    farmInvestors?: any[];
+    totalEstateInvestment?: number;
     mapNotes?: FarmMapNote[];
   } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'updates' | 'plots' | 'documents' | 'map'>('updates');
+  const [activeTab, setActiveTab] = useState<'updates' | 'plots' | 'owners' | 'documents' | 'map'>('updates');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
 
@@ -201,7 +207,7 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
     );
   }
 
-  const { farm, plots, updates, documents, mapNotes = [] } = data;
+  const { farm, plots, updates, documents, investorHoldings = [], farmInvestors = [], totalEstateInvestment = 0, mapNotes = [] } = data;
 
   // Filter updates by selected date-range
   const filteredUpdates = updates.filter(up => {
@@ -258,6 +264,26 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
             <div>
               Gross Acreage: <b className="text-gray-800 font-bold ml-1">{farm.totalHectares} acres/plots</b>
             </div>
+            {(user.role === UserRole.ADMIN || user.role === UserRole.FARM_MANAGER) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('owners')}
+                className="text-left hover:text-[#1B4332] transition cursor-pointer"
+                title="View farm owners list"
+              >
+                Farm Owners: <b className="text-[#1B4332] font-bold ml-1 underline decoration-[#2D6A4F]/40">{farmInvestors.length} Investors</b>
+              </button>
+            )}
+            {user.role === UserRole.ADMIN && (
+              <div>
+                Total Received: <b className="text-emerald-700 font-bold ml-1">₦{totalEstateInvestment.toLocaleString()}</b>
+              </div>
+            )}
+            {user.role === UserRole.INVESTOR && (
+              <div>
+                My Estate Investment: <b className="text-emerald-700 font-bold ml-1">₦{totalEstateInvestment.toLocaleString()}</b>
+              </div>
+            )}
             <div>
               Security Clearance: <b className="text-emerald-700 font-bold ml-1">AES-256</b>
             </div>
@@ -286,6 +312,18 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
           <Layers className="h-4 w-4" />
           <span>Section Plots ({plots.length})</span>
         </button>
+
+        {(user.role === UserRole.ADMIN || user.role === UserRole.FARM_MANAGER) && (
+          <button
+            onClick={() => setActiveTab('owners')}
+            className={`flex-1 py-3 text-xs font-mono font-bold uppercase tracking-wider rounded-xl transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${
+              activeTab === 'owners' ? 'bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white shadow shadow-[#1B4332]/30' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            <span>Farm Owners ({farmInvestors.length})</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('map')}
@@ -466,39 +504,217 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
         {/* ASSOCIATED PLOT STATS */}
         {activeTab === 'plots' && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs bg-white rounded-xl">
-                <thead>
-                  <tr className="border-b border-gray-150 text-gray-400 uppercase font-mono tracking-wider">
-                    <th className="py-3 px-3 font-bold">Plot identifier</th>
-                    <th className="py-3 px-3 font-bold text-center">Land Size</th>
-                    <th className="py-3 px-3 font-bold">Cultivar Canopy</th>
-                    <th className="py-3 px-3 font-bold">Active Status</th>
-                    <th className="py-3 px-3 font-bold">Ownership profile</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {plots.map((p) => (
-                    <tr key={p.id} className="border-b last:border-0 border-gray-50 hover:bg-gray-50/50 transition">
-                      <td className="py-4 px-3 font-mono font-bold text-gray-800">{p.plotNumber}</td>
-                      <td className="py-4 px-3 text-center font-mono text-gray-600">{p.sizeHectares} {p.sizeUnit || 'acre'}</td>
-                      <td className="py-4 px-3 text-gray-600 font-medium">{p.cropType}</td>
-                      <td className="py-4 px-3">
-                        <span className={`inline-block px-2.5 py-0.5 text-[9px] font-bold font-mono uppercase rounded-full ${getStatusBadge(p.status)}`}>
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-3 font-mono text-gray-400">
-                        {p.status === PlotStatus.DORMANT || p.status === PlotStatus.AVAILABLE ? (
-                          <span className="text-gray-400">Milling holding</span>
-                        ) : (
-                          <span className="text-emerald-700 font-bold">Allocated Investor</span>
-                        )}
-                      </td>
+            {plots.length === 0 ? (
+              <div className="p-8 text-center text-xs text-gray-400 font-mono">
+                No plots registered for this estate yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs bg-white rounded-xl">
+                  <thead>
+                    <tr className="border-b border-gray-150 text-gray-400 uppercase font-mono tracking-wider">
+                      <th className="py-3 px-3 font-bold">Plot identifier</th>
+                      <th className="py-3 px-3 font-bold text-center">Land Size</th>
+                      <th className="py-3 px-3 font-bold">Cultivar Canopy</th>
+                      <th className="py-3 px-3 font-bold">Active Status</th>
+                      <th className="py-3 px-3 font-bold">Ownership profile</th>
+                      {user.role !== UserRole.FARM_MANAGER && (
+                        <th className="py-3 px-3 font-bold text-right">Investment</th>
+                      )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {plots.map((p) => {
+                      const plotHoldings = investorHoldings.filter((h: any) => h.plotId === p.id);
+                      const plotTotalInvested = plotHoldings.reduce((s: number, h: any) => s + (Number(h.investmentAmount) || 0), 0);
+                      return (
+                        <tr key={p.id} className="border-b last:border-0 border-gray-50 hover:bg-gray-50/50 transition">
+                          <td className="py-4 px-3 font-mono font-bold text-gray-800">{p.plotNumber}</td>
+                          <td className="py-4 px-3 text-center font-mono text-gray-600">{p.sizeHectares} {p.sizeUnit || 'acre'}</td>
+                          <td className="py-4 px-3 text-gray-600 font-medium">{p.cropType}</td>
+                          <td className="py-4 px-3">
+                            <span className={`inline-block px-2.5 py-0.5 text-[9px] font-bold font-mono uppercase rounded-full ${getStatusBadge(p.status)}`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-3 font-mono text-gray-500">
+                            {plotHoldings.length > 0 ? (
+                              user.role === UserRole.INVESTOR ? (
+                                <span className="text-emerald-700 font-bold">
+                                  Your Deeded Plot ({plotHoldings[0]?.contractRef || 'CON-DEED'})
+                                </span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {plotHoldings.map((h: any, idx: number) =>
+                                    onSelectInvestor && user.role === UserRole.ADMIN && h.investorId ? (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => onSelectInvestor(h.investorId)}
+                                        className="text-emerald-700 hover:text-[#1B4332] hover:underline font-bold cursor-pointer text-left"
+                                      >
+                                        {h.investorName || 'Allocated Investor'}
+                                      </button>
+                                    ) : (
+                                      <span key={idx} className="text-emerald-700 font-bold">
+                                        {h.investorName || 'Allocated Investor'}
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              )
+                            ) : p.status === PlotStatus.DORMANT || p.status === PlotStatus.AVAILABLE ? (
+                              <span className="text-gray-400">Available holding</span>
+                            ) : (
+                              <span className="text-emerald-700 font-bold">Allocated Investor</span>
+                            )}
+                          </td>
+                          {user.role !== UserRole.FARM_MANAGER && (
+                            <td className="py-4 px-3 text-right font-mono font-bold text-emerald-800">
+                              {plotHoldings.length > 0 ? `₦${plotTotalInvested.toLocaleString()}` : '—'}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FARM OWNERS & ESTATE INVESTMENT TOTALS (Admin / Manager) */}
+        {activeTab === 'owners' && (user.role === UserRole.ADMIN || user.role === UserRole.FARM_MANAGER) && (
+          <div className="space-y-6 animate-fade-in">
+            <div className={`grid grid-cols-1 ${user.role === UserRole.ADMIN ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
+              <div className="bg-white p-5 rounded-2xl border border-[#2D6A4F]/10 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-[#1B4332]/10 text-[#1B4332] rounded-xl">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-mono uppercase font-bold text-gray-400 tracking-wider">Registered Farm Owners</div>
+                  <div className="text-2xl font-serif font-bold text-[#1B4332] mt-0.5">{farmInvestors.length}</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-[#2D6A4F]/10 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-amber-500/10 text-[#D4A017] rounded-xl">
+                  <Layers className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-mono uppercase font-bold text-gray-400 tracking-wider">Allocated Plots on Estate</div>
+                  <div className="text-2xl font-serif font-bold text-gray-800 mt-0.5">
+                    {farmInvestors.reduce((sum: number, inv: any) => sum + (Number(inv.plotsCount) || 0), 0)}
+                  </div>
+                </div>
+              </div>
+
+              {user.role === UserRole.ADMIN && (
+                <div className="bg-gradient-to-br from-[#1B4332] to-[#2D6A4F] text-white p-5 rounded-2xl shadow-sm flex items-center gap-4">
+                  <div className="p-3 bg-white/15 text-[#D4A017] rounded-xl">
+                    <DollarSign className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-mono uppercase font-bold text-emerald-100/80 tracking-wider">
+                      Total Received From All Investors
+                    </div>
+                    <div className="text-2xl font-serif font-bold text-white mt-0.5">
+                      ₦{totalEstateInvestment.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-gray-100">
+                <div>
+                  <h3 className="font-sans font-bold text-sm text-[#1B4332]">Estate Farm Owners & Investors</h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    All investors with active deeded plots or farm allocations in {farm.name}.
+                  </p>
+                </div>
+                {user.role === UserRole.ADMIN && onSelectInvestor && (
+                  <span className="text-[10px] font-mono text-[#2D6A4F] bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                    Click an investor name to view full profile & returns
+                  </span>
+                )}
+              </div>
+
+              {farmInvestors.length === 0 ? (
+                <div className="p-10 text-center border border-dashed border-gray-200 rounded-xl">
+                  <p className="text-xs text-gray-400 font-mono">No investors currently own plots in this estate.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs bg-white rounded-xl">
+                    <thead>
+                      <tr className="border-b border-gray-150 text-gray-400 uppercase font-mono tracking-wider">
+                        <th className="py-3 px-3 font-bold">Farm Owner</th>
+                        <th className="py-3 px-3 font-bold">Contact</th>
+                        <th className="py-3 px-3 font-bold">Assigned Plots</th>
+                        <th className="py-3 px-3 font-bold text-center">Total Area</th>
+                        {user.role === UserRole.ADMIN && (
+                          <th className="py-3 px-3 font-bold text-right">Amount Invested</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {farmInvestors.map((inv: any) => (
+                        <tr key={inv.id} className="border-b last:border-0 border-gray-50 hover:bg-[#FBF9F4]/60 transition">
+                          <td className="py-4 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-8 w-8 rounded-full bg-[#1B4332]/10 text-[#1B4332] flex items-center justify-center font-bold font-serif shrink-0">
+                                {(inv.name || inv.username || 'I').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                {user.role === UserRole.ADMIN && onSelectInvestor ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectInvestor(inv.id)}
+                                    className="font-bold text-[#1B4332] hover:text-[#2D6A4F] hover:underline flex items-center gap-1 cursor-pointer text-left"
+                                  >
+                                    <span>{inv.name}</span>
+                                    <ChevronRight className="h-3.5 w-3.5 text-[#D4A017]" />
+                                  </button>
+                                ) : (
+                                  <div className="font-bold text-gray-800">{inv.name}</div>
+                                )}
+                                <div className="text-[10px] font-mono text-gray-400">@{inv.username}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-3 font-mono text-[11px] text-gray-600">
+                            <div>{inv.email}</div>
+                            {inv.phone && <div className="text-[10px] text-gray-400">{inv.phone}</div>}
+                          </td>
+                          <td className="py-4 px-3">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[10px] font-mono font-bold text-[#1B4332] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                {inv.plotsCount} {inv.plotsCount === 1 ? 'Plot' : 'Plots'}
+                              </span>
+                              {(inv.plotNumbers || []).map((pn: string, i: number) => (
+                                <span key={i} className="text-[10px] font-mono font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                                  {pn}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-4 px-3 text-center font-mono text-gray-700 font-semibold">
+                            {inv.totalSize} {inv.sizeUnit || 'acre'}
+                          </td>
+                          {user.role === UserRole.ADMIN && (
+                            <td className="py-4 px-3 text-right font-mono font-extrabold text-emerald-800">
+                              ₦{(Number(inv.totalInvested) || 0).toLocaleString()}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}

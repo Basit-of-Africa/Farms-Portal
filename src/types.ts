@@ -71,6 +71,11 @@ export interface Farm {
   coverImage?: string;
   dateEstablished: string;
   isActive: boolean;
+  investorCount?: number;
+  totalInvestmentReceived?: number;
+  myPlotsCount?: number;
+  myTotalInvested?: number;
+  myPaidReturns?: number;
 }
 
 export interface FarmPlot {

@@ -29,6 +29,14 @@ interface InvestorDashboardProps {
 export default function InvestorDashboard({ user, token, onSelectFarm, refreshSignal }: InvestorDashboardProps) {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [holdings, setHoldings] = useState<any[]>([]);
+  const [summary, setSummary] = useState<{
+    totalFarms: number;
+    totalPlots: number;
+    totalCapital: number;
+    totalHectares: number;
+    totalPaidReturns: number;
+    totalPendingReturns: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,22 +45,14 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
       setLoading(true);
       setError(null);
 
-      // List of owned farms
-      const farmsRes = await fetch('/api/farms', {
+      const res = await fetch('/api/investor/portfolio', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!farmsRes.ok) throw new Error('Could not pull investor farms data');
-      const farmsData = await farmsRes.json();
-      setFarms(farmsData);
-
-      // Detail plot holdings (needs plotId lookup)
-      if (farmsData.length > 0) {
-        const detailsRes = await fetch(`/api/farms/${farmsData[0].id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const detailsData = await detailsRes.json();
-        setHoldings(detailsData.investorHoldings || []);
-      }
+      if (!res.ok) throw new Error('Could not pull investor portfolio data');
+      const portfolioData = await res.json();
+      setFarms(portfolioData.farms || []);
+      setHoldings(portfolioData.holdings || []);
+      setSummary(portfolioData.summary || null);
     } catch (err: any) {
       setError(err.message || 'Error occurred fetching portfolio holdings');
     } finally {
@@ -64,8 +64,9 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
     fetchInvestorPortfolio();
   }, [token, refreshSignal]);
 
-  const totalCapital = holdings.reduce((sum, h) => sum + h.investmentAmount, 0);
-  const totalHectares = holdings.reduce((sum, h) => sum + (h.sizeHectares || 0), 0);
+  const totalCapital = summary ? summary.totalCapital : holdings.reduce((sum, h) => sum + (Number(h.investmentAmount) || 0), 0);
+  const totalHectares = summary ? summary.totalHectares : holdings.reduce((sum, h) => sum + (Number(h.sizeHectares) || 0), 0);
+  const totalPaidReturns = summary?.totalPaidReturns ?? 0;
 
   if (loading) {
     return (
@@ -77,6 +78,12 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
 
   return (
     <div id="investor-dashboard-container" className="space-y-8 animate-fade-in">
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-mono">
+          {error}
+        </div>
+      )}
+
       {/* Welcome Hero BANNER */}
       <div className="relative bg-gradient-to-br from-[#0F291E] via-[#1B4332] to-[#2D6A4F] text-white p-10 rounded-3xl overflow-hidden border border-white/10 shadow-premium-lg">
         <div className="absolute right-0 bottom-0 opacity-[0.06] translate-x-1/6 translate-y-1/6 pointer-events-none">
@@ -125,6 +132,7 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
           <div>
             <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Deeded Plots</div>
             <div className="text-xl font-extrabold text-gray-800 font-sans mt-1">{holdings.length} Active</div>
+            <div className="text-[10px] font-mono text-gray-400 mt-0.5">{farms.length} {farms.length === 1 ? 'Estate' : 'Estates'}</div>
           </div>
         </div>
 
@@ -142,11 +150,14 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
         {/* Metric 4 */}
         <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium hover:shadow-premium-hover transition duration-300 flex items-center gap-4">
           <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl">
-            <Award className="h-6 w-6" />
+            <TrendingUp className="h-6 w-6" />
           </div>
           <div>
-            <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Ownership status</div>
-            <div className="text-xl font-extrabold text-emerald-700 font-sans mt-1">100% Certified</div>
+            <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Returns Earned</div>
+            <div className="text-xl font-extrabold text-emerald-700 font-sans mt-1">₦{totalPaidReturns.toLocaleString()}</div>
+            <div className="text-[10px] font-mono text-emerald-600 mt-0.5 flex items-center gap-1">
+              <Award className="h-3 w-3" /> 100% Certified
+            </div>
           </div>
         </div>
       </div>
@@ -181,7 +192,16 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
                       <span>{farm.location}, {farm.state}</span>
                     </div>
 
-                    <div className="mt-5 flex items-center justify-between border-t border-gray-50 pt-3.5 text-xs text-[#2D6A4F] font-bold uppercase tracking-wide font-mono">
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] font-mono">
+                      <span className="bg-[#FBF9F4] border border-gray-200 text-gray-700 px-2.5 py-1 rounded-lg font-bold">
+                        {farm.myPlotsCount ?? 1} {(farm.myPlotsCount ?? 1) === 1 ? 'Plot' : 'Plots'}
+                      </span>
+                      <span className="bg-emerald-50 border border-emerald-200/60 text-emerald-800 px-2.5 py-1 rounded-lg font-bold">
+                        Invested: ₦{(farm.myTotalInvested ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between border-t border-gray-50 pt-3.5 text-xs text-[#2D6A4F] font-bold uppercase tracking-wide font-mono">
                       <span>Explore chronicles & documents</span>
                       <ChevronRight className="h-4 w-4 shrink-0 transition group-hover:translate-x-1 text-[#D4A017]" />
                     </div>
@@ -207,6 +227,7 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
                 <table className="w-full text-left text-xs bg-white rounded-xl">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 uppercase font-mono tracking-wider">
+                      <th className="py-3 px-2 font-bold select-none">Farm Estate</th>
                       <th className="py-3 px-2 font-bold select-none">Plot ID</th>
                       <th className="py-3 px-2 font-bold select-none">Crop Cultivar</th>
                       <th className="py-3 px-2 font-bold font-sans select-none">Investment</th>
@@ -217,11 +238,12 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
                   <tbody>
                     {holdings.map((h, idx) => (
                       <tr key={idx} className="border-b last:border-0 border-gray-50 hover:bg-[#FBF9F4]/40 transition">
-                        <td className="py-4.5 px-2 font-mono font-bold text-[#1B4332]">{h.plotNumber || 'N/A'}</td>
-                        <td className="py-4.5 px-2 text-[#2c3e35] font-semibold">{h.cropType || 'Oil Palm'}</td>
-                        <td className="py-4.5 px-2 font-extrabold text-emerald-800 font-sans">₦{h.investmentAmount?.toLocaleString()}</td>
-                        <td className="py-4.5 px-2 text-gray-500 font-mono font-medium">{h.sizeHectares || '1.0'} {h.sizeUnit || 'acre'}</td>
-                        <td className="py-4.5 px-2 font-mono text-gray-400 font-bold">{h.contractRef || 'CON-DEED'}</td>
+                        <td className="py-4 px-2 font-semibold text-[#1B4332]">{h.farmName || 'Adubiaro Estate'}</td>
+                        <td className="py-4 px-2 font-mono font-bold text-[#1B4332]">{h.plotNumber || 'N/A'}</td>
+                        <td className="py-4 px-2 text-[#2c3e35] font-semibold">{h.cropType || 'Oil Palm'}</td>
+                        <td className="py-4 px-2 font-extrabold text-emerald-800 font-sans">₦{(Number(h.investmentAmount) || 0).toLocaleString()}</td>
+                        <td className="py-4 px-2 text-gray-500 font-mono font-medium">{h.sizeHectares || '1.0'} {h.sizeUnit || 'acre'}</td>
+                        <td className="py-4 px-2 font-mono text-gray-400 font-bold">{h.contractRef || 'CON-DEED'}</td>
                       </tr>
                     ))}
                   </tbody>

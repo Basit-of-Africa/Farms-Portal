@@ -18,6 +18,7 @@ import QuickActions from './components/QuickActions';
 import GlobalSearch from './components/GlobalSearch';
 import OnboardingTour from './components/OnboardingTour';
 import InvestorsView from './components/InvestorsView';
+import InvestorProfileView from './components/InvestorProfileView';
 import { User, UserRole } from './types';
 import { 
   Sprout, 
@@ -42,6 +43,9 @@ export default function App() {
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
+  const [selectedInvestorId, setSelectedInvestorId] = useState<string | null>(null);
+  const [investorProfileReturnTab, setInvestorProfileReturnTab] = useState<string>('investors');
+  const [investorProfileReturnFarmId, setInvestorProfileReturnFarmId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark';
@@ -171,12 +175,37 @@ export default function App() {
   // Switch to selected farm in detail tabs
   const handleSelectFarm = (farmId: string) => {
     setSelectedFarmId(farmId);
+    setSelectedInvestorId(null);
+    setInvestorProfileReturnFarmId(null);
     setActiveTab('farm-detail');
   };
 
   const handleBackToDashboard = () => {
     setSelectedFarmId(null);
+    setSelectedInvestorId(null);
+    setInvestorProfileReturnFarmId(null);
     setActiveTab('dashboard');
+  };
+
+  const handleSelectInvestor = (investorId: string, returnTab?: string) => {
+    const targetReturnTab = returnTab || activeTab;
+    setInvestorProfileReturnFarmId(targetReturnTab === 'farm-detail' ? selectedFarmId : null);
+    setSelectedInvestorId(investorId);
+    setSelectedFarmId(null);
+    setInvestorProfileReturnTab(targetReturnTab);
+    setActiveTab('investor-profile');
+  };
+
+  const handleBackFromInvestorProfile = () => {
+    setSelectedInvestorId(null);
+    if (investorProfileReturnTab === 'farm-detail' && investorProfileReturnFarmId) {
+      setSelectedFarmId(investorProfileReturnFarmId);
+      setInvestorProfileReturnFarmId(null);
+      setActiveTab('farm-detail');
+      return;
+    }
+    setInvestorProfileReturnFarmId(null);
+    setActiveTab(investorProfileReturnTab || 'investors');
   };
 
   if (!currentUser || !authToken) {
@@ -241,11 +270,18 @@ export default function App() {
       {/* Sidebar fixed nav boundary */}
       <Sidebar 
         user={currentUser} 
-        activeTab={activeTab === 'farm-detail' ? 'dashboard' : activeTab} 
+        activeTab={
+          activeTab === 'farm-detail'
+            ? 'dashboard'
+            : activeTab === 'investor-profile'
+              ? investorProfileReturnTab
+              : activeTab
+        } 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         setActiveTab={(tab) => {
           setSelectedFarmId(null);
+          setSelectedInvestorId(null);
           setActiveTab(tab);
           setIsSidebarOpen(false);
         }} 
@@ -326,6 +362,7 @@ export default function App() {
                 user={currentUser} 
                 token={authToken} 
                 onSelectFarm={handleSelectFarm}
+                onSelectInvestor={(investorId) => handleSelectInvestor(investorId, 'dashboard')}
                 triggerRefreshSignal={triggerRefreshSignal}
                 refreshSignal={refreshSignal}
               />
@@ -356,6 +393,11 @@ export default function App() {
             token={authToken}
             farmId={selectedFarmId}
             onBack={handleBackToDashboard}
+            onSelectInvestor={
+              currentUser.role === UserRole.ADMIN
+                ? (investorId) => handleSelectInvestor(investorId, 'farm-detail')
+                : undefined
+            }
             refreshSignal={refreshSignal}
           />
         )}
@@ -429,6 +471,34 @@ export default function App() {
               token={authToken} 
               refreshSignal={refreshSignal}
               triggerRefreshSignal={triggerRefreshSignal}
+              onSelectInvestor={
+                currentUser.role === UserRole.ADMIN
+                  ? (investorId) => handleSelectInvestor(investorId, 'investors')
+                  : undefined
+              }
+            />
+          )
+        )}
+
+        {/* DEDICATED INVESTOR PROFILE PAGE (Admin Only) */}
+        {activeTab === 'investor-profile' && selectedInvestorId && (
+          currentUser.role !== UserRole.ADMIN ? (
+            <div className="p-8 bg-red-50 border-l-4 border-red-500 rounded-2xl flex items-start gap-3">
+              <ShieldAlert className="text-red-500 h-6 w-6 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-sans font-bold text-sm text-red-800">403 Access Unauthorized</h3>
+                <p className="text-xs text-red-700 mt-1 max-w-xl">
+                  Only Administrators can inspect detailed investor portfolio profiles and financial returns.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <InvestorProfileView
+              investorId={selectedInvestorId}
+              token={authToken}
+              onBack={handleBackFromInvestorProfile}
+              onSelectFarm={handleSelectFarm}
+              refreshSignal={refreshSignal}
             />
           )
         )}

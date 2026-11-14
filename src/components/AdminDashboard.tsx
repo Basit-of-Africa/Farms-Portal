@@ -38,16 +38,18 @@ import {
 import { User, Farm, FarmPlot, UserRole, DocumentCategory, DocumentVisibility, FinancialStatus } from '../types';
 import DashboardStats from './DashboardStats';
 import CSVDataImporter from './CSVDataImporter';
+import { parseCsvRecords } from '../utils/csvParser';
 
 interface AdminDashboardProps {
   user: User;
   token: string;
   onSelectFarm: (farmId: string) => void;
+  onSelectInvestor?: (investorId: string) => void;
   triggerRefreshSignal: () => void;
   refreshSignal: number;
 }
 
-export default function AdminDashboard({ user, token, onSelectFarm, triggerRefreshSignal, refreshSignal }: AdminDashboardProps) {
+export default function AdminDashboard({ user, token, onSelectFarm, onSelectInvestor, triggerRefreshSignal, refreshSignal }: AdminDashboardProps) {
   // Stats
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -448,59 +450,19 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
       if (!text) return;
       
       try {
-        const lines = text.split(/\r?\n/);
-        if (lines.length === 0) {
+        const { headers, records } = parseCsvRecords(text);
+        if (headers.length === 0) {
           alert('CSV file is empty.');
           return;
         }
         
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
-        
-        // Find if necessary columns are present
-        const hasUsername = headers.includes('username');
-        const hasName = headers.includes('name');
-        const hasEmail = headers.includes('email');
+        const hasUsername = headers.some(h => ['username', 'user', 'handle'].includes(h));
+        const hasName = headers.some(h => ['name', 'fullname', 'investorname'].includes(h));
+        const hasEmail = headers.some(h => ['email', 'emailaddress'].includes(h));
         
         if (!hasUsername || !hasName || !hasEmail) {
           alert('CSV file must have at least "username", "name", and "email" columns.');
           return;
-        }
-        
-        const records: any[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-          
-          // Quotes-aware comma split
-          const values: string[] = [];
-          let current = '';
-          let inQuotes = false;
-          for (let charIndex = 0; charIndex < line.length; charIndex++) {
-            const char = line[charIndex];
-            if (char === '"' || char === "'") {
-              inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-              values.push(current.trim());
-              current = '';
-            } else {
-              current += char;
-            }
-          }
-          values.push(current.trim());
-
-          const record: any = {};
-          headers.forEach((header, index) => {
-            const val = values[index] ? values[index].replace(/^["']|["']$/g, '').trim() : '';
-            if (header === 'username') record.username = val;
-            if (header === 'name') record.name = val;
-            if (header === 'email') record.email = val;
-            if (header === 'phone' || header === 'telephone') record.phone = val;
-            if (header === 'password') record.password = val;
-          });
-          
-          if (record.username || record.name || record.email) {
-            records.push(record);
-          }
         }
         
         setParsedInvestors(records);
@@ -650,61 +612,10 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
           }
           setParsedWizardRecords(records);
         } else {
-          // CSV Parsing
-          const lines = text.split(/\r?\n/);
-          if (lines.length === 0) {
+          const { headers, records } = parseCsvRecords(text);
+          if (headers.length === 0) {
             alert('CSV file is empty.');
             return;
-          }
-
-          const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, '').replace(/_/g, ''));
-          const records: any[] = [];
-
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-
-            const values: string[] = [];
-            let current = '';
-            let inQuotes = false;
-            for (let charIndex = 0; charIndex < line.length; charIndex++) {
-              const char = line[charIndex];
-              if (char === '"' || char === "'") {
-                inQuotes = !inQuotes;
-              } else if (char === ',' && !inQuotes) {
-                values.push(current.trim());
-                current = '';
-              } else {
-                current += char;
-              }
-            }
-            values.push(current.trim());
-
-            const record: any = {};
-            headers.forEach((header, index) => {
-              const val = values[index] ? values[index].replace(/^["']|["']$/g, '').trim() : '';
-              if (header === 'username') record.username = val;
-              if (header === 'name') record.name = val;
-              if (header === 'email') record.email = val;
-              if (header === 'phone' || header === 'telephone') record.phone = val;
-              if (header === 'password') record.password = val;
-              
-              if (header === 'farmestate' || header === 'farm' || header === 'estate') record.farmEstate = val;
-              if (header === 'farmlocation' || header === 'location' || header === 'farmcity') record.farmLocation = val;
-              if (header === 'farmstate' || header === 'state') record.farmState = val;
-              if (header === 'farmdescription' || header === 'description') record.farmDescription = val;
-              if (header === 'farmdateestablished' || header === 'dateestablished') record.farmDateEstablished = val;
-              
-              if (header === 'plotnumber' || header === 'plotno') record.plotNumber = val;
-              if (header === 'sizehectares' || header === 'plotsize' || header === 'size') record.sizeHectares = val;
-              if (header === 'sizeunit' || header === 'unit' || header === 'plotunit') record.sizeUnit = val;
-              if (header === 'croptype' || header === 'crop') record.cropType = val;
-              if (header === 'investmentamount' || header === 'investment' || header === 'amount') record.investmentAmount = val;
-            });
-
-            if (record.username || record.name || record.email) {
-              records.push(record);
-            }
           }
           setParsedWizardRecords(records);
         }
@@ -1095,22 +1006,46 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
                 className={`bg-white rounded-3xl border ${usr.isActive !== false ? 'border-[#2D6A4F]/10' : 'border-red-200/45 bg-red-50/10'} p-6 shadow-premium transition duration-300 hover:shadow-lg`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-gray-100 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-[#1B4332] text-sm shrink-0 border border-[#52B788]/20">
-                      {usr.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                  {onSelectInvestor ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectInvestor(usr.id)}
+                      className="flex items-center gap-3 text-left group/profile cursor-pointer"
+                      title={`View ${usr.name}'s portfolio & returns`}
+                    >
+                      <div className="h-12 w-12 bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] rounded-full flex items-center justify-center font-bold text-[#1B4332] group-hover/profile:text-white text-sm shrink-0 border border-[#52B788]/20 transition-colors">
+                        {usr.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                      </div>
+                      <div>
+                        <h3 className="font-serif font-bold text-base text-[#1B4332] group-hover/profile:text-[#2D6A4F] group-hover/profile:underline flex items-center gap-2 transition-colors">
+                          {usr.name}
+                          {usr.isActive === false && (
+                            <span className="text-[9px] font-mono font-extrabold bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200 uppercase">
+                              Inactive
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-[11px] text-gray-400 font-mono">@{usr.username} • {usr.id}</p>
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-[#1B4332] text-sm shrink-0 border border-[#52B788]/20">
+                        {usr.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                      </div>
+                      <div>
+                        <h3 className="font-serif font-bold text-base text-[#1B4332] flex items-center gap-2">
+                          {usr.name}
+                          {usr.isActive === false && (
+                            <span className="text-[9px] font-mono font-extrabold bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200 uppercase">
+                              Inactive
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-[11px] text-gray-400 font-mono">@{usr.username} • {usr.id}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-serif font-bold text-base text-[#1B4332] flex items-center gap-2">
-                        {usr.name}
-                        {usr.isActive === false && (
-                          <span className="text-[9px] font-mono font-extrabold bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200 uppercase">
-                            Inactive
-                          </span>
-                        )}
-                      </h3>
-                      <p className="text-[11px] text-gray-400 font-mono">@{usr.username} • {usr.id}</p>
-                    </div>
-                  </div>
+                  )}
                   
                   {/* Administrative Controls */}
                   <div className="flex items-center gap-1.5 self-end sm:self-auto">
@@ -1532,12 +1467,20 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
                   <h3 className="font-serif font-bold text-[#1B4332] text-base group-hover:text-[#2D6A4F] transition">{farm.name}</h3>
                   <p className="text-xs text-gray-500 mt-1 font-sans">{farm.location}, {farm.state}</p>
                   
-                  <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4 text-xs font-mono">
-                    <span className="text-gray-400 font-bold">Plots: <b className="text-gray-700">{farm.totalPlots}</b></span>
-                    <span className="text-gray-400 font-bold">Size: <b className="text-gray-700">{farm.totalHectares} acres/plots</b></span>
-                    <span className="text-[#2D6A4F] font-bold flex items-center gap-1 group-hover:underline">
-                      Explore Portal <ArrowRight className="h-3 w-3" />
-                    </span>
+                  <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-gray-400 font-bold">Plots: <b className="text-gray-700">{farm.totalPlots}</b></span>
+                      <span className="text-gray-400 font-bold">Owners: <b className="text-gray-700">{farm.investorCount ?? 0}</b></span>
+                      <span className="text-gray-400 font-bold">Size: <b className="text-gray-700">{farm.totalHectares} acres/plots</b></span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-mono pt-1">
+                      <span className="text-gray-400 font-bold">
+                        Received: <b className="text-emerald-700">₦{(farm.totalInvestmentReceived ?? 0).toLocaleString()}</b>
+                      </span>
+                      <span className="text-[#2D6A4F] font-bold flex items-center gap-1 group-hover:underline">
+                        Explore Portal <ArrowRight className="h-3 w-3" />
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2140,17 +2083,27 @@ export default function AdminDashboard({ user, token, onSelectFarm, triggerRefre
                                 <th className="p-2">Username</th>
                                 <th className="p-2">Full Name</th>
                                 <th className="p-2">Email</th>
-                                <th className="p-2">Phone</th>
+                                <th className="p-2">Farm Estate</th>
+                                <th className="p-2">Plot</th>
+                                <th className="p-2">Amount</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {parsedInvestors.slice(0, 10).map((p, idx) => (
+                              {parsedInvestors.slice(0, 10).map((p: any, idx) => (
                                 <tr key={idx} className="border-b border-stone-50 text-xs text-stone-600 hover:bg-stone-50/50">
                                   <td className="p-2 font-mono text-stone-400">{idx + 1}</td>
                                   <td className="p-2 font-bold font-mono text-[#1B4332]">{p.username}</td>
                                   <td className="p-2 font-medium">{p.name}</td>
                                   <td className="p-2 text-stone-500 font-mono">{p.email}</td>
-                                  <td className="p-2 text-stone-400 font-mono">{p.phone || '-'}</td>
+                                  <td className="p-2 text-stone-600 font-mono">{p.farmEstate || p.farmLocation || '-'}</td>
+                                  <td className="p-2 text-stone-500 font-mono">
+                                    {p.plotNumber ? p.plotNumber : (p.farmEstate || p.farmLocation ? 'Auto-assigned' : '-')}
+                                  </td>
+                                  <td className="p-2 text-emerald-700 font-mono font-bold">
+                                    {p.investmentAmount && !isNaN(parseFloat(p.investmentAmount))
+                                      ? `₦${parseFloat(p.investmentAmount).toLocaleString()}`
+                                      : '-'}
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
