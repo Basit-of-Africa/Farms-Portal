@@ -27,10 +27,12 @@ import {
   Undo,
   RotateCcw,
   LayoutGrid,
-  Table as TableIcon
+  Table as TableIcon,
+  KeyRound
 } from 'lucide-react';
 import { User as UserType, UserRole } from '../types';
-import { parseCsvRecords } from '../utils/csvParser';
+import { parseCsvRecords, INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
+import { useImportReview } from './ImportReviewModal';
 
 interface InvestorsViewProps {
   user: UserType;
@@ -41,6 +43,8 @@ interface InvestorsViewProps {
 }
 
 export default function InvestorsView({ user, token, refreshSignal, triggerRefreshSignal, onSelectInvestor }: InvestorsViewProps) {
+  const { reviewImport, reviewModal } = useImportReview(token);
+
   const [investors, setInvestors] = useState<UserType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -153,7 +157,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
     }
   };
 
-  const handleBulkAction = async (action: 'update-role' | 'disable-account' | 'enable-account', value?: string) => {
+  const handleBulkAction = async (action: 'update-role' | 'disable-account' | 'enable-account' | 'send-login-details', value?: string) => {
     if (selectedUserIds.length === 0) return;
     setActionLoading(true);
     setError(null);
@@ -173,7 +177,9 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
       if (res.ok) {
         const data = await res.json();
-        showSuccess(`Bulk action completed successfully! Updated ${data.count} investor accounts.`);
+        showSuccess(action === 'send-login-details'
+          ? `Login details emailed to ${data.count} investor(s). Each must choose a new password at first sign-in.`
+          : `Bulk action completed successfully! Updated ${data.count} investor accounts.`);
         
         // Save to Recent Actions Toast for Undo functionality
         if (data.previousStates && data.previousStates.length > 0) {
@@ -634,11 +640,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
   // Download Import Template
   const handleDownloadSampleCsv = () => {
     const csvContent = 
-      "username,name,email,phone,password,farmEstate,plotNumber,sizeHectares,sizeUnit,cropType,investmentAmount\n" +
-      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026,Adubiaro Oil Palm Estate,P-101,2.5,acre,Oil Palm,5000000\n" +
-      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99,Ondo Cocoa Hills,,1.2,plot,Cocoa,1800000\n" +
-      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,,Adubiaro Oil Palm Estate,P-102,3.0,acre,Oil Palm,6000000\n" +
-      "funmi_peaks,Funmilayo Alao,funmi@estatemanager.com,,,,,,,,\n";
+      INVESTOR_IMPORT_CSV_TEMPLATE;
       
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -669,12 +671,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
           return;
         }
         
-        const hasUsername = headers.some(h => h === 'username' || h === 'user' || h === 'handle');
+        // Usernames are optional: they are created from email addresses when missing
         const hasName = headers.some(h => h === 'name' || h === 'fullname' || h === 'investorname');
         const hasEmail = headers.some(h => h === 'email' || h === 'emailaddress');
         
-        if (!hasUsername || !hasName || !hasEmail) {
-          setError('CSV file must have at least "username", "name", and "email" columns.');
+        if (!hasName || !hasEmail) {
+          setError('CSV file must have at least "name" and "email" columns.');
           return;
         }
         
@@ -699,17 +701,8 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       setBulkResults(null);
       setError(null);
       
-      const res = await fetch('/api/admin/users/bulk-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ investors: parsedInvestors })
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Bulk upload failed');
+      const data = await reviewImport(parsedInvestors);
+      if (!data) return;
       
       setBulkResults(data);
       if (data.successCount > 0) {
@@ -717,7 +710,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
         setParsedInvestors([]);
         fetchInvestors();
         if (triggerRefreshSignal) triggerRefreshSignal();
-        showSuccess(`Bulk added ${data.successCount} investors successfully!`);
+        showSuccess(`Imported ${data.successCount} holding(s) for ${data.usersCreatedCount} new and ${data.existingUsersMatchedCount} existing investor(s).`);
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during bulk import.');
@@ -741,6 +734,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
   return (
     <div className="space-y-6">
+      {reviewModal}
       
       {/* Banner Notifications */}
       {successMessage && (
@@ -1920,6 +1914,22 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 <Mail className="h-3.5 w-3.5" />
                 <span>Send Bulk Notification</span>
               </button>
+
+              {/* Email fresh login details (e.g. after an import without welcome emails) */}
+              {user.role === UserRole.ADMIN && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Email new temporary login details to the ${selectedUserIds.length} selected user(s)? Any password they currently use will stop working.`)) {
+                      handleBulkAction('send-login-details');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-[#1B4332] rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
+                  title="Email new temporary passwords to the selected users"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span>Send login details</span>
+                </button>
+              )}
 
               {/* Disable Accounts */}
               <button

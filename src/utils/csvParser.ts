@@ -23,6 +23,10 @@ export interface ParsedInvestorCsvRow {
   ownershipPercentage?: string;
   contractRef?: string;
   startDate?: string;
+  /** Free-text size such as "1 acre", "half acre", "2 plots" (interpreted by the server) */
+  sizeText?: string;
+  /** Columns not recognised here are passed through under their original header */
+  [column: string]: string | undefined;
 }
 
 /**
@@ -86,7 +90,7 @@ export function parseCsvRecords(text: string): {
     return { headers: [], records: [] };
   }
 
-  const rawHeaders = splitCsvLine(lines[0]);
+  const rawHeaders = splitCsvLine(lines[0]).map(h => h.replace(/^\uFEFF/, '').trim());
   const headers = rawHeaders.map(normalizeHeader);
   const records: ParsedInvestorCsvRow[] = [];
 
@@ -159,14 +163,15 @@ export function parseCsvRecords(text: string): {
         case 'plotcode':
           record.plotNumber = val;
           break;
-        case 'sizehectares':
         case 'plotsize':
         case 'size':
-        case 'acres':
-        case 'hectares':
         case 'acreage':
         case 'landsize':
-          record.sizeHectares = cleanNumericInput(val) || val;
+          // Keep the text as typed ("1 plot", "half acre"); the server reads the number and unit
+          record.sizeText = val;
+          break;
+        case 'sizehectares':
+          record.sizeHectares = val;
           break;
         case 'sizeunit':
         case 'unit':
@@ -185,12 +190,12 @@ export function parseCsvRecords(text: string): {
         case 'capital':
         case 'totalinvested':
         case 'amountpaid':
-          record.investmentAmount = cleanNumericInput(val) || val;
+          record.investmentAmount = val;
           break;
         case 'ownershippercentage':
         case 'ownership':
         case 'share':
-          record.ownershipPercentage = cleanNumericInput(val) || val;
+          record.ownershipPercentage = val;
           break;
         case 'contractref':
         case 'contract':
@@ -201,6 +206,10 @@ export function parseCsvRecords(text: string): {
         case 'date':
           record.startDate = val;
           break;
+        default:
+          // Unknown column (e.g. "Invested Amount", "Payment date", "Acres"): pass it through
+          // under its original header so the server can interpret or report it.
+          record[rawHeaders[index]] = val;
       }
     });
 
@@ -211,3 +220,16 @@ export function parseCsvRecords(text: string): {
 
   return { headers, records };
 }
+
+/**
+ * Downloadable import template. Only name, email and the farm are needed;
+ * usernames are created from email addresses when left blank. Sizes can be
+ * written naturally ("1 acre", "half acre", "2 plots", "1.5 hectares"),
+ * amounts as "5000000" or "₦5,000,000", dates day-first (15/03/2024).
+ */
+export const INVESTOR_IMPORT_CSV_TEMPLATE =
+  '\uFEFFname,email,phone,farmEstate,farmLocation,farmState,size,cropType,investmentAmount,startDate,plotNumber,username\n' +
+  'Olumide Benson,benson@example.com,08031111111,Phase 1 Oil Palm Farm,Iwo,Osun,1 acre,Oil Palm,5000000,15/03/2024,,\n' +
+  'Chioma Adeleke,chioma@example.com,+447700900123,Phase 1 Oil Palm Farm,Iwo,Osun,half acre,Oil Palm,"₦2,500,000",01/04/2024,,\n' +
+  'Chioma Adeleke,chioma@example.com,+447700900123,Akanran Cocoa Farm,Ibadan,Oyo,2 plots,Cocoa,1800000,20/05/2024,,\n' +
+  'Daniel Yusuf,daniel@example.com,08123333333,Akanran Cocoa Farm,Ibadan,Oyo,1.5 hectares,Cocoa,7000000,10/06/2024,P-12,danyusuf\n';

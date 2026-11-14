@@ -38,6 +38,7 @@ import {
   redactCredentials,
   Processor
 } from './server/privacy';
+import { normalizeImportRows, farmKeyOf, NormalizedImportRow } from './server/importNormalize';
 import {
   User,
   UserRole,
@@ -3335,303 +3336,274 @@ app.post('/api/users/create', requireAuth, (req, res) => {
   res.status(201).json({ ...publicUser(createdUser), temporaryPassword: tempPassword });
 });
 
-function parseCleanImportNumber(val: unknown, fallback = 0): number {
-  if (val === undefined || val === null || val === '') return fallback;
-  const cleaned = String(val).replace(/[^0-9.-]/g, '');
-  if (!cleaned) return fallback;
-  const parsed = parseFloat(cleaned);
-  return Number.isFinite(parsed) ? parsed : fallback;
+
+interface ImportOptions {
+  /** Validate and report only; nothing is saved and no emails are sent */
+  dryRun?: boolean;
+  /** Email login details to newly created accounts (default true) */
+  sendWelcomeEmails?: boolean;
+  /** Skip rows that exactly duplicate an earlier row */
+  skipDuplicateRows?: boolean;
 }
 
-function executeBulkInvestorImport(investors: any[], currentUser: User) {
+function sendWelcomeEmail(createdUser: User, tempPassword: string, sender: User) {
+  return dispatchEmail(
+    createdUser.email,
+    'Welcome to Adubiaro Farm Estates Portal',
+    `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
+    `<h3>Welcome to Adubiaro Estates Private Portal</h3>
+     <p>Dear ${createdUser.name},</p>
+     <p>An account has been set up for you on our private investor portal.</p>
+     <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
+       <tr><td><b>Username:</b></td><td>${createdUser.username}</td></tr>
+       <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
+       <tr><td><b>Email:</b></td><td>${createdUser.email}</td></tr>
+     </table>
+     <p>You will be asked to choose your own password when you first sign in.</p>
+     <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Sign in</a></p>`,
+    'Welcome Registration',
+    {
+      senderId: sender.id,
+      recipientId: createdUser.id,
+      relatedType: 'welcome',
+      relatedId: createdUser.id,
+      containsCredentials: true
+    }
+  );
+}
+
+function executeBulkInvestorImport(investors: any[], currentUser: User, options: ImportOptions = {}) {
+  const dryRun = !!options.dryRun;
+  const sendWelcomeEmails = options.sendWelcomeEmails !== false;
+  const { rows, globalWarnings } = normalizeImportRows(
+    investors,
+    {
+      existingUsers: db.users.map(u => ({ username: u.username, email: u.email, name: u.name })),
+      existingFarms: db.farms.map(f => ({ id: f.id, name: f.name, location: f.location, state: f.state }))
+    },
+    { skipDuplicateRows: options.skipDuplicateRows }
+  );
+
   // Plaintext temporary passwords for new accounts, kept only long enough to email them
   const tempPasswords = new Map<string, string>();
   const results = {
+    dryRun,
     total: investors.length,
     successCount: 0,
     failCount: 0,
+    skippedCount: 0,
+    usersCreatedCount: 0,
+    existingUsersMatchedCount: 0,
     farmsCreatedCount: 0,
+    farmsCreated: [] as string[],
     plotsCreatedCount: 0,
+    totalInvestment: 0,
+    welcomeEmailsSent: 0,
     added: [] as any[],
-    errors: [] as { row: number; username?: string; name?: string; error: string }[]
+    errors: [] as { row: number; username?: string; name?: string; error: string }[],
+    warnings: [] as { row: number; name?: string; message: string }[],
+    globalWarnings,
+    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number }>
   };
+
+  const isManager = currentUser.role === UserRole.FARM_MANAGER;
+  const managedFarmIds = new Set(db.assignments.filter(a => a.managerId === currentUser.id && a.isActive).map(a => a.farmId));
 
   const usersToAdd: User[] = [];
   const plotsToAdd: FarmPlot[] = [];
   const investorPlotsToAdd: InvestorPlot[] = [];
   const farmsToAdd: Farm[] = [];
+  const plotUpdates: Array<() => void> = [];
   const affectedFarmIds = new Set<string>();
+  const matchedExisting = new Set<string>();
+  const findFarm = (list: Farm[], r: NormalizedImportRow) =>
+    list.find(f => (r.farmId && f.id === r.farmId) || farmKeyOf(f.name) === r.farmKey);
 
-  for (let i = 0; i < investors.length; i++) {
-    const rowNum = i + 1;
-    const item = investors[i] || {};
-    const {
-      username,
-      name,
-      email,
-      phone,
-      password,
-      farmId,
-      farmEstate,
-      farmName,
-      estateName,
-      estate,
-      farm,
-      sizeHectares,
-      plotSize,
-      size,
-      sizeUnit,
-      cropType,
-      crop,
-      investmentAmount,
-      amountInvested,
-      investment,
-      amount,
-      capital,
-      ownershipPercentage,
-      contractRef,
-      startDate,
-      plotNumber,
-      plotNo,
-      plotId: rawPlotId,
-      plot,
-      farmLocation,
-      location,
-      farmState,
-      state,
-      farmDescription,
-      description,
-      farmDateEstablished
-    } = item;
+  for (const r of rows) {
+    const rowNum = r.rowNum;
+    r.warnings.forEach(message => results.warnings.push({ row: rowNum, name: r.name, message }));
+    const sizeLabel = `${r.size} ${r.sizeUnit}${r.size === 1 ? '' : 's'}`;
+    const report = (status: 'new_user' | 'existing_user' | 'skipped' | 'error') =>
+      results.rows.push({ row: rowNum, status, name: r.name, email: r.email, username: r.username, farm: r.farmName, size: r.farmName ? sizeLabel : '', crop: r.farmName ? r.cropType : '', amount: r.investmentAmount });
 
-    const cleanUsername = username ? String(username).trim() : '';
-    const cleanEmail = email ? String(email).trim() : '';
-    const cleanName = name ? String(name).trim() : '';
-    const cleanPhone = phone ? String(phone).trim() : '';
-
-    if (!cleanUsername || !cleanName || !cleanEmail) {
+    if (r.errors.length > 0) {
       results.failCount++;
-      results.errors.push({
-        row: rowNum,
-        username: cleanUsername || undefined,
-        name: cleanName || undefined,
-        error: 'Missing required fields: Username, Name, and Email are mandatory.'
-      });
+      r.errors.forEach(error => results.errors.push({ row: rowNum, username: r.username || undefined, name: r.name || undefined, error }));
+      report('error');
+      continue;
+    }
+    if (r.skip) {
+      results.skippedCount++;
+      report('skipped');
       continue;
     }
 
-    const rawFarmSearch =
-      farmId ||
-      farmEstate ||
-      farmName ||
-      estateName ||
-      estate ||
-      farm ||
-      farmLocation ||
-      location ||
-      '';
-    const farmSearch = String(rawFarmSearch).trim();
-    const rawPlotNum = String(plotNumber || plotNo || rawPlotId || plot || '').trim();
-    const pAmount = parseCleanImportNumber(
-      investmentAmount ?? amountInvested ?? investment ?? amount ?? capital,
-      0
-    );
-    const hasAllocationData = Boolean(farmSearch) || Boolean(rawPlotNum) || pAmount > 0;
+    const hasAllocationData = Boolean(r.farmName || r.farmId) || Boolean(r.plotNumber) || r.investmentAmount > 0;
 
-    // Check if user already exists in DB or in this batch
-    let targetUser: User | undefined =
-      usersToAdd.find(
-        u =>
-          u.username.toLowerCase() === cleanUsername.toLowerCase() ||
-          u.email.toLowerCase() === cleanEmail.toLowerCase()
-      ) ||
-      db.users.find(
-        u =>
-          u.username.toLowerCase() === cleanUsername.toLowerCase() ||
-          u.email.toLowerCase() === cleanEmail.toLowerCase()
-      );
-
-    let isNewUser = false;
-
-    if (targetUser) {
-      // If user already exists AND there is no estate/plot/investment data to assign, report duplicate
-      if (!hasAllocationData) {
+    // Resolve the farm (exact id or normalised name match only)
+    let matchedFarm: Farm | undefined;
+    if (r.farmName || r.farmId) {
+      matchedFarm = findFarm(db.farms, r) || findFarm(farmsToAdd, r);
+      if (isManager && (!matchedFarm || !managedFarmIds.has(matchedFarm.id))) {
         results.failCount++;
-        results.errors.push({
-          row: rowNum,
-          username: cleanUsername,
-          name: cleanName,
-          error: `User with username "${cleanUsername}" or email "${cleanEmail}" is already registered.`
-        });
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `Farm managers can only import investors into farms they manage ("${r.farmName}").` });
+        report('error');
         continue;
       }
+      if (!matchedFarm) {
+        if (r.farmId && !r.farmName) {
+          results.failCount++;
+          results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `Farm id "${r.farmId}" was not found.` });
+          report('error');
+          continue;
+        }
+        matchedFarm = {
+          id: `farm-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`,
+          name: r.farmName,
+          location: r.farmLocation || 'Not specified',
+          state: r.farmState || 'Not specified',
+          totalPlots: 0,
+          totalHectares: 0,
+          description: r.farmDescription || `Imported farm estate: ${r.farmName}`,
+          coverImage: '/farm-placeholder.svg',
+          dateEstablished: r.farmDateEstablished || new Date().toISOString().split('T')[0],
+          isActive: true
+        };
+        farmsToAdd.push(matchedFarm);
+        results.farmsCreatedCount++;
+        results.farmsCreated.push(matchedFarm.name);
+      }
+    } else if (hasAllocationData) {
+      results.failCount++;
+      results.errors.push({ row: rowNum, username: r.username, name: r.name, error: 'A plot or amount was given without a farm name.' });
+      report('error');
+      continue;
+    }
+
+    // Find or create the investor account (matched by email, then username)
+    let targetUser: User | undefined =
+      usersToAdd.find(u => u.email.toLowerCase() === r.email) ||
+      db.users.find(u => u.email.toLowerCase() === r.email) ||
+      (!r.usernameGenerated ? usersToAdd.find(u => u.username.toLowerCase() === r.username.toLowerCase()) || db.users.find(u => u.username.toLowerCase() === r.username.toLowerCase()) : undefined);
+
+    let isNewUser = false;
+    if (targetUser) {
+      if (targetUser.email.toLowerCase() !== r.email) {
+        results.failCount++;
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `Username "${r.username}" already belongs to a different email address.` });
+        report('error');
+        continue;
+      }
+      if (targetUser.privacy?.anonymisedAt) {
+        results.failCount++;
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: 'This email belongs to an erased account.' });
+        report('error');
+        continue;
+      }
+      if (!hasAllocationData) {
+        results.failCount++;
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `A user with email "${r.email}" is already registered and the row has no holding to add.` });
+        report('error');
+        continue;
+      }
+      if (!usersToAdd.includes(targetUser) && !matchedExisting.has(targetUser.id)) {
+        matchedExisting.add(targetUser.id);
+        results.existingUsersMatchedCount++;
+      }
     } else {
-      const uidSuffix = `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
-      const suppliedPassword = password ? String(password).trim() : '';
+      const uidSuffix = `${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`;
+      const suppliedPassword = r.password ? String(r.password).trim() : '';
       const tempPassword = suppliedPassword && !validatePasswordStrength(suppliedPassword) ? suppliedPassword : generateTempPassword();
       tempPasswords.set(`user-${uidSuffix}`, tempPassword);
       targetUser = {
         id: `user-${uidSuffix}`,
-        username: cleanUsername,
-        name: cleanName,
-        email: cleanEmail,
-        phone: cleanPhone,
+        username: r.username,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
         role: UserRole.INVESTOR,
-        password: hashPassword(tempPassword),
+        password: dryRun ? undefined : hashPassword(tempPassword),
         mustChangePassword: true,
         tokenVersion: 0,
         isActive: true
       };
       usersToAdd.push(targetUser);
+      results.usersCreatedCount++;
       isNewUser = true;
     }
 
-    // Resolve Farm Estate (exact match first, then substring match, then auto-create)
-    let matchedFarm: Farm | undefined;
-    if (farmSearch) {
-      const cleanSearch = farmSearch.toLowerCase();
-
-      matchedFarm =
-        db.farms.find(
-          f => f.id.toLowerCase() === cleanSearch || f.name.toLowerCase() === cleanSearch
-        ) ||
-        farmsToAdd.find(
-          f => f.id.toLowerCase() === cleanSearch || f.name.toLowerCase() === cleanSearch
-        ) ||
-        db.farms.find(f => f.name.toLowerCase().includes(cleanSearch)) ||
-        farmsToAdd.find(f => f.name.toLowerCase().includes(cleanSearch));
-
-      if (!matchedFarm) {
-        const fLoc = farmLocation || location || 'Ondo Region';
-        const fState = farmState || state || 'Ondo';
-        const fDesc = farmDescription || description || `Imported Farm Estate: ${farmSearch}`;
-        const fDate = farmDateEstablished || new Date().toISOString().split('T')[0];
-
-        matchedFarm = {
-          id: `farm-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-          name: farmSearch,
-          location: String(fLoc).trim(),
-          state: String(fState).trim(),
-          totalPlots: 0,
-          totalHectares: 0,
-          description: String(fDesc).trim(),
-          coverImage: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80',
-          dateEstablished: String(fDate).trim(),
-          isActive: true
-        };
-        farmsToAdd.push(matchedFarm);
-        results.farmsCreatedCount++;
-      }
-    } else if (hasAllocationData) {
-      // Worst case: amount or plot was provided without a farmEstate name; assign to primary active estate or create one
-      matchedFarm = db.farms[0] || farmsToAdd[0];
-      if (!matchedFarm) {
-        matchedFarm = {
-          id: `farm-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-          name: 'Adubiaro General Estate',
-          location: String(farmLocation || location || 'Ondo Region').trim(),
-          state: String(farmState || state || 'Ondo').trim(),
-          totalPlots: 0,
-          totalHectares: 0,
-          description: 'Default estate holding created during bulk import',
-          coverImage: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80',
-          dateEstablished: new Date().toISOString().split('T')[0],
-          isActive: true
-        };
-        farmsToAdd.push(matchedFarm);
-        results.farmsCreatedCount++;
-      }
-    }
-
-    // Always assign a plot & ownership record whenever an estate/farm is resolved (even if plotNumber wasn't stated in CSV)
     if (matchedFarm) {
-      const parsedSize = parseCleanImportNumber(sizeHectares ?? plotSize ?? size, 1.0);
-      const pSize = parsedSize > 0 ? parsedSize : 1.0;
-      const rawUnit = String(sizeUnit || 'acre').trim().toLowerCase();
-      const pUnit = rawUnit.includes('plot') ? 'plot' : rawUnit.includes('hectare') ? 'hectare' : 'acre';
-      const pCrop = String(cropType || crop || 'Oil Palm').trim() || 'Oil Palm';
-      const pOwnership = parseCleanImportNumber(ownershipPercentage, 100);
-
       let assignedPlotId: string | null = null;
 
-      // If plotNumber is specified and already exists unowned in this farm, attach to it
-      if (rawPlotNum) {
-        const existingUnownedPlot = db.plots.find(p => {
-          if (p.farmId !== matchedFarm!.id) return false;
-          if (p.plotNumber.toLowerCase() !== rawPlotNum.toLowerCase()) return false;
-          const alreadyOwnedInDb = db.investorPlots.some(ip => ip.plotId === p.id && ip.isActive !== false);
-          const alreadyOwnedInBatch = investorPlotsToAdd.some(ip => ip.plotId === p.id);
-          return !alreadyOwnedInDb && !alreadyOwnedInBatch;
-        });
-
+      // Attach to an existing unowned plot with the same number in this farm
+      if (r.plotNumber) {
+        const existingUnownedPlot = db.plots.find(p =>
+          p.farmId === matchedFarm!.id &&
+          p.plotNumber.toLowerCase() === r.plotNumber.toLowerCase() &&
+          !db.investorPlots.some(ip => ip.plotId === p.id && ip.isActive !== false) &&
+          !investorPlotsToAdd.some(ip => ip.plotId === p.id)
+        );
         if (existingUnownedPlot) {
-          existingUnownedPlot.status = PlotStatus.ACTIVE;
-          if (sizeHectares || plotSize || size) existingUnownedPlot.sizeHectares = pSize;
-          if (sizeUnit) existingUnownedPlot.sizeUnit = pUnit;
-          if (cropType || crop) existingUnownedPlot.cropType = pCrop;
           assignedPlotId = existingUnownedPlot.id;
+          plotUpdates.push(() => {
+            existingUnownedPlot.status = PlotStatus.ACTIVE;
+            existingUnownedPlot.sizeHectares = r.size;
+            existingUnownedPlot.sizeUnit = r.sizeUnit;
+            existingUnownedPlot.cropType = r.cropType;
+          });
         }
       }
 
       if (!assignedPlotId) {
-        let pNum = rawPlotNum;
+        let pNum = r.plotNumber;
         if (!pNum) {
           const existingPlotsCount = db.plots.filter(p => p.farmId === matchedFarm!.id).length;
           const pendingCount = plotsToAdd.filter(p => p.farmId === matchedFarm!.id).length;
           pNum = `P-${matchedFarm.id.replace('farm-', '').slice(-4).toUpperCase()}-${existingPlotsCount + pendingCount + 1}`;
         }
-
-        assignedPlotId = `plot-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
-        const newPlot: FarmPlot = {
+        assignedPlotId = `plot-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`;
+        plotsToAdd.push({
           id: assignedPlotId,
           farmId: matchedFarm.id,
           plotNumber: pNum,
-          sizeHectares: pSize,
-          sizeUnit: pUnit,
-          cropType: pCrop,
+          sizeHectares: r.size,
+          sizeUnit: r.sizeUnit,
+          cropType: r.cropType,
           status: PlotStatus.ACTIVE
-        };
-        plotsToAdd.push(newPlot);
+        });
       }
 
-      const invPlot: InvestorPlot = {
-        id: `invplot-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      investorPlotsToAdd.push({
+        id: `invplot-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`,
         investorId: targetUser.id,
         plotId: assignedPlotId,
-        investmentAmount: pAmount,
-        ownershipPercentage: pOwnership > 0 ? pOwnership : 100,
-        startDate: startDate ? String(startDate).trim() : new Date().toISOString().split('T')[0],
-        contractRef: contractRef
-          ? String(contractRef).trim()
-          : `CON-BLK-${Date.now().toString().slice(-5)}-${i + 1}`,
+        investmentAmount: r.investmentAmount,
+        ownershipPercentage: r.ownershipPercentage,
+        startDate: r.startDate || new Date().toISOString().split('T')[0],
+        contractRef: r.contractRef ? String(r.contractRef).trim() : `CON-BLK-${Date.now().toString().slice(-5)}-${rowNum}`,
         isActive: true
-      };
-
-      investorPlotsToAdd.push(invPlot);
+      });
       affectedFarmIds.add(matchedFarm.id);
       results.plotsCreatedCount++;
+      results.totalInvestment += r.investmentAmount;
     }
 
-    if (isNewUser || hasAllocationData) {
-      results.successCount++;
-      results.added.push({ id: targetUser.id, username: targetUser.username, name: targetUser.name });
-    }
+    results.successCount++;
+    results.added.push({ id: targetUser.id, username: targetUser.username, name: targetUser.name, email: targetUser.email });
+    report(isNewUser ? 'new_user' : 'existing_user');
+  }
+
+  if (dryRun) {
+    return results;
   }
 
   // Persist changes if any succeeded
   if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0) {
-    if (farmsToAdd.length > 0) {
-      db.farms.push(...farmsToAdd);
-    }
-    if (usersToAdd.length > 0) {
-      db.users.push(...usersToAdd);
-    }
-    if (plotsToAdd.length > 0) {
-      db.plots.push(...plotsToAdd);
-    }
-    if (investorPlotsToAdd.length > 0) {
-      db.investorPlots.push(...investorPlotsToAdd);
-    }
+    db.farms.push(...farmsToAdd);
+    db.users.push(...usersToAdd);
+    plotUpdates.forEach(apply => apply());
+    db.plots.push(...plotsToAdd);
+    db.investorPlots.push(...investorPlotsToAdd);
 
     // Recompute estate totals for affected farms
     affectedFarmIds.forEach(fId => {
@@ -3645,36 +3617,18 @@ function executeBulkInvestorImport(investors: any[], currentUser: User) {
       }
     });
 
+    recordAudit(db, currentUser, 'data.import_investors', {
+      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
+    });
     saveDb();
 
-    // Send notifications/emails for each newly added user
-    usersToAdd.forEach(createdUser => {
-      const tempPassword = tempPasswords.get(createdUser.id) || '(contact your administrator)';
-      dispatchEmail(
-        createdUser.email,
-        'Welcome to Adubiaro Farm Estates Portal',
-        `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
-        `<h3>Welcome to Adubiaro Estates Private Portal</h3>
-         <p>Dear ${createdUser.name},</p>
-         <p>An administrative account has been securely setup for you on our private client portal.</p>
-         <p>Your roles permissions: <b>INVESTOR</b></p>
-         <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
-           <tr><td><b>Authorized Username:</b></td><td>${createdUser.username}</td></tr>
-           <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
-           <tr><td><b>Sign-Up Email:</b></td><td>${createdUser.email}</td></tr>
-         </table>
-         <p>You are required to log in and change your temporary password immediately upon landing.</p>
-         <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Access Login Dashboard</a></p>`,
-        'Welcome Registration',
-        {
-          senderId: currentUser.id,
-          recipientId: createdUser.id,
-          relatedType: 'welcome',
-          relatedId: createdUser.id,
-          containsCredentials: true
-        }
-      );
-    });
+    if (sendWelcomeEmails) {
+      for (const createdUser of usersToAdd) {
+        sendWelcomeEmail(createdUser, tempPasswords.get(createdUser.id) || '(contact your administrator)', currentUser)
+          .catch(err => console.error('Welcome email failed:', err));
+        results.welcomeEmailsSent++;
+      }
+    }
   }
 
   return results;
@@ -3692,7 +3646,11 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Payload must contain an "investors" array.' });
   }
 
-  const results = executeBulkInvestorImport(investors, currentUser);
+  const results = executeBulkInvestorImport(investors, currentUser, {
+    dryRun: req.body.dryRun === true,
+    sendWelcomeEmails: req.body.sendWelcomeEmails !== false,
+    skipDuplicateRows: req.body.skipDuplicateRows === true
+  });
   res.status(200).json(results);
 });
 
@@ -3712,7 +3670,11 @@ app.post('/api/import/data', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Payload must contain a list of records in "investors", "records", "data", or as a top-level array.' });
   }
 
-  const results = executeBulkInvestorImport(investors, currentUser);
+  const results = executeBulkInvestorImport(investors, currentUser, {
+    dryRun: req.body.dryRun === true,
+    sendWelcomeEmails: req.body.sendWelcomeEmails !== false,
+    skipDuplicateRows: req.body.skipDuplicateRows === true
+  });
   res.status(200).json(results);
 });
 
@@ -4046,6 +4008,25 @@ app.post('/api/admin/users/bulk-action', requireAuth, (req, res) => {
 
   let updatedCount = 0;
   const previousStates: Array<{ id: string; role: UserRole; isActive: boolean }> = [];
+
+  // Email fresh temporary login details (e.g. after an import done without welcome emails)
+  if (action === 'send-login-details') {
+    if (currentUser.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: 'Only administrators can send login details.' });
+    }
+    let sent = 0;
+    for (const id of userIds) {
+      const target = db.users.find(u => u.id === id);
+      if (!target || target.id === currentUser.id || target.isActive === false || target.privacy?.anonymisedAt) continue;
+      const tempPassword = generateTempPassword();
+      setUserPassword(target, tempPassword, true);
+      sendWelcomeEmail(target, tempPassword, currentUser).catch(err => console.error('Login details email failed:', err));
+      sent++;
+    }
+    recordAudit(db, currentUser, 'user.login_details_sent', { details: `count=${sent}`, req });
+    saveDb();
+    return res.json({ success: true, count: sent, previousStates: [] });
+  }
 
   if (action === 'update-role' && currentUser.role !== UserRole.ADMIN && value !== UserRole.INVESTOR) {
     return res.status(403).json({ error: 'Only administrators can assign staff roles.' });
