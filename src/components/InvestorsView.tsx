@@ -1150,66 +1150,65 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             return (
               <div 
                 key={inv.id}
-                className={`bg-white dark:bg-stone-900 border rounded-3xl p-5 hover:shadow-premium transition-all duration-300 flex flex-col justify-between group relative ${
+                className={`bg-white dark:bg-stone-900 border rounded-3xl p-5 hover:shadow-premium transition-all duration-300 flex flex-col justify-between group relative min-w-0 overflow-hidden ${
                   isSelected
                     ? 'border-[#52B788] bg-emerald-50/30 dark:bg-emerald-950/10 ring-2 ring-[#52B788]/30 shadow-md scale-[1.015]'
                     : 'border-gray-150 dark:border-stone-800'
                 }`}
               >
-                <div>
+                <div className="min-w-0">
                   {/* Header info */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2.5">
-                      {/* Checkbox */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelectUser(inv.id);
-                        }}
-                        className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer"
-                        title={isSelected ? "Deselect user" : "Select user for batch operations"}
-                      >
-                        {isSelected ? (
-                          <CheckSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        ) : (
-                          <Square className="h-5 w-5 text-gray-300 dark:text-stone-700 shrink-0" />
-                        )}
-                      </button>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {/* Checkbox */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectUser(inv.id);
+                      }}
+                      className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer shrink-0"
+                      title={isSelected ? "Deselect user" : "Select user for batch operations"}
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      ) : (
+                        <Square className="h-5 w-5 text-gray-300 dark:text-stone-700 shrink-0" />
+                      )}
+                    </button>
 
-                      <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-xs shrink-0">
-                        {inv.name.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <div>
-                        <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors line-clamp-1">
-                          {inv.name}
-                        </h4>
-                        <p className="text-[10px] font-mono text-gray-400">@{inv.username}</p>
-                      </div>
+                    <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-xs shrink-0">
+                      {inv.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
-
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <span className={`text-[8.5px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border ${
-                        inv.role === UserRole.ADMIN
-                          ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800/40'
-                          : inv.role === UserRole.FARM_MANAGER
-                          ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/40'
-                          : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
-                      }`}>
-                        {inv.role.toUpperCase()}
-                      </span>
-                      <span className={`text-[8px] font-mono font-extrabold px-2 py-0.5 rounded-full border ${
-                        inv.isActive !== false
-                          ? 'bg-emerald-50/60 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/20'
-                          : 'bg-stone-100 dark:bg-stone-850 text-stone-500 border-stone-200 dark:border-stone-800'
-                      }`}>
-                        {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors truncate">
+                        {inv.name}
+                      </h4>
+                      <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
                     </div>
                   </div>
 
+                  {/* Role & Status Badges */}
+                  <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
+                    <span className={`text-[8.5px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border whitespace-nowrap max-w-full truncate ${
+                      inv.role === UserRole.ADMIN
+                        ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800/40'
+                        : inv.role === UserRole.FARM_MANAGER
+                        ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/40'
+                        : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
+                    }`}>
+                      {inv.role.toUpperCase()}
+                    </span>
+                    <span className={`text-[8px] font-mono font-extrabold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                      inv.isActive !== false
+                        ? 'bg-emerald-50/60 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/20'
+                        : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-700'
+                    }`}>
+                      {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </div>
+
                 {/* Body details */}
-                <div className="mt-5 space-y-2.5 text-xs text-gray-500 dark:text-stone-400 border-t border-dashed border-gray-100 dark:border-stone-800 pt-4">
+                <div className="mt-4 space-y-2.5 text-xs text-gray-500 dark:text-stone-400 border-t border-dashed border-gray-100 dark:border-stone-800 pt-4">
                   <div className="flex items-center gap-2.5">
                     <Mail className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                     <span className="truncate text-gray-700 dark:text-stone-300">{inv.email}</span>
