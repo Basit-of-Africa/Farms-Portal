@@ -20,9 +20,14 @@ import {
   Briefcase,
   Filter,
   RotateCcw,
-  X
+  X,
+  Map,
+  Plus,
+  Trash2,
+  Compass,
+  Tag
 } from 'lucide-react';
-import { User as UserType, Farm, FarmPlot, FarmUpdate, Document, UserRole, PlotStatus } from '../types';
+import { User as UserType, Farm, FarmPlot, FarmMapNote, FarmUpdate, Document, UserRole, PlotStatus } from '../types';
 import CommentsSection from './CommentsSection';
 import { getRelativeTime } from '../utils/time';
 
@@ -41,13 +46,77 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
     updates: FarmUpdate[];
     documents: Document[];
     investorHoldings?: any[];
+    mapNotes?: FarmMapNote[];
   } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'updates' | 'plots' | 'documents'>('updates');
+  const [activeTab, setActiveTab] = useState<'updates' | 'plots' | 'documents' | 'map'>('updates');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
+
+  const [clickedCoords, setClickedCoords] = useState<{ x: number, y: number } | null>(null);
+  const [newPinNote, setNewPinNote] = useState<string>('');
+  const [savingPin, setSavingPin] = useState<boolean>(false);
+  const [selectedPin, setSelectedPin] = useState<FarmMapNote | null>(null);
+  const [focusedPinId, setFocusedPinId] = useState<string | null>(null);
+
+  const handleSavePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clickedCoords || !newPinNote.trim()) return;
+
+    try {
+      setSavingPin(true);
+      const res = await fetch(`/api/farms/${farmId}/map-notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          x: clickedCoords.x,
+          y: clickedCoords.y,
+          note: newPinNote
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to save pin');
+      }
+
+      await fetchFarmDetails(); // reload details
+      setClickedCoords(null);
+      setNewPinNote('');
+    } catch (err: any) {
+      alert(err.message || 'Error occurred saving pin');
+    } finally {
+      setSavingPin(false);
+    }
+  };
+
+  const handleDeletePin = async (pinId: string) => {
+    if (!window.confirm('Are you sure you want to delete this pinned note?')) return;
+
+    try {
+      const res = await fetch(`/api/farms/${farmId}/map-notes/${pinId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete pin');
+      }
+
+      setSelectedPin(null);
+      await fetchFarmDetails(); // reload details
+    } catch (err: any) {
+      alert(err.message || 'Error occurred deleting pin');
+    }
+  };
 
   const fetchFarmDetails = async () => {
     try {
@@ -132,7 +201,7 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
     );
   }
 
-  const { farm, plots, updates, documents } = data;
+  const { farm, plots, updates, documents, mapNotes = [] } = data;
 
   // Filter updates by selected date-range
   const filteredUpdates = updates.filter(up => {
@@ -197,7 +266,7 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
       </div>
 
       {/* Tab bar header */}
-      <div className="flex flex-col sm:flex-row bg-white rounded-3xl sm:rounded-2xl shadow-premium p-2 sm:p-1.5 border border-[#2D6A4F]/10 gap-1.5 sm:gap-0">
+      <div className="flex flex-col lg:flex-row bg-white rounded-3xl lg:rounded-2xl shadow-premium p-2 lg:p-1.5 border border-[#2D6A4F]/10 gap-1.5 lg:gap-0">
         <button
           onClick={() => setActiveTab('updates')}
           className={`flex-1 py-3 text-xs font-mono font-bold uppercase tracking-wider rounded-xl transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${
@@ -216,6 +285,16 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
         >
           <Layers className="h-4 w-4" />
           <span>Section Plots ({plots.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('map')}
+          className={`flex-1 py-3 text-xs font-mono font-bold uppercase tracking-wider rounded-xl transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${
+            activeTab === 'map' ? 'bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white shadow shadow-[#1B4332]/30' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+          }`}
+        >
+          <Map className="h-4 w-4" />
+          <span>Interactive Map ({mapNotes.length})</span>
         </button>
 
         <button
@@ -467,6 +546,369 @@ export default function FarmDetail({ user, token, farmId, onBack, refreshSignal 
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {/* INTERACTIVE PLOT ALLOCATION & OPERATIONAL MAP */}
+        {activeTab === 'map' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+            
+            {/* Map Canvas (Left 2 columns on lg) */}
+            <div className="lg:col-span-2 flex flex-col gap-4">
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-premium flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-sans font-bold text-[#1B4332] text-sm">Estate Plot Allocation Map</h3>
+                    <p className="text-[11px] text-gray-500 font-sans mt-0.5">
+                      Visual parcel layout of {farm.name}. {(user.role === UserRole.ADMIN || user.role === UserRole.FARM_MANAGER) ? "Click anywhere on the map to pin a coordinate note." : "Hover or click pins to inspect field manager notes."}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-150">
+                      <Compass className="h-3.5 w-3.5 text-emerald-700 animate-spin-slow" />
+                      <span>GPS ACCURACY: ±2.4m</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Map Grid Arena */}
+                <div 
+                  id="farm-estate-map-canvas"
+                  onClick={(e) => {
+                    // Only allow admins and managers to place pins
+                    if (user.role !== UserRole.ADMIN && user.role !== UserRole.FARM_MANAGER) return;
+                    
+                    // Prevent trigger if clicking on an existing pin or tooltip
+                    const target = e.target as HTMLElement;
+                    if (target.closest('.map-pin-element') || target.closest('.map-pin-tooltip')) {
+                      return;
+                    }
+
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 100;
+                    const y = ((e.clientY - rect.top) / rect.height) * 100;
+                    
+                    // Select clicked coordinates to open the form
+                    setClickedCoords({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+                    setNewPinNote('');
+                    setSelectedPin(null);
+                  }}
+                  className={`relative h-[480px] w-full rounded-2xl overflow-hidden border border-gray-150 select-none shadow-inner bg-gradient-to-br from-emerald-50 via-sage-50 to-amber-50/30 ${
+                    (user.role === UserRole.ADMIN || user.role === UserRole.FARM_MANAGER) ? 'cursor-crosshair' : 'cursor-default'
+                  }`}
+                  style={{
+                    backgroundImage: 'radial-gradient(#2d6a4f 0.65px, transparent 0.65px), radial-gradient(#d8f3dc 1px, transparent 1px)',
+                    backgroundSize: '24px 24px, 48px 48px',
+                    backgroundPosition: '0 0, 12px 12px'
+                  }}
+                >
+                  
+                  {/* Decorative grid dividing lines & natural features to simulate map visual representation */}
+                  <div className="absolute inset-0 pointer-events-none opacity-40">
+                    {/* Simulated access roads/paths */}
+                    <div className="absolute top-[40%] left-0 right-0 h-4 bg-amber-100 border-y border-amber-200/50 transform -rotate-2 flex items-center justify-center">
+                      <span className="text-[8px] text-amber-600/70 font-mono tracking-widest font-bold uppercase">Primary Access Dirt Road</span>
+                    </div>
+                    <div className="absolute top-0 bottom-0 left-[35%] w-3 bg-amber-100 border-x border-amber-200/50 transform rotate-12" />
+                    
+                    {/* Natural reserve river */}
+                    <svg className="absolute bottom-4 left-4 w-48 h-24 text-sky-200/60" fill="none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <path d="M0,80 Q25,50 50,80 T100,80" stroke="currentColor" strokeWidth="12" strokeLinecap="round" />
+                      <text x="35" y="65" fill="#0369a1" className="text-[6px] font-mono uppercase tracking-widest font-bold opacity-60">Water Source Basin</text>
+                    </svg>
+
+                    {/* Tree canopies icons dotted */}
+                    <div className="absolute top-6 left-12 flex gap-1 opacity-60">
+                      <div className="w-5 h-5 rounded-full bg-emerald-800/30 border border-emerald-800/10 flex items-center justify-center text-[8px]">🌳</div>
+                      <div className="w-4 h-4 rounded-full bg-emerald-800/30 border border-emerald-800/10 flex items-center justify-center text-[8px] -mt-2">🌳</div>
+                      <div className="w-5 h-5 rounded-full bg-emerald-800/30 border border-emerald-800/10 flex items-center justify-center text-[8px] -ml-2">🌳</div>
+                    </div>
+                    <div className="absolute bottom-16 right-20 flex gap-1 opacity-60">
+                      <div className="w-5 h-5 rounded-full bg-emerald-800/30 border border-emerald-800/10 flex items-center justify-center text-[8px]">🌳</div>
+                      <div className="w-5 h-5 rounded-full bg-emerald-800/30 border border-emerald-800/10 flex items-center justify-center text-[8px] ml-1 -mt-1">🌳</div>
+                    </div>
+                  </div>
+
+                  {/* Visual Render of Plots according to the farm's plot list */}
+                  <div className="absolute inset-0 p-8 grid grid-cols-2 gap-4 pointer-events-none opacity-80">
+                    {plots.map((plot, idx) => {
+                      // Alternate background patterns or locations based on ID
+                      const statusColor = 
+                        plot.status === PlotStatus.ACTIVE ? 'bg-emerald-600/15 border-emerald-600/30 text-emerald-800' :
+                        plot.status === PlotStatus.HARVESTING ? 'bg-amber-600/15 border-amber-600/30 text-amber-800' :
+                        plot.status === PlotStatus.DORMANT ? 'bg-gray-600/15 border-gray-600/30 text-gray-800' :
+                        'bg-blue-600/15 border-blue-600/30 text-blue-800';
+
+                      return (
+                        <div 
+                          key={plot.id} 
+                          className={`rounded-xl border border-dashed p-4 flex flex-col justify-between transition-all duration-300 ${statusColor}`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <span className="text-[10px] font-mono font-bold tracking-wider uppercase bg-white/80 px-1.5 py-0.5 rounded border border-gray-200/30">
+                              {plot.plotNumber}
+                            </span>
+                            <span className="text-[8px] font-mono font-bold uppercase tracking-widest opacity-70">
+                              Sector {idx + 1}
+                            </span>
+                          </div>
+                          <div className="mt-2">
+                            <p className="text-[10px] font-bold tracking-tight line-clamp-1">{plot.cropType}</p>
+                            <p className="text-[9px] font-mono opacity-85 mt-0.5">{plot.sizeHectares} {plot.sizeUnit || 'acre'}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* RENDER ACTIVE PERSISTENT NOTE PINS */}
+                  {mapNotes.map((note) => {
+                    const isFocused = focusedPinId === note.id;
+                    return (
+                      <div
+                        key={note.id}
+                        className="map-pin-element absolute z-20 group -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+                        style={{ left: `${note.x}%`, top: `${note.y}%` }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPin(note);
+                          setClickedCoords(null);
+                        }}
+                      >
+                        {/* Halos for focused/highlighted state */}
+                        {isFocused && (
+                          <span className="absolute -inset-4 rounded-full bg-orange-500/30 animate-ping pointer-events-none" />
+                        )}
+                        <span className="absolute -inset-2 rounded-full bg-[#1B4332]/10 group-hover:scale-150 transition-transform duration-300 pointer-events-none" />
+                        
+                        {/* Pin marker wrapper */}
+                        <div className={`p-1.5 rounded-full shadow border transition-all duration-300 ${
+                          isFocused 
+                            ? 'bg-orange-500 border-orange-600 text-white scale-125' 
+                            : 'bg-white border-[#1B4332]/30 text-[#1B4332] hover:bg-emerald-50 hover:border-emerald-500 hover:scale-110'
+                        }`}>
+                          <MapPin className="h-4 w-4 fill-current" />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* TEMPORARY PLACING CROSSHAIR / PIN INDICATOR */}
+                  {clickedCoords && (
+                    <div 
+                      className="absolute z-30 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 animate-pulse"
+                      style={{ left: `${clickedCoords.x}%`, top: `${clickedCoords.y}%` }}
+                    >
+                      <div className="w-7 h-7 rounded-full border-2 border-orange-500 flex items-center justify-center bg-orange-100/40">
+                        <Plus className="h-4 w-4 text-orange-600 font-bold" />
+                      </div>
+                      <span className="text-[8px] font-mono font-bold bg-orange-600 text-white px-1 rounded shadow">
+                        X:{clickedCoords.x}% Y:{clickedCoords.y}%
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ACTIVE PIN DETAILS OVERLAY TOOLTIP CARD */}
+                  {selectedPin && (
+                    <div 
+                      className="map-pin-tooltip absolute z-40 bg-white rounded-xl shadow-xl border border-gray-150 p-4 w-72 max-w-[calc(100vw-2rem)] flex flex-col gap-2 -translate-x-1/2 transition-all duration-300"
+                      style={{ 
+                        left: `${selectedPin.x}%`, 
+                        // Position above or below depending on coordinate
+                        top: selectedPin.y > 60 ? `${selectedPin.y - 28}%` : `${selectedPin.y + 4}%`
+                      }}
+                    >
+                      <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="p-1 bg-emerald-50 border border-emerald-100 rounded text-emerald-700">
+                            <User className="h-3.5 w-3.5" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-800 leading-tight">{selectedPin.authorName}</p>
+                            <p className="text-[8px] font-mono font-bold text-gray-400 uppercase tracking-wider mt-0.5">{selectedPin.authorRole}</p>
+                          </div>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => setSelectedPin(null)}
+                          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 cursor-pointer"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      <div className="text-xs text-gray-700 font-sans leading-relaxed py-1 max-h-24 overflow-y-auto">
+                        {selectedPin.note}
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-gray-50 pt-2 text-[9px] text-gray-400 font-mono">
+                        <span>{getRelativeTime(selectedPin.createdAt)}</span>
+                        
+                        {(user.role === UserRole.ADMIN || selectedPin.authorId === user.id) && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePin(selectedPin.id)}
+                            className="flex items-center gap-0.5 font-bold text-red-600 hover:text-red-800 hover:bg-red-50 px-1.5 py-0.5 rounded transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>DELETE</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CREATE PIN FLOATING CARD FORM */}
+                  {clickedCoords && (
+                    <form 
+                      onSubmit={handleSavePin}
+                      className="absolute bottom-4 left-4 right-4 z-40 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-gray-150 p-4 flex flex-col sm:flex-row items-end gap-3"
+                    >
+                      <div className="flex-1 w-full space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-mono font-bold text-orange-700 uppercase tracking-wider flex items-center gap-1">
+                            <Tag className="h-3.5 w-3.5" />
+                            <span>DROP MANAGER PIN AT ({clickedCoords.x}%, {clickedCoords.y}%)</span>
+                          </label>
+                          <button 
+                            type="button"
+                            onClick={() => setClickedCoords(null)}
+                            className="text-gray-400 hover:text-gray-600 p-0.5 hover:bg-gray-50 rounded"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <textarea
+                          required
+                          rows={2}
+                          placeholder="Write agricultural details, irrigation instructions, soil treatment notes, or plot statuses..."
+                          value={newPinNote}
+                          onChange={(e) => setNewPinNote(e.target.value)}
+                          className="w-full text-xs bg-white border border-gray-200 rounded-lg p-2 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none font-sans placeholder-gray-400"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => setClickedCoords(null)}
+                          className="flex-1 sm:flex-initial px-3 py-2 border border-gray-200 text-gray-500 text-[10px] font-mono font-bold uppercase rounded-lg hover:bg-gray-50 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={savingPin}
+                          className="flex-1 sm:flex-initial px-4 py-2 bg-orange-600 text-white text-[10px] font-mono font-bold uppercase rounded-lg hover:bg-orange-700 cursor-pointer flex items-center justify-center gap-1 shadow shadow-orange-600/30"
+                        >
+                          {savingPin ? 'Pinning...' : 'Drop Pin'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar Pins List & Operational Map Legend (Right 1 column) */}
+            <div className="flex flex-col gap-4">
+              
+              {/* Map Legend card */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-premium">
+                <h4 className="font-sans font-bold text-gray-800 text-xs">Acreage & Canopy Legend</h4>
+                <p className="text-[10px] text-gray-400 font-sans mt-0.5">Plot allocation operational indicators</p>
+                
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-3.5 h-3.5 rounded border border-emerald-500/40 bg-emerald-500/10" />
+                    <div>
+                      <p className="text-[10px] font-bold text-emerald-800">ACTIVE CANOPY</p>
+                      <p className="text-[9px] text-gray-400 leading-tight">Actively planted plots under contract.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-3.5 h-3.5 rounded border border-amber-500/40 bg-amber-500/10" />
+                    <div>
+                      <p className="text-[10px] font-bold text-amber-800">HARVESTING STAGE</p>
+                      <p className="text-[9px] text-gray-400 leading-tight">Crops undergoing harvest and processing.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-3.5 h-3.5 rounded border border-gray-500/40 bg-gray-500/10" />
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-700">DORMANT FIELDS</p>
+                      <p className="text-[9px] text-gray-400 leading-tight">Soil preparing, tilling, or resting.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-3.5 h-3.5 rounded border border-blue-500/40 bg-blue-500/10" />
+                    <div>
+                      <p className="text-[10px] font-bold text-blue-800">AVAILABLE PLOTS</p>
+                      <p className="text-[9px] text-gray-400 leading-tight">Vacant parcels waiting for investor backing.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sidebar list of pinned notes with hover pulse highlights! */}
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-premium flex-1 flex flex-col gap-3 min-h-[300px]">
+                <div>
+                  <h4 className="font-sans font-bold text-gray-800 text-xs">Supervisor Coordinates Feed</h4>
+                  <p className="text-[10px] text-gray-400 font-sans mt-0.5">
+                    {mapNotes.length} pinned agricultural status records
+                  </p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-3 max-h-[380px] pr-1">
+                  {mapNotes.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 border border-dashed border-gray-100 rounded-xl">
+                      <MapPin className="h-8 w-8 text-gray-300 stroke-1" />
+                      <p className="text-[10px] text-gray-400 mt-2">No agricultural pins dropped on this estate yet.</p>
+                    </div>
+                  ) : (
+                    mapNotes.map((note) => {
+                      const isFocused = focusedPinId === note.id;
+                      return (
+                        <div 
+                          key={note.id}
+                          onMouseEnter={() => setFocusedPinId(note.id)}
+                          onMouseLeave={() => setFocusedPinId(null)}
+                          onClick={() => {
+                            setSelectedPin(note);
+                            setClickedCoords(null);
+                            // Scroll map container to highlight if needed
+                            const mapEl = document.getElementById('farm-estate-map-canvas');
+                            if (mapEl) {
+                              mapEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }
+                          }}
+                          className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all duration-300 ${
+                            isFocused 
+                              ? 'border-orange-400 bg-orange-50/40 shadow-sm' 
+                              : 'border-gray-100 hover:border-emerald-300 hover:bg-emerald-50/20'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                              Pin #{note.id.split('-')[2] || 'A'}
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-mono">{getRelativeTime(note.createdAt)}</span>
+                          </div>
+
+                          <p className="text-xs text-gray-700 mt-2 line-clamp-2 leading-relaxed font-sans">{note.note}</p>
+
+                          <div className="mt-2.5 pt-2 border-t border-gray-50 flex items-center justify-between text-[9px] text-gray-400 font-mono">
+                            <span className="font-bold text-gray-600 truncate max-w-[120px]">{note.authorName}</span>
+                            <span className="uppercase">{note.authorRole}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
 

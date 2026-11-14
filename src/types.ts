@@ -83,6 +83,18 @@ export interface FarmPlot {
   status: PlotStatus;
 }
 
+export interface FarmMapNote {
+  id: string;
+  farmId: string;
+  x: number; // percentage coordinate
+  y: number; // percentage coordinate
+  note: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  createdAt: string;
+}
+
 export interface InvestorPlot {
   id: string;
   investorId: string;

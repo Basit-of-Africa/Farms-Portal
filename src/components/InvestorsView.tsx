@@ -25,7 +25,9 @@ import {
   CheckSquare,
   Square,
   Undo,
-  RotateCcw
+  RotateCcw,
+  LayoutGrid,
+  Table as TableIcon
 } from 'lucide-react';
 import { User as UserType, UserRole } from '../types';
 
@@ -41,8 +43,17 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
+    const saved = localStorage.getItem('investors_view_mode');
+    return saved === 'table' ? 'table' : 'grid';
+  });
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleViewModeChange = (mode: 'grid' | 'table') => {
+    setViewMode(mode);
+    localStorage.setItem('investors_view_mode', mode);
+  };
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
@@ -882,9 +893,9 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
         </div>
       </div>
 
-      {/* Select All Bar */}
+      {/* Select All Bar & View Mode Switcher */}
       {!loading && filteredInvestors.length > 0 && (
-        <div className="flex items-center justify-between bg-stone-50 dark:bg-stone-850 border border-stone-200/50 dark:border-stone-800 px-4.5 py-3 rounded-2xl text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-stone-50 dark:bg-stone-900/70 border border-stone-200/50 dark:border-stone-800 px-4.5 py-3 rounded-2xl text-xs">
           <div className="flex items-center gap-2.5">
             <button
               onClick={toggleSelectAll}
@@ -907,16 +918,54 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             </span>
           </div>
 
-          {selectedUserIds.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[#2D6A4F] dark:text-[#52B788] font-bold font-mono">
-              <span className="h-2 w-2 rounded-full bg-[#52B788] animate-pulse" />
-              <span>{selectedUserIds.length} selected for batch operations</span>
+          <div className="flex items-center gap-3 ml-auto">
+            {selectedUserIds.length > 0 && (
+              <div className="flex items-center gap-1.5 text-[#2D6A4F] dark:text-[#52B788] font-bold font-mono">
+                <span className="h-2 w-2 rounded-full bg-[#52B788] animate-pulse" />
+                <span>{selectedUserIds.length} selected for batch operations</span>
+              </div>
+            )}
+
+            {/* Grid / Table View Toggle */}
+            <div
+              className="inline-flex items-center bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl p-1 shadow-xs"
+              role="group"
+              aria-label="Investors display layout"
+            >
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('grid')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-[#1B4332] text-white shadow-xs dark:bg-[#52B788] dark:text-stone-950'
+                    : 'text-gray-500 dark:text-stone-400 hover:text-gray-800 dark:hover:text-stone-200'
+                }`}
+                title="Grid view"
+                aria-pressed={viewMode === 'grid'}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span>Grid</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('table')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-[#1B4332] text-white shadow-xs dark:bg-[#52B788] dark:text-stone-950'
+                    : 'text-gray-500 dark:text-stone-400 hover:text-gray-800 dark:hover:text-stone-200'
+                }`}
+                title="Table view"
+                aria-pressed={viewMode === 'table'}
+              >
+                <TableIcon className="h-3.5 w-3.5" />
+                <span>Table</span>
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {/* Grid List */}
+      {/* Investors List (Grid or Table View) */}
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 text-[#52B788] animate-spin" />
@@ -929,6 +978,170 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
           <p className="text-xs text-gray-400 max-w-sm mt-1">
             We couldn't find any investor profiles matching your criteria or currently registered.
           </p>
+        </div>
+      ) : viewMode === 'table' ? (
+        <div className="bg-white dark:bg-stone-900 border border-[#2D6A4F]/10 dark:border-stone-800 rounded-3xl shadow-premium overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-950/40 text-gray-400 dark:text-stone-400 uppercase font-mono text-[10px] tracking-wider">
+                  <th className="py-3.5 pl-5 pr-2 w-10">
+                    <button
+                      type="button"
+                      onClick={toggleSelectAll}
+                      className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer flex items-center justify-center"
+                      title={filteredInvestors.every(inv => selectedUserIds.includes(inv.id)) ? 'Deselect all visible' : 'Select all visible'}
+                      aria-label="Toggle select all visible accounts"
+                    >
+                      {filteredInvestors.length > 0 && filteredInvestors.every(inv => selectedUserIds.includes(inv.id)) ? (
+                        <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <Square className="h-4 w-4 text-gray-300 dark:text-stone-600" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3.5 px-3 font-bold select-none">Investor / Account</th>
+                  <th className="py-3.5 px-3 font-bold select-none">Contact</th>
+                  <th className="py-3.5 px-3 font-bold select-none">Role</th>
+                  <th className="py-3.5 px-3 font-bold select-none">Status</th>
+                  <th className="py-3.5 px-3 font-bold select-none hidden xl:table-cell">Account ID</th>
+                  <th className="py-3.5 pl-3 pr-5 font-bold text-right select-none">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
+                {filteredInvestors.map((inv) => {
+                  const isSelected = selectedUserIds.includes(inv.id);
+                  const initials = inv.name
+                    .split(' ')
+                    .filter(Boolean)
+                    .map(n => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase();
+                  return (
+                    <tr
+                      key={inv.id}
+                      className={`transition-colors ${
+                        isSelected
+                          ? 'bg-emerald-50/40 dark:bg-emerald-950/20'
+                          : 'hover:bg-[#FBF9F4]/60 dark:hover:bg-stone-800/40'
+                      }`}
+                    >
+                      <td className="py-3.5 pl-5 pr-2 align-middle">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectUser(inv.id)}
+                          className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer flex items-center justify-center"
+                          title={isSelected ? 'Deselect user' : 'Select user for batch operations'}
+                          aria-label={`Select ${inv.name}`}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          ) : (
+                            <Square className="h-4 w-4 text-gray-300 dark:text-stone-600 shrink-0" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="py-3.5 px-3 align-middle">
+                        <div className="flex items-center gap-3 min-w-[180px]">
+                          <div className="w-9 h-9 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-[11px] shrink-0">
+                            {initials}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-sans font-bold text-xs text-gray-800 dark:text-stone-100 truncate">
+                              {inv.name}
+                            </p>
+                            <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-3 align-middle">
+                        <div className="space-y-1 min-w-[180px]">
+                          <div className="flex items-center gap-1.5 text-gray-700 dark:text-stone-300">
+                            <Mail className="h-3 w-3 text-gray-400 shrink-0" />
+                            <span className="truncate max-w-[220px]">{inv.email}</span>
+                          </div>
+                          {inv.phone && (
+                            <div className="flex items-center gap-1.5 text-gray-500 dark:text-stone-400 text-[11px]">
+                              <Phone className="h-3 w-3 text-gray-400 shrink-0" />
+                              <span>{inv.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-3 align-middle whitespace-nowrap">
+                        <span
+                          className={`inline-block text-[9px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border ${
+                            inv.role === UserRole.ADMIN
+                              ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800/40'
+                              : inv.role === UserRole.FARM_MANAGER
+                              ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/40'
+                              : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
+                          }`}
+                        >
+                          {inv.role.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-3 align-middle whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(inv)}
+                          title={inv.isActive !== false ? 'Deactivate Profile' : 'Activate Profile'}
+                          className="inline-flex items-center gap-1.5 cursor-pointer group"
+                        >
+                          {inv.isActive !== false ? (
+                            <ToggleRight className="h-5 w-5 text-emerald-500 group-hover:text-emerald-600 transition" />
+                          ) : (
+                            <ToggleLeft className="h-5 w-5 text-gray-400 group-hover:text-gray-500 transition" />
+                          )}
+                          <span
+                            className={`text-[8.5px] font-mono font-extrabold px-2 py-0.5 rounded-full border ${
+                              inv.isActive !== false
+                                ? 'bg-emerald-50/60 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/20'
+                                : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-700'
+                            }`}
+                          >
+                            {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
+                          </span>
+                        </button>
+                      </td>
+                      <td className="py-3.5 px-3 align-middle hidden xl:table-cell">
+                        <span className="text-[10px] font-mono text-gray-400">{inv.id}</span>
+                      </td>
+                      <td className="py-3.5 pl-3 pr-5 align-middle text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openMessageModal(inv)}
+                            className="p-2 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/40 rounded-xl transition cursor-pointer"
+                            title="Message / Mail Investor"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(inv)}
+                            className="p-2 bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] hover:bg-[#52B788]/20 rounded-xl transition cursor-pointer"
+                            title="Modify Details"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDeleteModal(inv)}
+                            className="p-2 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 rounded-xl transition cursor-pointer"
+                            title="Permanently Remove Profile"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

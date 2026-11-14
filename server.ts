@@ -21,6 +21,7 @@ import {
   UserRole,
   Farm,
   FarmPlot,
+  FarmMapNote,
   InvestorPlot,
   FarmManagerAssignment,
   FarmUpdate,
@@ -196,6 +197,7 @@ interface DatabaseSchema {
   documents: Document[];
   financials: FinancialSummary[];
   simulatedEmails: SimulatedEmail[];
+  mapNotes?: FarmMapNote[];
   settings?: SystemSettings;
 }
 
@@ -221,6 +223,7 @@ function getInitialDb(): DatabaseSchema {
     documents: [],
     financials: [],
     simulatedEmails: [],
+    mapNotes: [],
     settings: {
       databaseMode: 'auto',
       simulatedLatency: 0,
@@ -431,7 +434,8 @@ async function loadDbFromFirestore() {
       { name: 'updates', key: 'updates' },
       { name: 'documents', key: 'documents' },
       { name: 'financials', key: 'financials' },
-      { name: 'simulatedEmails', key: 'simulatedEmails' }
+      { name: 'simulatedEmails', key: 'simulatedEmails' },
+      { name: 'mapNotes', key: 'mapNotes' }
     ];
 
     let loadedSomething = false;
@@ -482,7 +486,8 @@ async function saveDbToFirestore() {
       { name: 'updates', list: db.updates },
       { name: 'documents', list: db.documents },
       { name: 'financials', list: db.financials },
-      { name: 'simulatedEmails', list: db.simulatedEmails }
+      { name: 'simulatedEmails', list: db.simulatedEmails },
+      { name: 'mapNotes', list: db.mapNotes || [] }
     ];
 
     for (const col of collectionsToSave) {
@@ -769,6 +774,20 @@ function mapSimulatedEmailFromDb(row: any): SimulatedEmail {
   };
 }
 
+function mapMapNoteFromDb(row: any): FarmMapNote {
+  return {
+    id: row.id,
+    farmId: row.farm_id,
+    x: Number(row.x),
+    y: Number(row.y),
+    note: row.note,
+    authorId: row.author_id,
+    authorName: row.author_name,
+    authorRole: row.author_role as UserRole,
+    createdAt: row.created_at
+  };
+}
+
 // Truncates all PostgreSQL tables (used primarily during database reset command)
 async function resetPostgresDb() {
   if (!pgPool) return;
@@ -1001,6 +1020,31 @@ async function saveDbToPostgres() {
       );
     }
 
+    // Synchronize map_notes
+    const activeNoteIds = (db.mapNotes || []).map(n => n.id);
+    if (activeNoteIds.length > 0) {
+      await client.query(`DELETE FROM map_notes WHERE id NOT IN (${activeNoteIds.map((_, i) => `$${i + 1}`).join(', ')});`, activeNoteIds);
+    } else {
+      await client.query('DELETE FROM map_notes;');
+    }
+
+    for (const note of (db.mapNotes || [])) {
+      await client.query(
+        `INSERT INTO map_notes (id, farm_id, x, y, note, author_id, author_name, author_role, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (id) DO UPDATE SET
+           farm_id = EXCLUDED.farm_id,
+           x = EXCLUDED.x,
+           y = EXCLUDED.y,
+           note = EXCLUDED.note,
+           author_id = EXCLUDED.author_id,
+           author_name = EXCLUDED.author_name,
+           author_role = EXCLUDED.author_role,
+           created_at = EXCLUDED.created_at`,
+        [note.id, note.farmId, note.x, note.y, note.note, note.authorId, note.authorName, note.authorRole, note.createdAt]
+      );
+    }
+
     await client.query('COMMIT');
     console.log('✅ Synchronized memory database state to PostgreSQL successfully.');
   } catch (err) {
@@ -1223,6 +1267,18 @@ async function initPostgres() {
         sent_at VARCHAR(100) NOT NULL,
         category VARCHAR(100) NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS map_notes (
+        id VARCHAR(50) PRIMARY KEY,
+        farm_id VARCHAR(50) NOT NULL,
+        x DOUBLE PRECISION NOT NULL,
+        y DOUBLE PRECISION NOT NULL,
+        note TEXT NOT NULL,
+        author_id VARCHAR(50) NOT NULL,
+        author_name VARCHAR(100) NOT NULL,
+        author_role VARCHAR(50) NOT NULL,
+        created_at VARCHAR(100) NOT NULL
+      );
     `);
 
     // Ensure legacy schemas have the password and is_active columns
@@ -1278,6 +1334,7 @@ async function initPostgres() {
     const documentsRes = await pgPool.query('SELECT * FROM documents;');
     const financialsRes = await pgPool.query('SELECT * FROM financials;');
     const emailsRes = await pgPool.query('SELECT * FROM simulated_emails ORDER BY sent_at DESC;');
+    const mapNotesRes = await pgPool.query('SELECT * FROM map_notes ORDER BY created_at DESC;');
 
     db = {
       users: usersRes.rows.map(mapUserFromDb),
@@ -1288,7 +1345,8 @@ async function initPostgres() {
       updates: updatesRes.rows.map(mapUpdateFromDb),
       documents: documentsRes.rows.map(mapDocumentFromDb),
       financials: financialsRes.rows.map(mapFinancialFromDb),
-      simulatedEmails: emailsRes.rows.map(mapSimulatedEmailFromDb)
+      simulatedEmails: emailsRes.rows.map(mapSimulatedEmailFromDb),
+      mapNotes: mapNotesRes.rows.map(mapMapNoteFromDb)
     };
 
     postgresError = null;
@@ -2024,8 +2082,79 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
     plots,
     updates,
     documents,
-    investorHoldings
+    investorHoldings,
+    mapNotes: (db.mapNotes || []).filter(mn => mn.farmId === farmId)
   });
+});
+
+// Add a Map Note/Pin to a farm (Admins and Farm Managers only)
+app.post('/api/farms/:id/map-notes', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const farmId = req.params.id;
+
+  if (user.role !== UserRole.ADMIN && user.role !== UserRole.FARM_MANAGER) {
+    return res.status(403).json({ error: 'Only admins and farm managers are authorized to pin notes' });
+  }
+
+  const { x, y, note } = req.body;
+  if (x === undefined || y === undefined || !note || !note.trim()) {
+    return res.status(400).json({ error: 'Coordinates x, y, and note content are required' });
+  }
+
+  const newNote: FarmMapNote = {
+    id: 'note-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+    farmId,
+    x: Number(x),
+    y: Number(y),
+    note: note.trim(),
+    authorId: user.id,
+    authorName: user.name,
+    authorRole: user.role,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!db.mapNotes) {
+    db.mapNotes = [];
+  }
+  db.mapNotes.push(newNote);
+  saveDb();
+
+  res.status(201).json(newNote);
+});
+
+// Delete a Map Note/Pin (Admins and Farm Managers only)
+app.delete('/api/farms/:id/map-notes/:noteId', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const noteId = req.params.noteId;
+
+  if (user.role !== UserRole.ADMIN && user.role !== UserRole.FARM_MANAGER) {
+    return res.status(403).json({ error: 'Only admins and farm managers are authorized to delete pinned notes' });
+  }
+
+  if (!db.mapNotes) {
+    db.mapNotes = [];
+  }
+
+  const noteIndex = db.mapNotes.findIndex(n => n.id === noteId);
+  if (noteIndex === -1) {
+    return res.status(404).json({ error: 'Pinned note not found' });
+  }
+
+  const note = db.mapNotes[noteIndex];
+  // Allow if admin or if manager is the author or manager is assigned to the farm
+  let authorized = user.role === UserRole.ADMIN || note.authorId === user.id;
+  if (!authorized && user.role === UserRole.FARM_MANAGER) {
+    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === note.farmId && a.isActive);
+  }
+
+  if (!authorized) {
+    return res.status(403).json({ error: 'You are not authorized to delete this note' });
+  }
+
+  db.mapNotes.splice(noteIndex, 1);
+  saveDb();
+
+  res.json({ success: true, message: 'Pinned note deleted successfully' });
 });
 
 // List investors of a farm (Admin/Manager assigned only)
