@@ -12,7 +12,8 @@ import {
   FileSpreadsheet, 
   Filter 
 } from 'lucide-react';
-import { parseCsvRecords } from '../utils/csvParser';
+import { parseCsvRecords, INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
+import { useImportReview } from './ImportReviewModal';
 
 interface CSVDataImporterProps {
   token: string;
@@ -20,6 +21,8 @@ interface CSVDataImporterProps {
 }
 
 export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterProps) {
+  const { reviewImport, reviewModal } = useImportReview(token);
+
   // Navigation tab State
   const [activeSubTab, setActiveSubTab] = useState<'import' | 'export'>('import');
 
@@ -167,10 +170,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
   // Import functions
   const handleDownloadTemplate = () => {
     const csvContent = 
-      "username,name,email,phone,password,farmEstate,farmLocation,farmState,farmDescription,farmDateEstablished,plotNumber,sizeHectares,sizeUnit,cropType,investmentAmount\n" +
-      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,Premium oil palm cultivation estate,2025-01-15,P-101,2.5,acre,Oil Palm,5000000\n" +
-      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99,Ondo Cocoa Hills,Ondo Rural,Ondo,Organic high-yield cocoa farm estate,2024-11-01,P-102,1.2,plot,Cocoa,1800000\n" +
-      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,,,P-103,3.0,acre,Oil Palm,6000000\n";
+      INVESTOR_IMPORT_CSV_TEMPLATE;
       
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -223,17 +223,8 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
       setUploading(true);
       setResults(null);
 
-      const res = await fetch('/api/import/data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ investors: records })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to import CSV data');
+      const data = await reviewImport(records, { endpoint: '/api/import/data' });
+      if (!data) return;
 
       setResults(data);
       if (data.successCount > 0) {
@@ -252,6 +243,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
 
   return (
     <div id="unified-data-console" className="space-y-6 text-left">
+      {reviewModal}
       {/* Console Sub-header Navigation */}
       <div className="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-4">
         <div>

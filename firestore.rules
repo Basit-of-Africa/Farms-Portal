@@ -1,10 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allows read/write access for authenticated users to resolve the 'Missing or insufficient permissions' error,
-    // ensuring the app can properly connect to the Firestore database in production.
+    // All data access goes through the portal's server, which uses the
+    // server-side Firestore SDK with a service account (not subject to these
+    // rules). Direct access from browsers or other clients is denied.
     match /{document=**} {
-      allow read, write: if request.auth != null || true;
+      allow read, write: if false;
     }
   }
 }

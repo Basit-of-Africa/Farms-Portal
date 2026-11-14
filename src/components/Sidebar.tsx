@@ -16,7 +16,9 @@ import {
   Users,
   Settings,
   X,
-  Smartphone
+  Smartphone,
+  KeyRound,
+  ShieldCheck
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -24,6 +26,7 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  onChangePassword?: () => void;
   isOpen?: boolean;
   onClose?: () => void;
   logoText?: string;
@@ -36,6 +39,7 @@ export default function Sidebar({
   activeTab, 
   setActiveTab, 
   onLogout, 
+  onChangePassword,
   isOpen, 
   onClose, 
   logoText,
@@ -187,6 +191,23 @@ export default function Sidebar({
             </button>
           )}
 
+          {/* Privacy & data protection (all roles) */}
+          <button
+            id="nav-privacy"
+            onClick={() => {
+              setActiveTab('privacy');
+              if (onClose) onClose();
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${
+              activeTab === 'privacy'
+                ? 'bg-gradient-to-r from-[#52B788] to-[#3B946A] text-[#0A2619] shadow-lg shadow-[#1B4332]/40 font-bold'
+                : 'text-gray-300 hover:bg-white/[0.04] hover:text-white'
+            }`}
+          >
+            <ShieldCheck className="h-4.5 w-4.5" />
+            <span>Privacy &amp; Data</span>
+          </button>
+
           {/* Super Admin systemwide settings */}
           {user.role === UserRole.ADMIN && (
             <button
@@ -218,6 +239,17 @@ export default function Sidebar({
           <Smartphone className="h-4.5 w-4.5 shrink-0" />
           <span>Install App Portal</span>
         </button>
+
+        {onChangePassword && (
+          <button
+            id="nav-change-password"
+            onClick={onChangePassword}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-[#F8F4EC]/60 hover:bg-white/5 hover:text-[#52B788] transition-all duration-150 cursor-pointer border border-transparent"
+          >
+            <KeyRound className="h-4.5 w-4.5" />
+            <span>Change password</span>
+          </button>
+        )}
 
         <button
           id="nav-logout"

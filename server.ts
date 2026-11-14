@@ -14,8 +14,31 @@ import pg from 'pg';
 import { v2 as cloudinary } from 'cloudinary';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
-import { initializeApp as initializeFirebaseApp } from 'firebase/app';
-import { initializeFirestore, doc, setDoc, getDoc, getDocs, collection } from 'firebase/firestore/lite';
+import { Firestore } from '@google-cloud/firestore';
+import {
+  hashPassword,
+  verifyPassword,
+  needsRehash,
+  isPasswordHash,
+  validatePasswordStrength,
+  generateTempPassword,
+  initAuthSecret,
+  issueToken,
+  verifyToken,
+  loginRetryAfter,
+  recordLoginFailure,
+  clearLoginFailures,
+  secretStrippingReplacer,
+  TOKEN_TTL_SECONDS
+} from './server/auth';
+import {
+  registerPrivacyRoutes,
+  recordAudit,
+  runRetention,
+  redactCredentials,
+  Processor
+} from './server/privacy';
+import { normalizeImportRows, farmKeyOf, NormalizedImportRow } from './server/importNormalize';
 import {
   User,
   UserRole,
@@ -33,7 +56,10 @@ import {
   PlotStatus,
   UpdateType,
   FinancialStatus,
-  SystemSettings
+  SystemSettings,
+  AuditLogEntry,
+  DataSubjectRequest,
+  BreachIncident
 } from './src/types';
 
 // Establish folders
@@ -62,8 +88,64 @@ const upload = multer({ storage });
 
 // Initialize express
 const app = express();
+
+// The Google Cloud SDK can surface internal retry failures as unhandled
+// rejections; log them instead of letting them terminate the portal.
+process.on('unhandledRejection', (reason: any) => {
+  console.error('⚠️ Unhandled promise rejection:', reason?.message || reason);
+});
 app.use(express.json({ limit: '10mb' }));
-app.use('/uploads', express.static(UPLOADS_DIR));
+// Never serialise password hashes or session versions in API responses
+app.set('json replacer', secretStrippingReplacer);
+// Baseline security / privacy headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  // API responses contain personal data: never let browsers or proxies cache them
+  if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
+});
+
+// Behind a reverse proxy (Cloud Run, Railway, ...) so req.ip reflects the client
+app.set('trust proxy', process.env.TRUST_PROXY ? (isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY)) : 1);
+// Uploaded files (contracts, deeds, photos, attachments) are personal data:
+// only signed-in users may fetch them, and documents follow the same access
+// rules as the download endpoint. Auth comes from the session cookie so that
+// <img> tags work without exposing tokens in URLs.
+app.use('/uploads', (req, res, next) => {
+  const user = getAuthenticatedUser(req, true);
+  if (!user || user.isActive === false) {
+    return res.status(401).send('Unauthenticated');
+  }
+  let fileUrl: string;
+  try {
+    fileUrl = '/uploads' + decodeURIComponent(req.path);
+  } catch {
+    return res.status(400).send('Bad request');
+  }
+  const doc = db.documents.find(d => d.fileUrl === fileUrl);
+  if (doc && !canAccessDocument(user, doc)) {
+    return res.status(403).send('Forbidden');
+  }
+  if (doc) {
+    recordAudit(db, user, 'document.downloaded', { targetType: 'document', targetId: doc.id, req });
+    saveDb();
+  }
+  if (!doc && user.role !== UserRole.ADMIN) {
+    const relatedEmails = db.simulatedEmails.filter(e => e.attachmentUrl === fileUrl);
+    if (relatedEmails.length > 0 && !relatedEmails.some(e => e.recipientId === user.id || e.senderId === user.id)) {
+      return res.status(403).send('Forbidden');
+    }
+  }
+  res.setHeader('Cache-Control', 'private, no-store');
+  next();
+}, express.static(UPLOADS_DIR));
 
 // Super Admin Latency Injection Middleware
 app.use((req, res, next) => {
@@ -199,6 +281,10 @@ interface DatabaseSchema {
   simulatedEmails: SimulatedEmail[];
   mapNotes?: FarmMapNote[];
   settings?: SystemSettings;
+  // Data-protection records (kept across demo resets / clean slate)
+  auditLogs?: AuditLogEntry[];
+  dataRequests?: DataSubjectRequest[];
+  breachIncidents?: BreachIncident[];
 }
 
 // Seed helper
@@ -224,6 +310,9 @@ function getInitialDb(): DatabaseSchema {
     financials: [],
     simulatedEmails: [],
     mapNotes: [],
+    auditLogs: [],
+    dataRequests: [],
+    breachIncidents: [],
     settings: {
       databaseMode: 'auto',
       simulatedLatency: 0,
@@ -277,7 +366,7 @@ try {
     } catch (err) {
       console.error('❌ Failed to parse FIREBASE_CONFIG environment variable:', err);
     }
-  } else if (process.env.FIREBASE_API_KEY && process.env.FIREBASE_PROJECT_ID) {
+  } else if (process.env.FIREBASE_PROJECT_ID) {
     console.log('🔄 Initializing Firebase using individual environment variables...');
     firebaseConfig = {
       apiKey: process.env.FIREBASE_API_KEY,
@@ -293,11 +382,38 @@ try {
     console.log('🔄 Initializing Firebase using firebase-applet-config.json file...');
   }
 
-  if (firebaseConfig) {
-    const fApp = initializeFirebaseApp(firebaseConfig);
+  // The server SDK needs Google credentials; without them it cannot connect.
+  const hasGoogleCredentials = !!(
+    process.env.FIREBASE_SERVICE_ACCOUNT ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    process.env.K_SERVICE || // Cloud Run provides a runtime service account
+    process.env.FIRESTORE_USE_ADC === 'true'
+  );
+
+  if (firebaseConfig && !hasGoogleCredentials) {
+    console.warn('⚠️ Firebase config found but no Google service-account credentials (FIREBASE_SERVICE_ACCOUNT, GOOGLE_APPLICATION_CREDENTIALS, or Cloud Run). Firestore cloud backing disabled.');
+  } else if (firebaseConfig) {
+    // Server-side Firestore SDK: authenticates with a Google service account
+    // (FIREBASE_SERVICE_ACCOUNT JSON, GOOGLE_APPLICATION_CREDENTIALS, or the
+    // runtime's default credentials on Cloud Run). It is not subject to
+    // firestore.rules, which deny all direct client access.
     const dbId = firebaseConfig.firestoreDatabaseId || process.env.FIREBASE_DATABASE_ID || '(default)';
-    firestoreDb = initializeFirestore(fApp, {}, dbId);
-    console.log(`✅ Firebase Firestore client (Lite mode) successfully initialized on database: "${dbId}".`);
+    const firestoreOptions: any = {
+      projectId: firebaseConfig.projectId,
+      ignoreUndefinedProperties: true
+    };
+    if (dbId && dbId !== '(default)') firestoreOptions.databaseId = dbId;
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        firestoreOptions.credentials = { client_email: sa.client_email, private_key: sa.private_key };
+        if (!firestoreOptions.projectId) firestoreOptions.projectId = sa.project_id;
+      } catch (err) {
+        console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable:', err);
+      }
+    }
+    firestoreDb = new Firestore(firestoreOptions);
+    console.log(`✅ Firestore server client initialized on database: "${dbId}".`);
   } else {
     console.warn('⚠️ No Firebase configuration found (neither env vars nor JSON config). Firestore cloud backing disabled.');
   }
@@ -325,7 +441,7 @@ async function runFirebaseDiagnostics(config: any): Promise<{
   }
 
   // 1. Verify required keys
-  const requiredFields = ['apiKey', 'projectId'];
+  const requiredFields = ['projectId'];
   const missingFields = requiredFields.filter(f => !config[f]);
   if (missingFields.length > 0) {
     const msg = `Configuration lacks necessary Firebase fields: ${missingFields.join(', ')}`;
@@ -346,8 +462,7 @@ async function runFirebaseDiagnostics(config: any): Promise<{
   try {
     console.log('⚡ [Firebase Diagnostic] Performing diagnostic connectivity probe to Firestore...');
     // We attempt to read the settings document. In Firestore Lite, this goes directly to the server.
-    const testDocRef = doc(firestoreDb, 'settings', 'standalone');
-    await getDoc(testDocRef);
+    await firestoreDb.collection('settings').doc('standalone').get();
     console.log('🎉 [Firebase Diagnostic] Connectivity probe succeeded! Firestore client is fully online and responsive.');
     return { isValidConfig: true, canConnect: true, errorType: 'none', errorMessage: null };
   } catch (error: any) {
@@ -435,15 +550,20 @@ async function loadDbFromFirestore() {
       { name: 'documents', key: 'documents' },
       { name: 'financials', key: 'financials' },
       { name: 'simulatedEmails', key: 'simulatedEmails' },
-      { name: 'mapNotes', key: 'mapNotes' }
+      { name: 'mapNotes', key: 'mapNotes' },
+      { name: 'auditLogs', key: 'auditLogs' },
+      { name: 'dataRequests', key: 'dataRequests' },
+      { name: 'breachIncidents', key: 'breachIncidents' }
     ];
 
     let loadedSomething = false;
     for (const col of collectionsToLoad) {
-      const querySnapshot = await retryWithBackoff(() => getDocs(collection(firestoreDb, col.name)), 4, 1000);
+      const querySnapshot = await retryWithBackoff<any>(() => firestoreDb.collection(col.name).get(), 4, 1000);
       const items: any[] = [];
-      querySnapshot.forEach((docSnapshot) => {
-        items.push({ id: docSnapshot.id, ...docSnapshot.data() });
+      querySnapshot.forEach((docSnapshot: any) => {
+        const item = { id: docSnapshot.id, ...docSnapshot.data() };
+        items.push(item);
+        firestoreLastSaved.set(`${col.name}/${docSnapshot.id}`, JSON.stringify(docSnapshot.data()));
       });
       if (items.length > 0) {
         (db as any)[col.key] = items;
@@ -454,8 +574,8 @@ async function loadDbFromFirestore() {
     }
 
     // Load settings
-    const settingsDoc = await retryWithBackoff(() => getDoc(doc(firestoreDb, 'settings', 'standalone')), 4, 1000);
-    if (settingsDoc.exists()) {
+    const settingsDoc = await retryWithBackoff<any>(() => firestoreDb.collection('settings').doc('standalone').get(), 4, 1000);
+    if (settingsDoc.exists) {
       db.settings = settingsDoc.data() as SystemSettings;
       loadedSomething = true;
     }
@@ -473,6 +593,10 @@ async function loadDbFromFirestore() {
   }
 }
 
+// Last serialized state written to (or read from) Firestore, keyed "collection/id".
+// Used to skip unchanged documents and to delete documents removed in memory.
+const firestoreLastSaved = new Map<string, string>();
+
 // Helper to fully synchronize memory DB state to corresponding Firestore paths
 async function saveDbToFirestore() {
   if (!firestoreDb) return;
@@ -487,23 +611,41 @@ async function saveDbToFirestore() {
       { name: 'documents', list: db.documents },
       { name: 'financials', list: db.financials },
       { name: 'simulatedEmails', list: db.simulatedEmails },
-      { name: 'mapNotes', list: db.mapNotes || [] }
+      { name: 'mapNotes', list: db.mapNotes || [] },
+      { name: 'auditLogs', list: db.auditLogs || [] },
+      { name: 'dataRequests', list: db.dataRequests || [] },
+      { name: 'breachIncidents', list: db.breachIncidents || [] }
     ];
 
     for (const col of collectionsToSave) {
-      for (const item of col.list) {
+      const currentKeys = new Set<string>();
+      for (const item of col.list as any[]) {
         if (item && item.id) {
           const { id, ...data } = item;
+          const key = `${col.name}/${item.id}`;
+          currentKeys.add(key);
+          const serialized = JSON.stringify(data);
+          // Only write documents that changed since the last sync
+          if (firestoreLastSaved.get(key) === serialized) continue;
           // Prevent setting undefined values in Firestore
-          const cleanData = JSON.parse(JSON.stringify(data));
-          await retryWithBackoff(() => setDoc(doc(firestoreDb, col.name, item.id), cleanData), 3, 1000);
+          const cleanData = JSON.parse(serialized);
+          await retryWithBackoff(() => firestoreDb.collection(col.name).doc(item.id).set(cleanData), 3, 1000);
+          firestoreLastSaved.set(key, serialized);
+        }
+      }
+      // Propagate deletions (erasure, retention purges, removed records)
+      for (const key of Array.from(firestoreLastSaved.keys())) {
+        if (key.startsWith(`${col.name}/`) && !currentKeys.has(key)) {
+          const docId = key.slice(col.name.length + 1);
+          await retryWithBackoff(() => firestoreDb.collection(col.name).doc(docId).delete(), 3, 1000);
+          firestoreLastSaved.delete(key);
         }
       }
     }
 
     if (db.settings) {
       const cleanSettings = JSON.parse(JSON.stringify(db.settings));
-      await retryWithBackoff(() => setDoc(doc(firestoreDb, 'settings', 'standalone'), cleanSettings), 3, 1000);
+      await retryWithBackoff(() => firestoreDb.collection('settings').doc('standalone').set(cleanSettings), 3, 1000);
     }
     console.log('✅ Synchronized memory DB state to Firestore successfully.');
   } catch (err) {
@@ -569,8 +711,8 @@ async function initFirestore() {
     // Check if the settings doc exists in Firestore to see if we should seed
     let settingsDocExists = false;
     try {
-      const settingsDoc = await retryWithBackoff(() => getDoc(doc(firestoreDb, 'settings', 'standalone')), 4, 1000);
-      settingsDocExists = settingsDoc.exists();
+      const settingsDoc = await retryWithBackoff<any>(() => firestoreDb.collection('settings').doc('standalone').get(), 4, 1000);
+      settingsDocExists = settingsDoc.exists;
     } catch (err) {
       console.error('❌ Could not verify settings doc in Firestore:', err);
     }
@@ -624,7 +766,10 @@ function mapUserFromDb(row: any): User {
     email: row.email,
     name: row.name,
     password: row.password || undefined,
-    isActive: row.is_active !== false
+    isActive: row.is_active !== false,
+    mustChangePassword: row.must_change_password === true,
+    tokenVersion: row.token_version || 0,
+    privacy: row.privacy || undefined
   };
 }
 
@@ -733,7 +878,8 @@ function mapDocumentFromDb(row: any): Document {
     category: row.category as DocumentCategory,
     visibility: row.visibility as DocumentVisibility,
     description: row.description || undefined,
-    uploadedAt: row.uploaded_at
+    uploadedAt: row.uploaded_at,
+    storage: row.storage || undefined
   };
 }
 
@@ -834,8 +980,8 @@ async function saveDbToPostgres() {
     // 1. Synchronize Users
     for (const user of db.users) {
       await client.query(
-        `INSERT INTO users (id, username, role, phone, email, name, password, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO users (id, username, role, phone, email, name, password, is_active, must_change_password, token_version, privacy)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          ON CONFLICT (id) DO UPDATE SET
            username = EXCLUDED.username,
            role = EXCLUDED.role,
@@ -843,8 +989,11 @@ async function saveDbToPostgres() {
            email = EXCLUDED.email,
            name = EXCLUDED.name,
            password = EXCLUDED.password,
-           is_active = EXCLUDED.is_active`,
-        [user.id, user.username, user.role, user.phone || null, user.email, user.name, user.password || null, user.isActive !== false]
+           is_active = EXCLUDED.is_active,
+           must_change_password = EXCLUDED.must_change_password,
+           token_version = EXCLUDED.token_version,
+           privacy = EXCLUDED.privacy`,
+        [user.id, user.username, user.role, user.phone || null, user.email, user.name, user.password || null, user.isActive !== false, user.mustChangePassword === true, user.tokenVersion || 0, user.privacy ? JSON.stringify(user.privacy) : null]
       );
     }
 
@@ -939,8 +1088,8 @@ async function saveDbToPostgres() {
     // 7. Synchronize Documents
     for (const doc of db.documents) {
       await client.query(
-        `INSERT INTO documents (id, farm_id, plot_id, uploaded_by, uploaded_by_name, title, file_url, file_name, category, visibility, description, uploaded_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `INSERT INTO documents (id, farm_id, plot_id, uploaded_by, uploaded_by_name, title, file_url, file_name, category, visibility, description, uploaded_at, storage)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          ON CONFLICT (id) DO UPDATE SET
            farm_id = EXCLUDED.farm_id,
            plot_id = EXCLUDED.plot_id,
@@ -952,8 +1101,9 @@ async function saveDbToPostgres() {
            category = EXCLUDED.category,
            visibility = EXCLUDED.visibility,
            description = EXCLUDED.description,
-           uploaded_at = EXCLUDED.uploaded_at`,
-        [doc.id, doc.farmId, doc.plotId || null, doc.uploadedBy, doc.uploadedByName, doc.title, doc.fileUrl, doc.fileName, doc.category, doc.visibility, doc.description || null, doc.uploadedAt]
+           uploaded_at = EXCLUDED.uploaded_at,
+           storage = EXCLUDED.storage`,
+        [doc.id, doc.farmId, doc.plotId || null, doc.uploadedBy, doc.uploadedByName, doc.title, doc.fileUrl, doc.fileName, doc.category, doc.visibility, doc.description || null, doc.uploadedAt, doc.storage ? JSON.stringify(doc.storage) : null]
       );
     }
 
@@ -1043,6 +1193,41 @@ async function saveDbToPostgres() {
            created_at = EXCLUDED.created_at`,
         [note.id, note.farmId, note.x, note.y, note.note, note.authorId, note.authorName, note.authorRole, note.createdAt]
       );
+    }
+
+    // Data-protection records and settings (JSON documents)
+    const records: Array<{ collection: string; items: any[] }> = [
+      { collection: 'auditLogs', items: db.auditLogs || [] },
+      { collection: 'dataRequests', items: db.dataRequests || [] },
+      { collection: 'breachIncidents', items: db.breachIncidents || [] },
+      { collection: 'settings', items: db.settings ? [{ id: 'standalone', ...db.settings }] : [] }
+    ];
+    for (const rec of records) {
+      const ids = rec.items.map(i => i.id);
+      await client.query('DELETE FROM app_records WHERE collection = $1 AND NOT (id = ANY($2::varchar[]));', [rec.collection, ids]);
+      for (const item of rec.items) {
+        await client.query(
+          `INSERT INTO app_records (collection, id, data) VALUES ($1, $2, $3)
+           ON CONFLICT (collection, id) DO UPDATE SET data = EXCLUDED.data`,
+          [rec.collection, item.id, JSON.stringify(item)]
+        );
+      }
+    }
+
+    // Propagate deletions so erased or purged records do not come back on restart
+    const tableIds: Array<[string, string[]]> = [
+      ['users', db.users.map(x => x.id)],
+      ['farms', db.farms.map(x => x.id)],
+      ['plots', db.plots.map(x => x.id)],
+      ['investor_plots', db.investorPlots.map(x => x.id)],
+      ['assignments', db.assignments.map(x => x.id)],
+      ['updates', db.updates.map(x => x.id)],
+      ['documents', db.documents.map(x => x.id)],
+      ['financials', db.financials.map(x => x.id)],
+      ['simulated_emails', db.simulatedEmails.map(x => x.id)]
+    ];
+    for (const [table, ids] of tableIds) {
+      await client.query(`DELETE FROM ${table} WHERE NOT (id = ANY($1::varchar[]));`, [ids]);
     }
 
     await client.query('COMMIT');
@@ -1169,8 +1354,18 @@ async function initPostgres() {
         phone VARCHAR(50),
         email VARCHAR(100) NOT NULL,
         name VARCHAR(100) NOT NULL,
-        password VARCHAR(100),
-        is_active BOOLEAN DEFAULT TRUE
+        password VARCHAR(255),
+        is_active BOOLEAN DEFAULT TRUE,
+        must_change_password BOOLEAN DEFAULT FALSE,
+        token_version INTEGER DEFAULT 0,
+        privacy JSONB
+      );
+
+      CREATE TABLE IF NOT EXISTS app_records (
+        collection VARCHAR(50) NOT NULL,
+        id VARCHAR(100) NOT NULL,
+        data JSONB NOT NULL,
+        PRIMARY KEY (collection, id)
       );
 
       CREATE TABLE IF NOT EXISTS farms (
@@ -1283,8 +1478,13 @@ async function initPostgres() {
 
     // Ensure legacy schemas have the password and is_active columns
     await pgPool.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(100);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
+      ALTER TABLE users ALTER COLUMN password TYPE VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy JSONB;
+      ALTER TABLE documents ADD COLUMN IF NOT EXISTS storage JSONB;
       ALTER TABLE updates ADD COLUMN IF NOT EXISTS updated_at VARCHAR(100);
       ALTER TABLE updates ADD COLUMN IF NOT EXISTS comments JSONB DEFAULT '[]';
       ALTER TABLE plots ADD COLUMN IF NOT EXISTS size_unit VARCHAR(50) DEFAULT 'acre';
@@ -1335,6 +1535,11 @@ async function initPostgres() {
     const financialsRes = await pgPool.query('SELECT * FROM financials;');
     const emailsRes = await pgPool.query('SELECT * FROM simulated_emails ORDER BY sent_at DESC;');
     const mapNotesRes = await pgPool.query('SELECT * FROM map_notes ORDER BY created_at DESC;');
+    const recordsRes = await pgPool.query('SELECT collection, data FROM app_records;');
+    const recordsOf = (name: string) => recordsRes.rows.filter((r: any) => r.collection === name).map((r: any) => r.data);
+    const byNewest = (field: string) => (a: any, b: any) => String(b[field]).localeCompare(String(a[field]));
+    const storedSettings = recordsOf('settings')[0];
+    if (storedSettings) delete storedSettings.id;
 
     db = {
       users: usersRes.rows.map(mapUserFromDb),
@@ -1346,7 +1551,12 @@ async function initPostgres() {
       documents: documentsRes.rows.map(mapDocumentFromDb),
       financials: financialsRes.rows.map(mapFinancialFromDb),
       simulatedEmails: emailsRes.rows.map(mapSimulatedEmailFromDb),
-      mapNotes: mapNotesRes.rows.map(mapMapNoteFromDb)
+      mapNotes: mapNotesRes.rows.map(mapMapNoteFromDb),
+      auditLogs: recordsOf('auditLogs').sort(byNewest('at')),
+      dataRequests: recordsOf('dataRequests').sort(byNewest('createdAt')),
+      breachIncidents: recordsOf('breachIncidents').sort(byNewest('detectedAt')),
+      // Settings were previously not stored in PostgreSQL; keep the loaded ones
+      settings: storedSettings || db.settings
     };
 
     postgresError = null;
@@ -1407,17 +1617,21 @@ async function dispatchEmail(
     attachmentUrl?: string;
     attachmentName?: string;
     attachmentType?: string;
+    /** The message contains a credential (e.g. temporary password) */
+    containsCredentials?: boolean;
   }
 ) {
   const settings = getSettings();
+  // When the email is really delivered, the stored copy never keeps credentials
+  const redactStoredCopy = !!extra?.containsCredentials && (settings.emailServiceType || 'simulation') !== 'simulation';
 
   // 1. Appends to internal simulated log (always record so admins can see in outbox tab)
   const newEmail: SimulatedEmail = {
     id: 'email-' + Date.now().toString() + '-' + Math.floor(Math.random() * 1000),
     to,
     subject,
-    body: textBody,
-    htmlBody,
+    body: redactStoredCopy ? redactCredentials(textBody) : textBody,
+    htmlBody: redactStoredCopy ? redactCredentials(htmlBody) : htmlBody,
     sentAt: new Date().toISOString(),
     category,
     deliveryStatus: 'simulated',
@@ -1500,15 +1714,53 @@ async function dispatchEmail(
 }
 
 // AUTHENTICATION MIDDLEWARE
-function getAuthenticatedUser(req: express.Request): User | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer mock-token-')) {
-    return null;
+const SESSION_COOKIE = 'adubiaro_session';
+
+function readCookie(req: express.Request, name: string): string | null {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === name) return decodeURIComponent(v.join('='));
   }
-  const username = authHeader.replace('Bearer mock-token-', '').trim();
-  const foundUser = db.users.find(u => u.username === username);
-  return foundUser || null;
+  return null;
 }
+
+/**
+ * HttpOnly session cookie used only for fetching files (images, document
+ * downloads). All API calls still require the Authorization header, so the
+ * cookie cannot be used for cross-site request forgery.
+ */
+function setSessionCookie(req: express.Request, res: express.Response, token: string) {
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure || process.env.NODE_ENV === 'production',
+    maxAge: TOKEN_TTL_SECONDS * 1000,
+    path: '/'
+  });
+}
+
+function getAuthenticatedUser(req: express.Request, allowCookie = false): User | null {
+  const authHeader = req.headers.authorization;
+  let token: string | null = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice('Bearer '.length).trim();
+  } else if (allowCookie) {
+    token = readCookie(req, SESSION_COOKIE);
+  }
+  if (!token) return null;
+  const payload = verifyToken(token);
+  if (!payload) return null;
+  const foundUser = db.users.find(u => u.id === payload.sub);
+  if (!foundUser) return null;
+  // Tokens are revoked by bumping the user's tokenVersion (password change/reset)
+  if ((foundUser.tokenVersion || 0) !== payload.tv) return null;
+  return foundUser;
+}
+
+// Routes a user with a pending forced password change may still call
+const PASSWORD_CHANGE_ALLOWED_PATHS = new Set(['/api/auth/change-password', '/api/user/me']);
 
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = getAuthenticatedUser(req);
@@ -1518,20 +1770,133 @@ function requireAuth(req: express.Request, res: express.Response, next: express.
   if (user.isActive === false) {
     return res.status(403).json({ error: 'This account has been deactivated. Please contact support.' });
   }
+  if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED_PATHS.has(req.path)) {
+    return res.status(403).json({ error: 'You must change your temporary password before continuing.', code: 'PASSWORD_CHANGE_REQUIRED' });
+  }
   // Attach user to req as custom property
   (req as any).user = user;
   next();
+}
+
+/** Like requireAuth, but also accepts the session cookie (read-only file downloads). */
+function requireAuthAllowCookie(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const user = getAuthenticatedUser(req, true);
+  if (!user || user.isActive === false || user.mustChangePassword) {
+    return res.status(401).json({ error: 'Unauthenticated' });
+  }
+  (req as any).user = user;
+  next();
+}
+
+/** Whether a user may view a document (shared by downloads and /uploads). */
+function canAccessDocument(user: User, doc: Document): boolean {
+  if (user.role === UserRole.ADMIN) return true;
+  if (user.role === UserRole.FARM_MANAGER) {
+    // Farm managers can see general docs for farms they manage, but not financial ones
+    const managesFarm = db.assignments.some(a => a.managerId === user.id && a.farmId === doc.farmId && a.isActive);
+    return managesFarm && doc.category !== DocumentCategory.FINANCIAL;
+  }
+  if (user.role === UserRole.INVESTOR) {
+    const plotIds = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive).map(ip => ip.plotId);
+    const ownsPlotInFarm = db.plots.some(p => p.farmId === doc.farmId && plotIds.includes(p.id));
+    if (!ownsPlotInFarm) return false;
+    if (doc.visibility === DocumentVisibility.FARM) return true;
+    return doc.visibility === DocumentVisibility.PLOT && !!doc.plotId && plotIds.includes(doc.plotId);
+  }
+  return false;
+}
+
+/** Investor ids linked to farms the manager is actively assigned to. */
+function investorIdsForManager(managerId: string): Set<string> {
+  const farmIds = new Set(db.assignments.filter(a => a.managerId === managerId && a.isActive).map(a => a.farmId));
+  const plotIds = new Set(db.plots.filter(p => farmIds.has(p.farmId)).map(p => p.id));
+  return new Set(db.investorPlots.filter(ip => plotIds.has(ip.plotId)).map(ip => ip.investorId));
+}
+
+/** User object safe to send to the client. */
+function publicUser(user: User) {
+  const { password: _password, tokenVersion: _tv, ...rest } = user as any;
+  return rest;
+}
+
+/**
+ * Whether `actor` may modify `target`'s account. Admins may manage anyone;
+ * farm managers may only manage investor accounts.
+ */
+function canManageUser(actor: User, target: User): boolean {
+  if (actor.role === UserRole.ADMIN) return true;
+  if (actor.role === UserRole.FARM_MANAGER) return target.role === UserRole.INVESTOR;
+  return false;
+}
+
+/** Sets a new (hashed) password and revokes the user's existing sessions. */
+function setUserPassword(user: User, plain: string, mustChange: boolean) {
+  user.password = hashPassword(plain);
+  user.mustChangePassword = mustChange;
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+}
+
+/**
+ * Credential migration, run after the database is loaded or replaced:
+ *  - hashes any legacy plaintext passwords
+ *  - guarantees at least one admin can sign in (ADMIN_INITIAL_PASSWORD, or a
+ *    generated one-time password printed to the server log)
+ * Returns true if anything changed.
+ */
+function migrateUserCredentials(): boolean {
+  let changed = false;
+  for (const u of db.users) {
+    if (needsRehash(u.password)) {
+      u.password = hashPassword(u.password as string);
+      changed = true;
+    }
+  }
+
+  const activeAdmins = db.users.filter(u => u.role === UserRole.ADMIN && u.isActive !== false);
+  if (activeAdmins.length > 0 && !activeAdmins.some(u => isPasswordHash(u.password))) {
+    const admin = activeAdmins[0];
+    const envPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    const initial = envPassword && !validatePasswordStrength(envPassword) ? envPassword : generateTempPassword();
+    setUserPassword(admin, initial, true);
+    changed = true;
+    if (envPassword && initial === envPassword) {
+      console.warn(`🔐 Admin "${admin.username}" had no password; set it from ADMIN_INITIAL_PASSWORD. It must be changed at first login.`);
+    } else {
+      if (envPassword) console.warn('⚠️ ADMIN_INITIAL_PASSWORD is too weak (min 8 chars, letters and numbers); ignoring it.');
+      console.warn('================================================================');
+      console.warn(`🔐 Admin "${admin.username}" had no password. One-time password: ${initial}`);
+      console.warn('   Sign in with it and you will be asked to choose a new one.');
+      console.warn('================================================================');
+    }
+  }
+
+  const locked = db.users.filter(u => !isPasswordHash(u.password));
+  if (locked.length > 0) {
+    console.warn(`🔒 ${locked.length} account(s) have no password and cannot sign in until an admin sets one: ${locked.map(u => u.username).join(', ')}`);
+  }
+  return changed;
 }
 
 // API ROUTING
 
 // Auth - Login
 app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  
-  // Accept standard demo passwords
+  const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+  const password = req.body?.password;
+  const ip = req.ip || 'unknown';
+
+  const retryAfter = loginRetryAfter(ip, username);
+  if (retryAfter > 0) {
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: `Too many failed sign-in attempts. Try again in ${Math.ceil(retryAfter / 60)} minute(s).` });
+  }
+
   const user = db.users.find(u => u.username === username);
-  if (!user) {
+  const isMatch = verifyPassword(password, user?.password);
+
+  if (!user || !isMatch) {
+    recordLoginFailure(ip, username);
+    if (user) recordAudit(db, null, 'auth.login_failed', { targetType: 'user', targetId: user.id, req });
     return res.status(400).json({ error: 'Invalid login credentials' });
   }
 
@@ -1539,27 +1904,108 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(403).json({ error: 'This account has been deactivated. Please contact support.' });
   }
 
-  let isMatch = false;
-  if (user.password && password === user.password) {
-    isMatch = true;
-  } else {
-    if (user.role === UserRole.ADMIN && password === 'Admin@1234') isMatch = true;
-    if (user.role === UserRole.FARM_MANAGER && password === 'Manager@1234') isMatch = true;
-    if (user.role === UserRole.INVESTOR && password === 'Investor@1234') isMatch = true;
+  clearLoginFailures(ip, username);
+
+  if (needsRehash(user.password)) {
+    user.password = hashPassword(password);
+    saveDb();
   }
 
-  if (!isMatch) {
-    return res.status(400).json({ error: 'Invalid login credentials' });
-  }
-
-  const token = `mock-token-${user.username}`;
-  res.json({ token, user });
+  const token = issueToken(user.id, user.tokenVersion || 0);
+  setSessionCookie(req, res, token);
+  recordAudit(db, user, 'auth.login', { targetType: 'user', targetId: user.id, req });
+  saveDb();
+  res.json({ token, user: publicUser(user), mustChangePassword: !!user.mustChangePassword });
 });
 
-// Auth - Current User Status
+// Auth - Change own password (also completes a forced temporary-password change)
+app.post('/api/auth/change-password', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  const { currentPassword, newPassword } = req.body || {};
+
+  if (!verifyPassword(currentPassword, user.password)) {
+    return res.status(400).json({ error: 'Current password is incorrect.' });
+  }
+  const weakness = validatePasswordStrength(newPassword);
+  if (weakness) {
+    return res.status(400).json({ error: weakness });
+  }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ error: 'New password must be different from the current password.' });
+  }
+
+  setUserPassword(user, newPassword, false);
+  // The temporary password is no longer needed anywhere: scrub stored copies
+  for (const email of db.simulatedEmails) {
+    if (email.recipientId === user.id && email.containsCredentials) {
+      email.body = redactCredentials(email.body);
+      email.htmlBody = redactCredentials(email.htmlBody);
+      email.containsCredentials = false;
+    }
+  }
+
+  recordAudit(db, user, 'auth.password_changed', { targetType: 'user', targetId: user.id, req });
+  saveDb();
+
+  // Existing sessions were revoked; hand back a fresh token for this one
+  const token = issueToken(user.id, user.tokenVersion || 0);
+  setSessionCookie(req, res, token);
+  res.json({ success: true, token, user: publicUser(user) });
+});
+
+// Auth - Current User Status (also refreshes the file-download session cookie)
 app.get('/api/user/me', requireAuth, (req, res) => {
-  res.json({ user: (req as any).user });
+  const authHeader = req.headers.authorization || '';
+  setSessionCookie(req, res, authHeader.slice('Bearer '.length).trim());
+  res.json({ user: publicUser((req as any).user) });
 });
+
+// Auth - Sign out (clears the file-download session cookie)
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie(SESSION_COOKIE, { path: '/' });
+  res.json({ success: true });
+});
+
+// Privacy & data protection (notice, consent, data subject rights, audit, breaches)
+registerPrivacyRoutes(app, {
+  getDb: () => db,
+  saveDb,
+  getSettings,
+  setPrivacySettings: p => {
+    getSettings().privacy = p;
+  },
+  requireAuth,
+  publicUser,
+  describeProcessors,
+  sendEmail: (to, subject, text, html, category, extra) => {
+    dispatchEmail(to, subject, text, html, category, extra).catch(err => console.error('Privacy email failed:', err));
+  }
+});
+
+/** Third parties that receive personal data under the current configuration. */
+function describeProcessors(): Processor[] {
+  const list: Processor[] = [];
+  const settings = getSettings();
+  const outside = 'may be outside Nigeria';
+  if (firestoreDb) {
+    list.push({ name: 'Google Cloud Firestore (Google LLC)', purpose: 'Database storage of portal records', location: `Google Cloud data centre for the configured project (${outside})` });
+  }
+  if (usePostgres && process.env.DATABASE_URL) {
+    let host = 'database provider';
+    try { host = new URL(process.env.DATABASE_URL).hostname; } catch { /* ignore */ }
+    list.push({ name: `PostgreSQL database hosting (${host})`, purpose: 'Database storage of portal records', location: `Provider's data centre (${outside})` });
+  }
+  if (process.env.CLOUDINARY_URL) {
+    list.push({ name: 'Cloudinary Ltd.', purpose: 'Storage of uploaded documents, photos and attachments', location: `Cloudinary data centres (${outside})` });
+  }
+  if (settings.emailServiceType === 'smtp' && settings.smtpHost) {
+    list.push({ name: `Email provider (${settings.smtpHost})`, purpose: 'Delivery of account and portfolio emails', location: outside });
+  }
+  if (settings.emailServiceType === 'brevo') {
+    list.push({ name: 'Brevo (Sendinblue SAS)', purpose: 'Delivery of account and portfolio emails', location: 'European Union' });
+  }
+  return list;
+}
 
 // Admin System Stats Dashboard
 app.get('/api/admin/system-stats', requireAuth, (req, res) => {
@@ -2519,15 +2965,20 @@ app.post('/api/documents/farm/:id/upload', requireAuth, upload.single('file'), a
 
   let fileUrl = `/uploads/${req.file.filename}`;
   const fileName = req.file.originalname;
+  let storage: Document['storage'];
+  const newDocId = 'doc-' + Date.now();
 
   const cld = getCloudinary();
   if (process.env.CLOUDINARY_URL) {
     try {
+      // Stored as a *private* asset: only reachable through signed, expiring URLs
       const cldRes = await cld.uploader.upload(req.file.path, {
         folder: 'farm_estate_documents',
-        resource_type: 'auto'
+        resource_type: 'auto',
+        type: 'private'
       });
-      fileUrl = cldRes.secure_url;
+      storage = { provider: 'cloudinary', publicId: cldRes.public_id, resourceType: cldRes.resource_type, format: cldRes.format, deliveryType: 'private' };
+      fileUrl = `/api/documents/${newDocId}/download`;
       fs.unlinkSync(req.file.path);
     } catch (e) {
       console.error('Cloudinary document uploaded locally fallback', e);
@@ -2535,7 +2986,8 @@ app.post('/api/documents/farm/:id/upload', requireAuth, upload.single('file'), a
   }
 
   const newDoc: Document = {
-    id: 'doc-' + Date.now(),
+    id: newDocId,
+    storage,
     farmId,
     plotId: visibility === DocumentVisibility.PLOT ? plotId : undefined,
     uploadedBy: user.id,
@@ -2598,7 +3050,7 @@ app.post('/api/documents/farm/:id/upload', requireAuth, upload.single('file'), a
 });
 
 // Secure Document download check & serving
-app.get('/api/documents/:id/download', requireAuth, (req, res) => {
+app.get('/api/documents/:id/download', requireAuthAllowCookie, (req, res) => {
   const user = (req as any).user as User;
   const docId = req.params.id;
 
@@ -2608,30 +3060,7 @@ app.get('/api/documents/:id/download', requireAuth, (req, res) => {
   }
 
   // Access check
-  let isAuthorized = false;
-  if (user.role === UserRole.ADMIN) {
-    isAuthorized = true;
-  } else if (user.role === UserRole.FARM_MANAGER) {
-    // Farm managers can see general docs, but not financial categories
-    const managesFarm = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === doc.farmId && a.isActive
-    );
-    if (managesFarm && doc.category !== DocumentCategory.FINANCIAL) {
-      isAuthorized = true;
-    }
-  } else if (user.role === UserRole.INVESTOR) {
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
-    const plotIds = investorPlotsList.map(ip => ip.plotId);
-    const ownsPlotInFarm = db.plots.some(p => p.farmId === doc.farmId && plotIds.includes(p.id));
-
-    if (ownsPlotInFarm) {
-      if (doc.visibility === DocumentVisibility.FARM) {
-        isAuthorized = true;
-      } else if (doc.visibility === DocumentVisibility.PLOT && doc.plotId && plotIds.includes(doc.plotId)) {
-        isAuthorized = true;
-      }
-    }
-  }
+  const isAuthorized = canAccessDocument(user, doc);
 
   if (!isAuthorized) {
     return res.status(403).json({ error: 'Forbidden — You do not have permission to download this secure document' });
@@ -2649,6 +3078,26 @@ app.get('/api/documents/:id/download', requireAuth, (req, res) => {
       }
     });
     saveDb();
+  }
+
+  recordAudit(db, user, 'document.downloaded', { targetType: 'document', targetId: doc.id, req });
+  saveDb();
+
+  // Privately stored cloud file: redirect to a short-lived signed download URL
+  if (doc.storage?.provider === 'cloudinary') {
+    const cld = getCloudinary();
+    const signedUrl = cld.utils.private_download_url(doc.storage.publicId, doc.storage.format || '', {
+      resource_type: doc.storage.resourceType,
+      type: doc.storage.deliveryType,
+      expires_at: Math.floor(Date.now() / 1000) + 120,
+      attachment: true
+    } as any);
+    return res.redirect(signedUrl);
+  }
+
+  // Legacy documents stored at a (public) cloud URL
+  if (doc.fileUrl && /^https?:\/\//.test(doc.fileUrl)) {
+    return res.redirect(doc.fileUrl);
   }
 
   // Handle serving the actual file or a mock file stream if they uploaded standard seeds
@@ -2772,6 +3221,7 @@ app.post('/api/financials/upload', requireAuth, (req, res) => {
   };
 
   db.financials.push(newFin);
+  recordAudit(db, user, 'financial.published', { req });
   saveDb();
 
   // EMAIL TRIGGER 3: Financial record added → email the specific plot investor
@@ -2821,11 +3271,23 @@ app.post('/api/users/create', requireAuth, (req, res) => {
 
   const { username, name, email, phone, role, password } = req.body;
 
+  if (!username || !name || !email) {
+    return res.status(400).json({ error: 'Username, name and email are required.' });
+  }
+
   // Unique username validation
   const existingUser = db.users.find(u => u.username === username);
   if (existingUser) {
     return res.status(400).json({ error: 'Username already exists' });
   }
+
+  const providedPassword = typeof password === 'string' && password.trim() !== '' ? password.trim() : null;
+  if (providedPassword) {
+    const weakness = validatePasswordStrength(providedPassword);
+    if (weakness) return res.status(400).json({ error: weakness });
+  }
+  // Temporary password: either the one the admin chose, or a random one
+  const tempPassword = providedPassword || generateTempPassword();
 
   const newUserId = 'user-' + Date.now();
   const createdUser: User = {
@@ -2835,19 +3297,14 @@ app.post('/api/users/create', requireAuth, (req, res) => {
     email,
     phone,
     role: (role as UserRole) || UserRole.INVESTOR,
-    password: password || undefined
+    password: hashPassword(tempPassword),
+    mustChangePassword: true,
+    tokenVersion: 0
   };
 
   db.users.push(createdUser);
+  recordAudit(db, user, 'user.created', { req });
   saveDb();
-
-  // Set default temporary password for welcome notification
-  let tempPassword = password || 'User@1234';
-  if (!password) {
-    if (role === UserRole.FARM_MANAGER) tempPassword = 'Manager@1234';
-    if (role === UserRole.INVESTOR) tempPassword = 'Investor@1234';
-    if (role === UserRole.ADMIN) tempPassword = 'Admin@1234';
-  }
 
   // EMAIL TRIGGER 4: New user / investor account created → welcome email
   dispatchEmail(
@@ -2870,303 +3327,283 @@ app.post('/api/users/create', requireAuth, (req, res) => {
       senderId: user.id,
       recipientId: createdUser.id,
       relatedType: 'welcome',
-      relatedId: createdUser.id
+      relatedId: createdUser.id,
+      containsCredentials: true
     }
   );
 
-  res.status(201).json(createdUser);
+  // The temporary password is shown once to the admin (it is also emailed)
+  res.status(201).json({ ...publicUser(createdUser), temporaryPassword: tempPassword });
 });
 
-function parseCleanImportNumber(val: unknown, fallback = 0): number {
-  if (val === undefined || val === null || val === '') return fallback;
-  const cleaned = String(val).replace(/[^0-9.-]/g, '');
-  if (!cleaned) return fallback;
-  const parsed = parseFloat(cleaned);
-  return Number.isFinite(parsed) ? parsed : fallback;
+
+interface ImportOptions {
+  /** Validate and report only; nothing is saved and no emails are sent */
+  dryRun?: boolean;
+  /** Email login details to newly created accounts (default true) */
+  sendWelcomeEmails?: boolean;
+  /** Skip rows that exactly duplicate an earlier row */
+  skipDuplicateRows?: boolean;
 }
 
-function executeBulkInvestorImport(investors: any[], currentUser: User) {
+function sendWelcomeEmail(createdUser: User, tempPassword: string, sender: User) {
+  return dispatchEmail(
+    createdUser.email,
+    'Welcome to Adubiaro Farm Estates Portal',
+    `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
+    `<h3>Welcome to Adubiaro Estates Private Portal</h3>
+     <p>Dear ${createdUser.name},</p>
+     <p>An account has been set up for you on our private investor portal.</p>
+     <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
+       <tr><td><b>Username:</b></td><td>${createdUser.username}</td></tr>
+       <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
+       <tr><td><b>Email:</b></td><td>${createdUser.email}</td></tr>
+     </table>
+     <p>You will be asked to choose your own password when you first sign in.</p>
+     <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Sign in</a></p>`,
+    'Welcome Registration',
+    {
+      senderId: sender.id,
+      recipientId: createdUser.id,
+      relatedType: 'welcome',
+      relatedId: createdUser.id,
+      containsCredentials: true
+    }
+  );
+}
+
+function executeBulkInvestorImport(investors: any[], currentUser: User, options: ImportOptions = {}) {
+  const dryRun = !!options.dryRun;
+  const sendWelcomeEmails = options.sendWelcomeEmails !== false;
+  const { rows, globalWarnings } = normalizeImportRows(
+    investors,
+    {
+      existingUsers: db.users.map(u => ({ username: u.username, email: u.email, name: u.name })),
+      existingFarms: db.farms.map(f => ({ id: f.id, name: f.name, location: f.location, state: f.state }))
+    },
+    { skipDuplicateRows: options.skipDuplicateRows }
+  );
+
+  // Plaintext temporary passwords for new accounts, kept only long enough to email them
+  const tempPasswords = new Map<string, string>();
   const results = {
+    dryRun,
     total: investors.length,
     successCount: 0,
     failCount: 0,
+    skippedCount: 0,
+    usersCreatedCount: 0,
+    existingUsersMatchedCount: 0,
     farmsCreatedCount: 0,
+    farmsCreated: [] as string[],
     plotsCreatedCount: 0,
+    totalInvestment: 0,
+    welcomeEmailsSent: 0,
     added: [] as any[],
-    errors: [] as { row: number; username?: string; name?: string; error: string }[]
+    errors: [] as { row: number; username?: string; name?: string; error: string }[],
+    warnings: [] as { row: number; name?: string; message: string }[],
+    globalWarnings,
+    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number }>
   };
+
+  const isManager = currentUser.role === UserRole.FARM_MANAGER;
+  const managedFarmIds = new Set(db.assignments.filter(a => a.managerId === currentUser.id && a.isActive).map(a => a.farmId));
 
   const usersToAdd: User[] = [];
   const plotsToAdd: FarmPlot[] = [];
   const investorPlotsToAdd: InvestorPlot[] = [];
   const farmsToAdd: Farm[] = [];
+  const plotUpdates: Array<() => void> = [];
   const affectedFarmIds = new Set<string>();
+  const matchedExisting = new Set<string>();
+  const findFarm = (list: Farm[], r: NormalizedImportRow) =>
+    list.find(f => (r.farmId && f.id === r.farmId) || farmKeyOf(f.name) === r.farmKey);
 
-  for (let i = 0; i < investors.length; i++) {
-    const rowNum = i + 1;
-    const item = investors[i] || {};
-    const {
-      username,
-      name,
-      email,
-      phone,
-      password,
-      farmId,
-      farmEstate,
-      farmName,
-      estateName,
-      estate,
-      farm,
-      sizeHectares,
-      plotSize,
-      size,
-      sizeUnit,
-      cropType,
-      crop,
-      investmentAmount,
-      amountInvested,
-      investment,
-      amount,
-      capital,
-      ownershipPercentage,
-      contractRef,
-      startDate,
-      plotNumber,
-      plotNo,
-      plotId: rawPlotId,
-      plot,
-      farmLocation,
-      location,
-      farmState,
-      state,
-      farmDescription,
-      description,
-      farmDateEstablished
-    } = item;
+  for (const r of rows) {
+    const rowNum = r.rowNum;
+    r.warnings.forEach(message => results.warnings.push({ row: rowNum, name: r.name, message }));
+    const sizeLabel = `${r.size} ${r.sizeUnit}${r.size === 1 ? '' : 's'}`;
+    const report = (status: 'new_user' | 'existing_user' | 'skipped' | 'error') =>
+      results.rows.push({ row: rowNum, status, name: r.name, email: r.email, username: r.username, farm: r.farmName, size: r.farmName ? sizeLabel : '', crop: r.farmName ? r.cropType : '', amount: r.investmentAmount });
 
-    const cleanUsername = username ? String(username).trim() : '';
-    const cleanEmail = email ? String(email).trim() : '';
-    const cleanName = name ? String(name).trim() : '';
-    const cleanPhone = phone ? String(phone).trim() : '';
-
-    if (!cleanUsername || !cleanName || !cleanEmail) {
+    if (r.errors.length > 0) {
       results.failCount++;
-      results.errors.push({
-        row: rowNum,
-        username: cleanUsername || undefined,
-        name: cleanName || undefined,
-        error: 'Missing required fields: Username, Name, and Email are mandatory.'
-      });
+      r.errors.forEach(error => results.errors.push({ row: rowNum, username: r.username || undefined, name: r.name || undefined, error }));
+      report('error');
+      continue;
+    }
+    if (r.skip) {
+      results.skippedCount++;
+      report('skipped');
       continue;
     }
 
-    const rawFarmSearch =
-      farmId ||
-      farmEstate ||
-      farmName ||
-      estateName ||
-      estate ||
-      farm ||
-      farmLocation ||
-      location ||
-      '';
-    const farmSearch = String(rawFarmSearch).trim();
-    const rawPlotNum = String(plotNumber || plotNo || rawPlotId || plot || '').trim();
-    const pAmount = parseCleanImportNumber(
-      investmentAmount ?? amountInvested ?? investment ?? amount ?? capital,
-      0
-    );
-    const hasAllocationData = Boolean(farmSearch) || Boolean(rawPlotNum) || pAmount > 0;
+    const hasAllocationData = Boolean(r.farmName || r.farmId) || Boolean(r.plotNumber) || r.investmentAmount > 0;
 
-    // Check if user already exists in DB or in this batch
-    let targetUser: User | undefined =
-      usersToAdd.find(
-        u =>
-          u.username.toLowerCase() === cleanUsername.toLowerCase() ||
-          u.email.toLowerCase() === cleanEmail.toLowerCase()
-      ) ||
-      db.users.find(
-        u =>
-          u.username.toLowerCase() === cleanUsername.toLowerCase() ||
-          u.email.toLowerCase() === cleanEmail.toLowerCase()
-      );
-
-    let isNewUser = false;
-
-    if (targetUser) {
-      // If user already exists AND there is no estate/plot/investment data to assign, report duplicate
-      if (!hasAllocationData) {
+    // Resolve the farm (exact id or normalised name match only)
+    let matchedFarm: Farm | undefined;
+    if (r.farmName || r.farmId) {
+      matchedFarm = findFarm(db.farms, r) || findFarm(farmsToAdd, r);
+      if (isManager && (!matchedFarm || !managedFarmIds.has(matchedFarm.id))) {
         results.failCount++;
-        results.errors.push({
-          row: rowNum,
-          username: cleanUsername,
-          name: cleanName,
-          error: `User with username "${cleanUsername}" or email "${cleanEmail}" is already registered.`
-        });
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `Farm managers can only import investors into farms they manage ("${r.farmName}").` });
+        report('error');
         continue;
       }
+      if (!matchedFarm) {
+        if (r.farmId && !r.farmName) {
+          results.failCount++;
+          results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `Farm id "${r.farmId}" was not found.` });
+          report('error');
+          continue;
+        }
+        matchedFarm = {
+          id: `farm-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`,
+          name: r.farmName,
+          location: r.farmLocation || 'Not specified',
+          state: r.farmState || 'Not specified',
+          totalPlots: 0,
+          totalHectares: 0,
+          description: r.farmDescription || `Imported farm estate: ${r.farmName}`,
+          coverImage: '/farm-placeholder.svg',
+          dateEstablished: r.farmDateEstablished || new Date().toISOString().split('T')[0],
+          isActive: true
+        };
+        farmsToAdd.push(matchedFarm);
+        results.farmsCreatedCount++;
+        results.farmsCreated.push(matchedFarm.name);
+      }
+    } else if (hasAllocationData) {
+      results.failCount++;
+      results.errors.push({ row: rowNum, username: r.username, name: r.name, error: 'A plot or amount was given without a farm name.' });
+      report('error');
+      continue;
+    }
+
+    // Find or create the investor account (matched by email, then username)
+    let targetUser: User | undefined =
+      usersToAdd.find(u => u.email.toLowerCase() === r.email) ||
+      db.users.find(u => u.email.toLowerCase() === r.email) ||
+      (!r.usernameGenerated ? usersToAdd.find(u => u.username.toLowerCase() === r.username.toLowerCase()) || db.users.find(u => u.username.toLowerCase() === r.username.toLowerCase()) : undefined);
+
+    let isNewUser = false;
+    if (targetUser) {
+      if (targetUser.email.toLowerCase() !== r.email) {
+        results.failCount++;
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `Username "${r.username}" already belongs to a different email address.` });
+        report('error');
+        continue;
+      }
+      if (targetUser.privacy?.anonymisedAt) {
+        results.failCount++;
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: 'This email belongs to an erased account.' });
+        report('error');
+        continue;
+      }
+      if (!hasAllocationData) {
+        results.failCount++;
+        results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `A user with email "${r.email}" is already registered and the row has no holding to add.` });
+        report('error');
+        continue;
+      }
+      if (!usersToAdd.includes(targetUser) && !matchedExisting.has(targetUser.id)) {
+        matchedExisting.add(targetUser.id);
+        results.existingUsersMatchedCount++;
+      }
     } else {
-      const uidSuffix = `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+      const uidSuffix = `${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`;
+      const suppliedPassword = r.password ? String(r.password).trim() : '';
+      const tempPassword = suppliedPassword && !validatePasswordStrength(suppliedPassword) ? suppliedPassword : generateTempPassword();
+      tempPasswords.set(`user-${uidSuffix}`, tempPassword);
       targetUser = {
         id: `user-${uidSuffix}`,
-        username: cleanUsername,
-        name: cleanName,
-        email: cleanEmail,
-        phone: cleanPhone,
+        username: r.username,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
         role: UserRole.INVESTOR,
-        password: password ? String(password).trim() : undefined,
+        password: dryRun ? undefined : hashPassword(tempPassword),
+        mustChangePassword: true,
+        tokenVersion: 0,
         isActive: true
       };
       usersToAdd.push(targetUser);
+      results.usersCreatedCount++;
       isNewUser = true;
     }
 
-    // Resolve Farm Estate (exact match first, then substring match, then auto-create)
-    let matchedFarm: Farm | undefined;
-    if (farmSearch) {
-      const cleanSearch = farmSearch.toLowerCase();
-
-      matchedFarm =
-        db.farms.find(
-          f => f.id.toLowerCase() === cleanSearch || f.name.toLowerCase() === cleanSearch
-        ) ||
-        farmsToAdd.find(
-          f => f.id.toLowerCase() === cleanSearch || f.name.toLowerCase() === cleanSearch
-        ) ||
-        db.farms.find(f => f.name.toLowerCase().includes(cleanSearch)) ||
-        farmsToAdd.find(f => f.name.toLowerCase().includes(cleanSearch));
-
-      if (!matchedFarm) {
-        const fLoc = farmLocation || location || 'Ondo Region';
-        const fState = farmState || state || 'Ondo';
-        const fDesc = farmDescription || description || `Imported Farm Estate: ${farmSearch}`;
-        const fDate = farmDateEstablished || new Date().toISOString().split('T')[0];
-
-        matchedFarm = {
-          id: `farm-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-          name: farmSearch,
-          location: String(fLoc).trim(),
-          state: String(fState).trim(),
-          totalPlots: 0,
-          totalHectares: 0,
-          description: String(fDesc).trim(),
-          coverImage: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80',
-          dateEstablished: String(fDate).trim(),
-          isActive: true
-        };
-        farmsToAdd.push(matchedFarm);
-        results.farmsCreatedCount++;
-      }
-    } else if (hasAllocationData) {
-      // Worst case: amount or plot was provided without a farmEstate name; assign to primary active estate or create one
-      matchedFarm = db.farms[0] || farmsToAdd[0];
-      if (!matchedFarm) {
-        matchedFarm = {
-          id: `farm-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-          name: 'Adubiaro General Estate',
-          location: String(farmLocation || location || 'Ondo Region').trim(),
-          state: String(farmState || state || 'Ondo').trim(),
-          totalPlots: 0,
-          totalHectares: 0,
-          description: 'Default estate holding created during bulk import',
-          coverImage: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80',
-          dateEstablished: new Date().toISOString().split('T')[0],
-          isActive: true
-        };
-        farmsToAdd.push(matchedFarm);
-        results.farmsCreatedCount++;
-      }
-    }
-
-    // Always assign a plot & ownership record whenever an estate/farm is resolved (even if plotNumber wasn't stated in CSV)
     if (matchedFarm) {
-      const parsedSize = parseCleanImportNumber(sizeHectares ?? plotSize ?? size, 1.0);
-      const pSize = parsedSize > 0 ? parsedSize : 1.0;
-      const rawUnit = String(sizeUnit || 'acre').trim().toLowerCase();
-      const pUnit = rawUnit.includes('plot') ? 'plot' : rawUnit.includes('hectare') ? 'hectare' : 'acre';
-      const pCrop = String(cropType || crop || 'Oil Palm').trim() || 'Oil Palm';
-      const pOwnership = parseCleanImportNumber(ownershipPercentage, 100);
-
       let assignedPlotId: string | null = null;
 
-      // If plotNumber is specified and already exists unowned in this farm, attach to it
-      if (rawPlotNum) {
-        const existingUnownedPlot = db.plots.find(p => {
-          if (p.farmId !== matchedFarm!.id) return false;
-          if (p.plotNumber.toLowerCase() !== rawPlotNum.toLowerCase()) return false;
-          const alreadyOwnedInDb = db.investorPlots.some(ip => ip.plotId === p.id && ip.isActive !== false);
-          const alreadyOwnedInBatch = investorPlotsToAdd.some(ip => ip.plotId === p.id);
-          return !alreadyOwnedInDb && !alreadyOwnedInBatch;
-        });
-
+      // Attach to an existing unowned plot with the same number in this farm
+      if (r.plotNumber) {
+        const existingUnownedPlot = db.plots.find(p =>
+          p.farmId === matchedFarm!.id &&
+          p.plotNumber.toLowerCase() === r.plotNumber.toLowerCase() &&
+          !db.investorPlots.some(ip => ip.plotId === p.id && ip.isActive !== false) &&
+          !investorPlotsToAdd.some(ip => ip.plotId === p.id)
+        );
         if (existingUnownedPlot) {
-          existingUnownedPlot.status = PlotStatus.ACTIVE;
-          if (sizeHectares || plotSize || size) existingUnownedPlot.sizeHectares = pSize;
-          if (sizeUnit) existingUnownedPlot.sizeUnit = pUnit;
-          if (cropType || crop) existingUnownedPlot.cropType = pCrop;
           assignedPlotId = existingUnownedPlot.id;
+          plotUpdates.push(() => {
+            existingUnownedPlot.status = PlotStatus.ACTIVE;
+            existingUnownedPlot.sizeHectares = r.size;
+            existingUnownedPlot.sizeUnit = r.sizeUnit;
+            existingUnownedPlot.cropType = r.cropType;
+          });
         }
       }
 
       if (!assignedPlotId) {
-        let pNum = rawPlotNum;
+        let pNum = r.plotNumber;
         if (!pNum) {
           const existingPlotsCount = db.plots.filter(p => p.farmId === matchedFarm!.id).length;
           const pendingCount = plotsToAdd.filter(p => p.farmId === matchedFarm!.id).length;
           pNum = `P-${matchedFarm.id.replace('farm-', '').slice(-4).toUpperCase()}-${existingPlotsCount + pendingCount + 1}`;
         }
-
-        assignedPlotId = `plot-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
-        const newPlot: FarmPlot = {
+        assignedPlotId = `plot-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`;
+        plotsToAdd.push({
           id: assignedPlotId,
           farmId: matchedFarm.id,
           plotNumber: pNum,
-          sizeHectares: pSize,
-          sizeUnit: pUnit,
-          cropType: pCrop,
+          sizeHectares: r.size,
+          sizeUnit: r.sizeUnit,
+          cropType: r.cropType,
           status: PlotStatus.ACTIVE
-        };
-        plotsToAdd.push(newPlot);
+        });
       }
 
-      const invPlot: InvestorPlot = {
-        id: `invplot-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      investorPlotsToAdd.push({
+        id: `invplot-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`,
         investorId: targetUser.id,
         plotId: assignedPlotId,
-        investmentAmount: pAmount,
-        ownershipPercentage: pOwnership > 0 ? pOwnership : 100,
-        startDate: startDate ? String(startDate).trim() : new Date().toISOString().split('T')[0],
-        contractRef: contractRef
-          ? String(contractRef).trim()
-          : `CON-BLK-${Date.now().toString().slice(-5)}-${i + 1}`,
+        investmentAmount: r.investmentAmount,
+        ownershipPercentage: r.ownershipPercentage,
+        startDate: r.startDate || new Date().toISOString().split('T')[0],
+        contractRef: r.contractRef ? String(r.contractRef).trim() : `CON-BLK-${Date.now().toString().slice(-5)}-${rowNum}`,
         isActive: true
-      };
-
-      investorPlotsToAdd.push(invPlot);
+      });
       affectedFarmIds.add(matchedFarm.id);
       results.plotsCreatedCount++;
+      results.totalInvestment += r.investmentAmount;
     }
 
-    if (isNewUser || hasAllocationData) {
-      results.successCount++;
-      results.added.push({ id: targetUser.id, username: targetUser.username, name: targetUser.name });
-    }
+    results.successCount++;
+    results.added.push({ id: targetUser.id, username: targetUser.username, name: targetUser.name, email: targetUser.email });
+    report(isNewUser ? 'new_user' : 'existing_user');
+  }
+
+  if (dryRun) {
+    return results;
   }
 
   // Persist changes if any succeeded
   if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0) {
-    if (farmsToAdd.length > 0) {
-      db.farms.push(...farmsToAdd);
-    }
-    if (usersToAdd.length > 0) {
-      db.users.push(...usersToAdd);
-    }
-    if (plotsToAdd.length > 0) {
-      db.plots.push(...plotsToAdd);
-    }
-    if (investorPlotsToAdd.length > 0) {
-      db.investorPlots.push(...investorPlotsToAdd);
-    }
+    db.farms.push(...farmsToAdd);
+    db.users.push(...usersToAdd);
+    plotUpdates.forEach(apply => apply());
+    db.plots.push(...plotsToAdd);
+    db.investorPlots.push(...investorPlotsToAdd);
 
     // Recompute estate totals for affected farms
     affectedFarmIds.forEach(fId => {
@@ -3180,35 +3617,18 @@ function executeBulkInvestorImport(investors: any[], currentUser: User) {
       }
     });
 
+    recordAudit(db, currentUser, 'data.import_investors', {
+      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
+    });
     saveDb();
 
-    // Send notifications/emails for each newly added user
-    usersToAdd.forEach(createdUser => {
-      const tempPassword = createdUser.password || 'Investor@1234';
-      dispatchEmail(
-        createdUser.email,
-        'Welcome to Adubiaro Farm Estates Portal',
-        `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
-        `<h3>Welcome to Adubiaro Estates Private Portal</h3>
-         <p>Dear ${createdUser.name},</p>
-         <p>An administrative account has been securely setup for you on our private client portal.</p>
-         <p>Your roles permissions: <b>INVESTOR</b></p>
-         <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
-           <tr><td><b>Authorized Username:</b></td><td>${createdUser.username}</td></tr>
-           <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
-           <tr><td><b>Sign-Up Email:</b></td><td>${createdUser.email}</td></tr>
-         </table>
-         <p>You are required to log in and change your temporary password immediately upon landing.</p>
-         <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Access Login Dashboard</a></p>`,
-        'Welcome Registration',
-        {
-          senderId: currentUser.id,
-          recipientId: createdUser.id,
-          relatedType: 'welcome',
-          relatedId: createdUser.id
-        }
-      );
-    });
+    if (sendWelcomeEmails) {
+      for (const createdUser of usersToAdd) {
+        sendWelcomeEmail(createdUser, tempPasswords.get(createdUser.id) || '(contact your administrator)', currentUser)
+          .catch(err => console.error('Welcome email failed:', err));
+        results.welcomeEmailsSent++;
+      }
+    }
   }
 
   return results;
@@ -3226,7 +3646,11 @@ app.post('/api/admin/users/bulk-upload', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Payload must contain an "investors" array.' });
   }
 
-  const results = executeBulkInvestorImport(investors, currentUser);
+  const results = executeBulkInvestorImport(investors, currentUser, {
+    dryRun: req.body.dryRun === true,
+    sendWelcomeEmails: req.body.sendWelcomeEmails !== false,
+    skipDuplicateRows: req.body.skipDuplicateRows === true
+  });
   res.status(200).json(results);
 });
 
@@ -3246,7 +3670,11 @@ app.post('/api/import/data', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Payload must contain a list of records in "investors", "records", "data", or as a top-level array.' });
   }
 
-  const results = executeBulkInvestorImport(investors, currentUser);
+  const results = executeBulkInvestorImport(investors, currentUser, {
+    dryRun: req.body.dryRun === true,
+    sendWelcomeEmails: req.body.sendWelcomeEmails !== false,
+    skipDuplicateRows: req.body.skipDuplicateRows === true
+  });
   res.status(200).json(results);
 });
 
@@ -3259,8 +3687,14 @@ app.get('/api/export/data', requireAuth, (req, res) => {
 
   const exportData: any[] = [];
 
+  // Data minimisation: managers may only export investors on farms they manage
+  const managerScope = currentUser.role === UserRole.FARM_MANAGER ? investorIdsForManager(currentUser.id) : null;
+  recordAudit(db, currentUser, 'data.export_investors', { details: managerScope ? `scope=manager:${managerScope.size}` : 'scope=all', req });
+  saveDb();
+
   // Loop through all users
   db.users.forEach(u => {
+    if (managerScope && !managerScope.has(u.id)) return;
     // Find all plots assigned to this user
     const matchedInvestorPlots = db.investorPlots.filter(ip => ip.investorId === u.id);
 
@@ -3321,6 +3755,11 @@ app.get('/api/admin/users', requireAuth, (req, res) => {
   if (user.role !== UserRole.ADMIN && user.role !== UserRole.FARM_MANAGER) {
     return res.status(403).json({ error: 'Admin or Manager access required' });
   }
+  if (user.role === UserRole.FARM_MANAGER) {
+    // Data minimisation: managers only see investors on farms they manage
+    const allowed = investorIdsForManager(user.id);
+    return res.json(db.users.filter(u => u.id === user.id || (u.role === UserRole.INVESTOR && allowed.has(u.id))));
+  }
   res.json(db.users);
 });
 
@@ -3337,6 +3776,7 @@ app.get('/api/admin/investors/:id/profile', requireAuth, (req, res) => {
   }
 
   const { password: _password, ...safeInvestor } = targetUser as any;
+  recordAudit(db, currentUser, 'user.profile_viewed', { targetType: 'user', targetId: targetUser.id, req });
 
   const investorHoldingsRaw = db.investorPlots.filter(ip => ip.investorId === targetUser.id);
   const ownedPlotIds = Array.from(new Set(investorHoldingsRaw.map(ip => ip.plotId)));
@@ -3484,11 +3924,16 @@ app.post('/api/admin/users/:id/toggle-active', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
+  if (!canManageUser(currentUser, targetUser)) {
+    return res.status(403).json({ error: 'Farm managers can only activate or deactivate investor accounts.' });
+  }
+
   // Toggle active
   targetUser.isActive = targetUser.isActive === false ? true : false;
+  recordAudit(db, currentUser, 'user.active_toggled', { req, targetType: 'user', targetId: req.params.id });
   saveDb();
 
-  res.json({ success: true, user: targetUser });
+  res.json({ success: true, user: publicUser(targetUser) });
 });
 
 // Admin Route to update a user's details
@@ -3503,8 +3948,26 @@ app.post('/api/admin/users/:id/update', requireAuth, (req, res) => {
   if (!targetUser) {
     return res.status(404).json({ error: 'User not found' });
   }
+  if (!canManageUser(currentUser, targetUser)) {
+    return res.status(403).json({ error: 'Farm managers can only edit investor accounts.' });
+  }
 
   const { name, email, phone, username, role, isActive, password } = req.body;
+
+  if (role && currentUser.role !== UserRole.ADMIN && role !== UserRole.INVESTOR) {
+    return res.status(403).json({ error: 'Only administrators can assign staff roles.' });
+  }
+  if (targetUser.id === currentUser.id && role && role !== currentUser.role) {
+    return res.status(400).json({ error: 'You cannot change your own role.' });
+  }
+  if (targetUser.id === currentUser.id && isActive === false) {
+    return res.status(400).json({ error: 'You cannot deactivate your own account.' });
+  }
+  const newPassword = typeof password === 'string' ? password.trim() : '';
+  if (newPassword) {
+    const weakness = validatePasswordStrength(newPassword);
+    if (weakness) return res.status(400).json({ error: weakness });
+  }
 
   if (username && username !== targetUser.username) {
     const existingUser = db.users.find(u => u.username === username);
@@ -3519,10 +3982,12 @@ app.post('/api/admin/users/:id/update', requireAuth, (req, res) => {
   if (phone) targetUser.phone = phone;
   if (role) targetUser.role = role as UserRole;
   if (typeof isActive === 'boolean') targetUser.isActive = isActive;
-  if (password && password.trim() !== '') targetUser.password = password;
+  // A password set by someone else is temporary: the user must change it at next sign-in.
+  if (newPassword) setUserPassword(targetUser, newPassword, targetUser.id !== currentUser.id);
 
+  recordAudit(db, currentUser, 'user.updated', { req, targetType: 'user', targetId: req.params.id });
   saveDb();
-  res.json({ success: true, user: targetUser });
+  res.json({ success: true, user: publicUser(targetUser) });
 });
 
 // Admin Route to perform bulk actions on users
@@ -3544,9 +4009,35 @@ app.post('/api/admin/users/bulk-action', requireAuth, (req, res) => {
   let updatedCount = 0;
   const previousStates: Array<{ id: string; role: UserRole; isActive: boolean }> = [];
 
+  // Email fresh temporary login details (e.g. after an import done without welcome emails)
+  if (action === 'send-login-details') {
+    if (currentUser.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: 'Only administrators can send login details.' });
+    }
+    let sent = 0;
+    for (const id of userIds) {
+      const target = db.users.find(u => u.id === id);
+      if (!target || target.id === currentUser.id || target.isActive === false || target.privacy?.anonymisedAt) continue;
+      const tempPassword = generateTempPassword();
+      setUserPassword(target, tempPassword, true);
+      sendWelcomeEmail(target, tempPassword, currentUser).catch(err => console.error('Login details email failed:', err));
+      sent++;
+    }
+    recordAudit(db, currentUser, 'user.login_details_sent', { details: `count=${sent}`, req });
+    saveDb();
+    return res.json({ success: true, count: sent, previousStates: [] });
+  }
+
+  if (action === 'update-role' && currentUser.role !== UserRole.ADMIN && value !== UserRole.INVESTOR) {
+    return res.status(403).json({ error: 'Only administrators can assign staff roles.' });
+  }
+  if (action === 'update-role' && !Object.values(UserRole).includes(value)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+
   userIds.forEach(id => {
     const targetUser = db.users.find(u => u.id === id);
-    if (targetUser) {
+    if (targetUser && canManageUser(currentUser, targetUser)) {
       // Record original state in case we want to undo
       const originalState = {
         id: targetUser.id,
@@ -3587,6 +4078,7 @@ app.post('/api/admin/users/bulk-action', requireAuth, (req, res) => {
   });
 
   if (updatedCount > 0) {
+    recordAudit(db, currentUser, 'user.bulk_action', { req });
     saveDb();
   }
 
@@ -3607,15 +4099,20 @@ app.post('/api/admin/users/bulk-undo', requireAuth, (req, res) => {
 
   let undoneCount = 0;
   previousStates.forEach(state => {
-    const targetUser = db.users.find(u => u.id === state.id);
-    if (targetUser) {
+    const targetUser = db.users.find(u => u.id === state?.id);
+    if (!targetUser || !canManageUser(currentUser, targetUser)) return;
+    if (!Object.values(UserRole).includes(state.role)) return;
+    if (currentUser.role !== UserRole.ADMIN && state.role !== UserRole.INVESTOR) return;
+    if (targetUser.id === currentUser.id && (state.role !== currentUser.role || state.isActive === false)) return;
+    {
       targetUser.role = state.role;
-      targetUser.isActive = state.isActive;
+      targetUser.isActive = state.isActive !== false;
       undoneCount++;
     }
   });
 
   if (undoneCount > 0) {
+    recordAudit(db, currentUser, 'user.bulk_undo', { req });
     saveDb();
   }
 
@@ -3631,8 +4128,11 @@ app.post('/api/admin/users/:id/message', requireAuth, upload.single('attachment'
 
   const targetUserId = req.params.id;
   const targetUser = db.users.find(u => u.id === targetUserId);
-  if (!targetUser) {
+  if (!targetUser || targetUser.privacy?.anonymisedAt) {
     return res.status(404).json({ error: 'User not found' });
+  }
+  if (currentUser.role === UserRole.FARM_MANAGER && targetUser.id !== currentUser.id && !investorIdsForManager(currentUser.id).has(targetUser.id)) {
+    return res.status(403).json({ error: 'Farm managers can only message investors on farms they manage.' });
   }
 
   const { subject, body } = req.body;
@@ -3712,6 +4212,8 @@ app.post('/api/admin/users/:id/message', requireAuth, upload.single('attachment'
         attachmentType: fileType || undefined
       }
     );
+    recordAudit(db, currentUser, 'message.sent_to_user', { targetType: 'user', targetId: targetUser.id, req });
+    saveDb();
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to dispatch email' });
@@ -3726,6 +4228,8 @@ app.post('/api/admin/broadcast', requireAuth, upload.single('attachment'), async
   }
 
   const { recipientIds, subject, body } = req.body;
+  // Promotional (marketing) messages only go to users who opted in
+  const isMarketing = req.body.isMarketing === true || req.body.isMarketing === 'true';
   if (!recipientIds) {
     return res.status(400).json({ error: 'Recipient IDs are required.' });
   }
@@ -3791,13 +4295,22 @@ app.post('/api/admin/broadcast', requireAuth, upload.single('attachment'), async
     <p>${body.replace(/\n/g, '<br/>')}</p>
     ${mediaHtml}
     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-    <p style="font-size: 11px; color: #888;">This email is dispatched from Adubiaro Farm Estates Private Portal.</p>
+    <p style="font-size: 11px; color: #888;">This email is dispatched from Adubiaro Farm Estates Private Portal.${isMarketing ? ' You receive promotional messages because you opted in. You can withdraw consent at any time under Privacy &amp; Data in the portal.' : ''}</p>
   </div>`;
 
   let sentCount = 0;
+  let skippedNoConsent = 0;
+  const managerScope = currentUser.role === UserRole.FARM_MANAGER ? investorIdsForManager(currentUser.id) : null;
   for (const id of ids) {
     const targetUser = db.users.find(u => u.id === id);
-    if (!targetUser) continue;
+    if (!targetUser || targetUser.privacy?.anonymisedAt) continue;
+    // Managers may only message investors on farms they manage
+    if (managerScope && !managerScope.has(targetUser.id)) continue;
+    // Promotional messages require opt-in consent (NDPA / GDPR / e-privacy rules)
+    if (isMarketing && !targetUser.privacy?.marketingConsent) {
+      skippedNoConsent++;
+      continue;
+    }
 
     try {
       await dispatchEmail(
@@ -3822,7 +4335,9 @@ app.post('/api/admin/broadcast', requireAuth, upload.single('attachment'), async
     }
   }
 
-  res.json({ success: true, count: sentCount });
+  recordAudit(db, currentUser, 'message.broadcast', { details: `sent=${sentCount}; marketing=${isMarketing}; skippedNoConsent=${skippedNoConsent}`, req });
+  saveDb();
+  res.json({ success: true, count: sentCount, skippedNoConsent });
 });
 
 // Admin Route to delete a user
@@ -3843,10 +4358,14 @@ app.delete('/api/admin/users/:id', requireAuth, (req, res) => {
   }
 
   const deletedUser = db.users[userIndex];
+  if (!canManageUser(currentUser, deletedUser)) {
+    return res.status(403).json({ error: 'Farm managers can only delete investor accounts.' });
+  }
   db.users.splice(userIndex, 1);
+  recordAudit(db, currentUser, 'user.deleted', { req, targetType: 'user', targetId: req.params.id });
   saveDb();
 
-  res.json({ success: true, deletedUser });
+  res.json({ success: true, deletedUser: publicUser(deletedUser) });
 });
 
 // Admin route to manage plots, link to farms, assign plots to investors
@@ -4318,7 +4837,7 @@ app.get('/api/notifications', requireAuth, (req, res) => {
           category: d.category,
           fileName: d.fileName,
           description: d.description,
-          fileUrl: d.fileUrl
+          fileUrl: `/api/documents/${d.id}/download`
         }
       });
     }
@@ -4369,7 +4888,14 @@ app.post('/api/admin/reset-db', requireAuth, async (req, res) => {
   if (usePostgres) {
     await resetPostgresDb();
   }
+  const complianceRecords = { auditLogs: db.auditLogs, dataRequests: db.dataRequests, breachIncidents: db.breachIncidents };
   db = getInitialDb();
+  // Keep the admin performing the reset so they are not locked out
+  db.users = [user];
+  // Data-protection records must survive resets
+  Object.assign(db, complianceRecords);
+  recordAudit(db, user, 'system.database_reset', { req });
+  migrateUserCredentials();
   saveDb();
   res.json({ message: 'Database successfully restored to original seed demo values.' });
 });
@@ -4397,6 +4923,7 @@ app.post('/api/admin/clean-slate', requireAuth, async (req, res) => {
     db.financials = [];
     db.simulatedEmails = [];
 
+    recordAudit(db, user, 'system.clean_slate', { req });
     saveDb();
     res.json({ message: 'Database successfully migrated to clean slate. Ready for live production data!' });
   } catch (err: any) {
@@ -4641,6 +5168,7 @@ app.put('/api/admin/settings', requireAuth, (req, res) => {
     }
   }
 
+  recordAudit(db, user, 'system.settings_updated', { req });
   saveDb();
   const responseSettings = {
     ...currentSettings,
@@ -4655,6 +5183,9 @@ app.get('/api/admin/database/export', requireAuth, (req, res) => {
   if (user.role !== UserRole.ADMIN) {
     return res.status(403).json({ error: 'Admin access required.' });
   }
+
+  recordAudit(db, user, 'system.database_exported', { req });
+  saveDb();
 
   // Create export payload
   const payload = {
@@ -4690,9 +5221,20 @@ app.post('/api/admin/database/import', requireAuth, async (req, res) => {
     }
 
     // Replace in-memory database
+    // Keep the current data-protection records (merged with any in the backup)
+    const mergeById = <T extends { id: string }>(a: T[] = [], b: T[] = []) => {
+      const map = new Map<string, T>();
+      [...b, ...a].forEach(item => item && item.id && map.set(item.id, item));
+      return Array.from(map.values());
+    };
+    importedDb.auditLogs = mergeById(db.auditLogs, importedDb.auditLogs).sort((x: any, y: any) => String(y.at).localeCompare(String(x.at)));
+    importedDb.dataRequests = mergeById(db.dataRequests, importedDb.dataRequests);
+    importedDb.breachIncidents = mergeById(db.breachIncidents, importedDb.breachIncidents);
     db = importedDb;
+    migrateUserCredentials();
 
     // Persist immediately across active channels
+    recordAudit(db, user, 'system.database_imported', { req });
     saveDb();
 
     // Log the import backup event
@@ -4749,6 +5291,7 @@ app.get('/api/portal/settings', (req, res) => {
 
 // INTEGRATE VITE NODE DEV SERVER MIDDLEWARE
 async function startServer() {
+  initAuthSecret(DATA_DIR);
   await initFirestore();
   await initPostgres();
 
@@ -4795,9 +5338,28 @@ async function startServer() {
 
   if (dataRemoved) {
     console.log('🧹 Demo data records detected. Purging from database and saving clean slate...');
-    saveDb();
   } else {
     console.log('✨ No pre-seeded demo data records found on startup.');
+  }
+
+  // Storage limitation: purge records older than the configured retention periods
+  const retention = runRetention(db, getSettings());
+  if (retention.emailsRemoved || retention.auditRemoved) {
+    console.log(`🗑️ Retention purge removed ${retention.emailsRemoved} email log entries and ${retention.auditRemoved} audit entries.`);
+    dataRemoved = true;
+  }
+  setInterval(() => {
+    const result = runRetention(db, getSettings());
+    if (result.emailsRemoved || result.auditRemoved) {
+      recordAudit(db, null, 'privacy.retention_run', { details: `emails=${result.emailsRemoved}; audit=${result.auditRemoved}` });
+      saveDb();
+    }
+  }, 24 * 60 * 60 * 1000).unref();
+
+  // Hash legacy plaintext passwords and make sure an admin can sign in
+  const credentialsChanged = migrateUserCredentials();
+  if (dataRemoved || credentialsChanged) {
+    saveDb();
   }
 
   if (process.env.NODE_ENV !== 'production') {

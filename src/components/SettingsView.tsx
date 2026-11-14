@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
@@ -333,10 +334,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
   const handleDownloadWizardCsvTemplate = () => {
     const csvContent = 
-      "username,name,email,phone,password,farmEstate,farmLocation,farmState,farmDescription,farmDateEstablished,plotNumber,sizeHectares,sizeUnit,cropType,investmentAmount\n" +
-      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,Premium oil palm cultivation estate,2025-01-15,P-101,2.5,acre,Oil Palm,5000000\n" +
-      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99,Ondo Cocoa Hills,Ondo Rural,Ondo,Organic high-yield cocoa farm estate,2024-11-01,P-102,1.2,plot,Cocoa,1800000\n" +
-      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,,,P-103,3.0,acre,Oil Palm,6000000\n";
+      INVESTOR_IMPORT_CSV_TEMPLATE;
       
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -537,8 +535,8 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         throw new Error(errData.error || 'Failed to generate user credential profile');
       }
 
-      await res.json();
-      setNewUserSuccess(`User "${newFullName}" provisioned successfully. Temporary credentials dispatched to notifications list.`);
+      const created = await res.json();
+      setNewUserSuccess(`User "${newFullName}" provisioned. Temporary password: ${created.temporaryPassword} (also sent in the welcome email; the user must change it at first sign-in).`);
       
       // Reset Fields
       setNewUsername('');

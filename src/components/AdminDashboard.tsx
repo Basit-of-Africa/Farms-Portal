@@ -38,7 +38,8 @@ import {
 import { User, Farm, FarmPlot, UserRole, DocumentCategory, DocumentVisibility, FinancialStatus } from '../types';
 import DashboardStats from './DashboardStats';
 import CSVDataImporter from './CSVDataImporter';
-import { parseCsvRecords } from '../utils/csvParser';
+import { parseCsvRecords, INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
+import { useImportReview } from './ImportReviewModal';
 
 interface AdminDashboardProps {
   user: User;
@@ -50,6 +51,8 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, token, onSelectFarm, onSelectInvestor, triggerRefreshSignal, refreshSignal }: AdminDashboardProps) {
+  const { reviewImport, reviewModal } = useImportReview(token);
+
   // Stats
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -426,7 +429,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'User setup error');
 
-      setUserSuccessMessage(`Account for ${data.name} (${data.role.toUpperCase()}) provisioned successfully! Signals triggered a welcome notification.`);
+      setUserSuccessMessage(`Account for ${data.name} (${data.role.toUpperCase()}) provisioned. Temporary password: ${data.temporaryPassword} (also sent in the welcome email; the user must change it at first sign-in).`);
       setNewUsername('');
       setNewName('');
       setNewEmail('');
@@ -456,12 +459,12 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
           return;
         }
         
-        const hasUsername = headers.some(h => ['username', 'user', 'handle'].includes(h));
+        // Usernames are optional: they are created from email addresses when missing
         const hasName = headers.some(h => ['name', 'fullname', 'investorname'].includes(h));
         const hasEmail = headers.some(h => ['email', 'emailaddress'].includes(h));
         
-        if (!hasUsername || !hasName || !hasEmail) {
-          alert('CSV file must have at least "username", "name", and "email" columns.');
+        if (!hasName || !hasEmail) {
+          alert('CSV file must have at least "name" and "email" columns.');
           return;
         }
         
@@ -484,17 +487,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setBulkUploading(true);
       setBulkResults(null);
       
-      const res = await fetch('/api/admin/users/bulk-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ investors: parsedInvestors })
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Bulk upload failed');
+      const data = await reviewImport(parsedInvestors);
+      if (!data) return;
       
       setBulkResults(data);
       if (data.successCount > 0) {
@@ -529,10 +523,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   const handleDownloadWizardCsvTemplate = () => {
     const csvContent = 
-      "username,name,email,phone,password,farmEstate,farmLocation,farmState,farmDescription,farmDateEstablished,plotNumber,sizeHectares,sizeUnit,cropType,investmentAmount\n" +
-      "benson_oil,Olumide Benson,benson@oilpalm.com,+2348031111111,BensonSecret2026,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,Premium oil palm cultivation estate,2025-01-15,P-101,2.5,acre,Oil Palm,5000000\n" +
-      "chioma_farm,Chioma Adeleke,chioma@realestate.com,+2348052222222,ChiomaPass99,Ondo Cocoa Hills,Ondo Rural,Ondo,Organic high-yield cocoa farm estate,2024-11-01,P-102,1.2,plot,Cocoa,1800000\n" +
-      "dan_investor,Daniel Yusuf,daniel@agroworld.com,+2348123333333,,Adubiaro Oil Palm Estate,Adubiaro City,Ondo,,,P-103,3.0,acre,Oil Palm,6000000\n";
+      INVESTOR_IMPORT_CSV_TEMPLATE;
       
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -637,17 +628,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setWizardUploading(true);
       setWizardResults(null);
 
-      const res = await fetch('/api/admin/users/bulk-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ investors: parsedWizardRecords })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Unified import wizard failed');
+      const data = await reviewImport(parsedWizardRecords, { rowOffset: wizardFile?.name.toLowerCase().endsWith('.json') ? 0 : 1 });
+      if (!data) return;
 
       setWizardResults(data);
       if (data.successCount > 0) {
@@ -1337,6 +1319,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   return (
     <div id="admin-dashboard-container" className="space-y-8 animate-fade-in">
+      {reviewModal}
       {/* Upper header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium">
         <div>
@@ -2039,7 +2022,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         className="hidden"
                       />
                       <p className="text-[10px] text-stone-400 mt-1 font-mono">
-                        Requires columns: <span className="text-stone-600 font-bold">username, name, email</span> (phone and password are optional)
+                        Requires columns: <span className="text-stone-600 font-bold">name, email</span> (usernames are created from emails if blank; you review everything before it is saved)
                       </p>
                     </div>
 

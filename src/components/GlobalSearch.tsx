@@ -88,7 +88,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
       if (item.fileUrl && item.fileUrl.startsWith('#')) {
         alert(`Simulating access to document "${item.title}". Real file: ${item.fileName}`);
       } else {
-        window.open(`/api/documents/${item.id}/download?token=${token}`, '_blank');
+        window.open(`/api/documents/${item.id}/download`, '_blank'); // authenticated by the session cookie
       }
     } else if (type === 'investorPlot' || type === 'financial') {
       setActiveTab('financials');
