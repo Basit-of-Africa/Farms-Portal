@@ -280,7 +280,7 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
                 <p className="text-[11px] opacity-80 mt-1 font-mono">Published {formatDate(selectedAlert.date)}</p>
               </div>
               <button
-                _id="btn-close-modal"
+                id="btn-close-modal"
                 onClick={() => setSelectedAlert(null)}
                 className="p-1 px-1.5 hover:bg-white/10 rounded-xl text-white cursor-pointer transition min-w-[32px] min-h-[32px] flex items-center justify-center"
               >

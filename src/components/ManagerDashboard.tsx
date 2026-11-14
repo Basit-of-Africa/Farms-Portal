@@ -28,6 +28,7 @@ import {
 import { User, Farm } from '../types';
 import CommentsSection from './CommentsSection';
 import { getRelativeTime } from '../utils/time';
+import { toast } from './ui/sonner';
 
 interface ManagerDashboardProps {
   user: User;
@@ -274,7 +275,7 @@ export default function ManagerDashboard({ user, token, onSelectFarm, triggerRef
       setIsPersonalized(false);
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setUpdateLoading(false);
     }
@@ -311,7 +312,7 @@ export default function ManagerDashboard({ user, token, onSelectFarm, triggerRef
       setDocFile(null);
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setDocLoading(false);
     }
@@ -386,7 +387,7 @@ export default function ManagerDashboard({ user, token, onSelectFarm, triggerRef
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-sans font-extrabold text-xs text-[#2c3e35]/70 uppercase tracking-wider font-mono">Live Operations Feed</h2>
-                  <p className="text-[10px] text-gray-400 font-mono">Recent chronicles across your estates</p>
+                  <p className="text-[10px] text-gray-400 font-mono">Recent updates across your farms</p>
                 </div>
                 <button 
                   type="button"
@@ -771,7 +772,7 @@ export default function ManagerDashboard({ user, token, onSelectFarm, triggerRef
             <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium">
               <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-3">
                 <FileText className="text-[#1B4332] h-4.5 w-4.5" />
-                <h3 className="font-serif font-bold text-sm text-[#1B4332]">Dispatch Farm-wide Certificate / Report</h3>
+                <h3 className="font-serif font-bold text-sm text-[#1B4332]">Upload a farm document or report</h3>
               </div>
 
               {docSuccess && (
@@ -802,7 +803,7 @@ export default function ManagerDashboard({ user, token, onSelectFarm, triggerRef
                     >
                       <option value="report">Operational Report</option>
                       <option value="certificate">Ecological Certificate</option>
-                      <option value="legal">Legal Clearance</option>
+                      <option value="legal">Visibility</option>
                       <option value="other">Other / Support Document</option>
                     </select>
                   </div>

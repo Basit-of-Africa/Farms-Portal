@@ -40,6 +40,8 @@ import DashboardStats from './DashboardStats';
 import CSVDataImporter from './CSVDataImporter';
 import { parseCsvRecords, INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
 import { useImportReview } from './ImportReviewModal';
+import { toast } from './ui/sonner';
+import { useConfirm } from './ui/confirm';
 
 interface AdminDashboardProps {
   user: User;
@@ -51,6 +53,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, token, onSelectFarm, onSelectInvestor, triggerRefreshSignal, refreshSignal }: AdminDashboardProps) {
+  const confirmDialog = useConfirm();
   const { reviewImport, reviewModal } = useImportReview(token);
 
   // Stats
@@ -216,7 +219,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   const handleToggleUserActive = async (targetUser: User) => {
     if (targetUser.id === user.id) {
-      alert('You cannot deactivate your own super admin account.');
+      toast.error('You cannot deactivate your own super admin account.');
       return;
     }
 
@@ -237,17 +240,17 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       fetchStatsAndLists();
       if (triggerRefreshSignal) triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message || 'Error updating account status.');
+      toast.error(err.message || 'Error updating account status.');
     }
   };
 
   const handleDeleteUser = async (targetUser: User) => {
     if (targetUser.id === user.id) {
-      alert('You cannot delete your own super admin account.');
+      toast.error('You cannot delete your own super admin account.');
       return;
     }
 
-    if (!window.confirm(`Are you absolutely sure you want to permanently delete user "${targetUser.name}"? This action cannot be undone.`)) {
+    if (!(await confirmDialog({ title: `Delete ${targetUser.name}?`, description: 'This permanently removes the account and cannot be undone. To erase personal data while keeping legally required records, use Privacy & Data instead.', confirmText: 'Delete user', destructive: true }))) {
       return;
     }
 
@@ -267,7 +270,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       fetchStatsAndLists();
       if (triggerRefreshSignal) triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message || 'Error deleting user.');
+      toast.error(err.message || 'Error deleting user.');
     }
   };
 
@@ -437,7 +440,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setNewPassword('');
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -455,7 +458,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       try {
         const { headers, records } = parseCsvRecords(text);
         if (headers.length === 0) {
-          alert('CSV file is empty.');
+          toast.error('CSV file is empty.');
           return;
         }
         
@@ -464,14 +467,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         const hasEmail = headers.some(h => ['email', 'emailaddress'].includes(h));
         
         if (!hasName || !hasEmail) {
-          alert('CSV file must have at least "name" and "email" columns.');
+          toast.error('CSV file must have at least "name" and "email" columns.');
           return;
         }
         
         setParsedInvestors(records);
       } catch (err) {
         console.error(err);
-        alert('Failed to parse CSV file. Ensure it is a valid comma-separated format.');
+        toast.error('Failed to parse CSV file. Ensure it is a valid comma-separated format.');
       }
     };
     reader.readAsText(file);
@@ -479,7 +482,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   const handleBulkUploadInvestors = async () => {
     if (parsedInvestors.length === 0) {
-      alert('No parsed investor records to upload.');
+      toast.error('No parsed investor records to upload.');
       return;
     }
     
@@ -497,7 +500,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         triggerRefreshSignal();
       }
     } catch (err: any) {
-      alert(err.message || 'An error occurred during bulk import.');
+      toast.error(err.message || 'An error occurred during bulk import.');
     } finally {
       setBulkUploading(false);
     }
@@ -598,21 +601,21 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
           const parsed = JSON.parse(text);
           const records = Array.isArray(parsed) ? parsed : (parsed.investors || parsed.records || []);
           if (!Array.isArray(records)) {
-            alert('JSON must be an array of objects or contain a "records"/"investors" list.');
+            toast.error('JSON must be an array of objects or contain a "records"/"investors" list.');
             return;
           }
           setParsedWizardRecords(records);
         } else {
           const { headers, records } = parseCsvRecords(text);
           if (headers.length === 0) {
-            alert('CSV file is empty.');
+            toast.error('CSV file is empty.');
             return;
           }
           setParsedWizardRecords(records);
         }
       } catch (err: any) {
         console.error(err);
-        alert('Failed to parse file. Please verify format.');
+        toast.error('Failed to parse file. Please verify format.');
       }
     };
     reader.readAsText(file);
@@ -620,7 +623,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   const handleWizardSubmit = async () => {
     if (parsedWizardRecords.length === 0) {
-      alert('No parsed records to import.');
+      toast.error('No parsed records to import.');
       return;
     }
 
@@ -638,7 +641,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         triggerRefreshSignal();
       }
     } catch (err: any) {
-      alert(err.message || 'An error occurred during wizard import.');
+      toast.error(err.message || 'An error occurred during wizard import.');
     } finally {
       setWizardUploading(false);
     }
@@ -674,7 +677,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setAllocAmount('');
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -700,7 +703,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setAssignSuccessMessage(`Farm Manager successfuly linked and registered for updates.`);
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -735,7 +738,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setFinNotes('');
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -744,7 +747,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     e.preventDefault();
     setDocSuccessMessage(null);
     if (!docFile) {
-      alert('Attach a valid legal file.');
+      toast.error('Attach a valid legal file.');
       return;
     }
 
@@ -775,14 +778,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setDocFile(null);
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
   const parseAndSetCoverPhoto = (file: File) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image is customly large. Please select an image under 5MB for optimized storage.");
+      toast.error("Image is customly large. Please select an image under 5MB for optimized storage.");
       return;
     }
     const reader = new FileReader();
@@ -864,7 +867,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -882,42 +885,6 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     setFarmSuccessMessage(null);
   };
 
-  // System Db Reset Seed
-  const handleResetDb = async () => {
-    if (!window.confirm('Restore system state to pristine seed values? This deletes custom plots.')) return;
-    try {
-      const res = await fetch('/api/admin/reset-db', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        alert('Prinstine state restored.');
-        triggerRefreshSignal();
-      }
-    } catch (err) {
-      alert('Reset failed.');
-    }
-  };
-
-  // Clean Slate for Production Mode
-  const handleCleanSlate = async () => {
-    if (!window.confirm('Wipe ALL demo data (farms, plots, investments, announcements, documents, and other users) and enter Production Mode? This cannot be undone.')) return;
-    try {
-      const res = await fetch('/api/admin/clean-slate', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        alert('All demo data cleared successfully! Your database is now fresh, clean, and ready for real data.');
-        triggerRefreshSignal();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Clean slate action failed.');
-      }
-    } catch (err) {
-      alert('Action failed.');
-    }
-  };
 
   if (loading) {
     return (
@@ -1321,10 +1288,10 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     <div id="admin-dashboard-container" className="space-y-8 animate-fade-in">
       {reviewModal}
       {/* Upper header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-6 rounded-2xl border border-border shadow-sm">
         <div>
-          <h1 className="font-serif font-extrabold text-2xl text-[#1B4332] tracking-wide">Super Admin Hub</h1>
-          <p className="text-xs text-gray-400 font-mono mt-1 font-bold">Full system status & security role controller</p>
+          <h1 className="font-bold text-2xl text-foreground">Admin overview</h1>
+          <p className="text-sm text-muted-foreground mt-1">Investors, farms, payouts and documents at a glance. Database reset and go-live are under System Settings → Danger zone.</p>
         </div>
         <div className="flex gap-3 flex-wrap">
           <button
@@ -1332,21 +1299,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             className="flex items-center gap-2 px-4 py-2 border border-[#2D6A4F]/15 text-gray-600 rounded-xl text-xs font-mono font-bold cursor-pointer hover:bg-gray-50 transition shadow-sm"
           >
             <RefreshCw className="h-3.5 w-3.5 text-[#2D6A4F]" />
-            <span>Reload Portal Status</span>
-          </button>
-          <button
-            onClick={handleResetDb}
-            className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl text-xs font-mono font-bold cursor-pointer shadow-sm transition"
-          >
-            <ShieldAlert className="h-3.5 w-3.5" />
-            <span>Reset Database Seed</span>
-          </button>
-          <button
-            onClick={handleCleanSlate}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-mono font-bold cursor-pointer shadow-sm transition"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Go Live — Wipe Demo Data</span>
+            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -1354,7 +1307,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       {/* New 'Dashboard Stats' Key Performance Indicators Grid */}
       <div id="admin-dashboard-stats-section" className="space-y-4">
         <h2 className="font-sans font-extrabold text-xs text-[#2c3e35]/70 uppercase tracking-wider font-mono">
-          System Performance Analytics
+          Summary
         </h2>
         <DashboardStats stats={stats} loading={loading} />
       </div>
@@ -1404,7 +1357,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             <Sprout className="h-5.5 w-5.5" />
           </div>
           <div>
-            <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider">Deeded plots</div>
+            <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider">Allocated plots</div>
             <div className="text-lg font-bold text-[#1B4332] font-serif mt-0.5">{stats?.totalPlotsCount} <span className="text-xs text-gray-400">/ {stats?.totalFarms} Farms</span></div>
           </div>
         </div>
@@ -1713,7 +1666,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
               <form onSubmit={handleUploadDocument} className="space-y-4">
                 <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
                   <FileText className="text-[#1B4332] h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Secure Document Dispatcher</h3>
+                  <h3 className="font-sans font-bold text-sm text-gray-800">Upload a document</h3>
                 </div>
 
                 {docSuccessMessage && (
@@ -1762,7 +1715,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       <option value="certificate">Certificate</option>
                       <option value="report">Operational Report</option>
                       <option value="financial">Financial Report</option>
-                      <option value="legal">Legal clearance</option>
+                      <option value="legal">Visibility</option>
                       <option value="other">Other / Support</option>
                     </select>
                   </div>
@@ -1991,7 +1944,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         if (file && file.name.endsWith('.csv')) {
                           handleCsvSelect(file);
                         } else {
-                          alert('Please drop a valid CSV file.');
+                          toast.error('Please drop a valid CSV file.');
                         }
                       }}
                       className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer ${
@@ -2681,7 +2634,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                             <div className="flex items-center justify-between p-2.5 bg-white border border-gray-100 rounded-xl">
                               <div>
-                                <span className="text-xs font-bold text-gray-700 block">Simulate Email Dispatches</span>
+                                <span className="text-xs font-bold text-gray-700 block">Simulate emails (no real sending)</span>
                                 <span className="text-[9.5px] font-mono text-gray-400 block max-w-[200px]">Logs all Welcome & Payout alerts to outbox.</span>
                               </div>
                               <label className="relative inline-flex items-center cursor-pointer">

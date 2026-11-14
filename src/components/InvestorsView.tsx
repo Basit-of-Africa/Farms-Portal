@@ -33,6 +33,11 @@ import {
 import { User as UserType, UserRole } from '../types';
 import { parseCsvRecords, INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
 import { useImportReview } from './ImportReviewModal';
+import { ColumnDef } from '@tanstack/react-table';
+import { DataTable } from './ui/data-table';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { useConfirm } from './ui/confirm';
 
 interface InvestorsViewProps {
   user: UserType;
@@ -43,6 +48,7 @@ interface InvestorsViewProps {
 }
 
 export default function InvestorsView({ user, token, refreshSignal, triggerRefreshSignal, onSelectInvestor }: InvestorsViewProps) {
+  const confirmDialog = useConfirm();
   const { reviewImport, reviewModal } = useImportReview(token);
 
   const [investors, setInvestors] = useState<UserType[]>([]);
@@ -732,6 +738,90 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
     return matchesSearch && matchesRole;
   });
 
+  // Columns for the table view (sortable; selection is shared with the grid view)
+  const roleLabel = (role: UserRole) => (role === UserRole.ADMIN ? 'Admin' : role === UserRole.FARM_MANAGER ? 'Farm manager' : 'Investor');
+  const investorColumns: ColumnDef<UserType>[] = [
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      cell: ({ row }) => {
+        const inv = row.original;
+        const initials = inv.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase();
+        const body = (
+          <span className="flex items-center gap-3 min-w-[180px]">
+            <span className="w-9 h-9 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-bold text-xs shrink-0">{initials}</span>
+            <span className="min-w-0">
+              <span className="block font-semibold text-foreground truncate">{inv.name}</span>
+              <span className="block text-xs text-muted-foreground truncate">@{inv.username}</span>
+            </span>
+          </span>
+        );
+        return user.role === UserRole.ADMIN && onSelectInvestor && inv.role === UserRole.INVESTOR ? (
+          <button type="button" onClick={() => onSelectInvestor(inv.id)} className="text-left hover:underline cursor-pointer" title={`View ${inv.name}'s portfolio`}>
+            {body}
+          </button>
+        ) : (
+          body
+        );
+      }
+    },
+    {
+      accessorKey: 'email',
+      header: 'Contact',
+      cell: ({ row }) => (
+        <div className="min-w-[180px] space-y-0.5">
+          <div className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" /><span className="truncate max-w-[240px]">{row.original.email}</span></div>
+          {row.original.phone && <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Phone className="h-3.5 w-3.5 shrink-0" />{row.original.phone}</div>}
+        </div>
+      )
+    },
+    {
+      accessorKey: 'role',
+      header: 'Role',
+      cell: ({ getValue }) => {
+        const role = getValue() as UserRole;
+        return <Badge variant={role === UserRole.INVESTOR ? 'success' : role === UserRole.ADMIN ? 'default' : 'outline'}>{roleLabel(role)}</Badge>;
+      }
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      accessorFn: inv => (inv.isActive !== false ? 'Active' : 'Disabled'),
+      cell: ({ row }) => {
+        const inv = row.original;
+        const active = inv.isActive !== false;
+        return (
+          <button
+            type="button"
+            onClick={() => handleToggleActive(inv)}
+            className="inline-flex items-center gap-1.5 cursor-pointer"
+            title={active ? 'Disable this account' : 'Enable this account'}
+            aria-label={`${active ? 'Disable' : 'Enable'} ${inv.name}`}
+          >
+            {active ? <ToggleRight className="h-5 w-5 text-success" /> : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}
+            <Badge variant={active ? 'success' : 'muted'}>{active ? 'Active' : 'Disabled'}</Badge>
+          </button>
+        );
+      }
+    },
+    {
+      id: 'actions',
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const inv = row.original;
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="icon" onClick={() => openMessageModal(inv)} aria-label={`Message ${inv.name}`} title="Send a message"><Mail /></Button>
+            <Button variant="ghost" size="icon" onClick={() => openEditModal(inv)} aria-label={`Edit ${inv.name}`} title="Edit details"><Edit2 /></Button>
+            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => openDeleteModal(inv)} aria-label={`Delete ${inv.name}`} title="Delete account"><Trash2 /></Button>
+          </div>
+        );
+      }
+    }
+  ];
+
+
   return (
     <div className="space-y-6">
       {reviewModal}
@@ -922,7 +1012,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 text-[#52B788] animate-spin" />
-          <p className="text-xs font-mono text-gray-400">Restructuring portfolio holdings registry...</p>
+          <p className="text-xs font-mono text-gray-400">Saving…</p>
         </div>
       ) : filteredInvestors.length === 0 ? (
         <div className="py-20 bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800 text-center flex flex-col items-center justify-center p-6">
@@ -933,188 +1023,16 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
           </p>
         </div>
       ) : viewMode === 'table' ? (
-        <div className="bg-white dark:bg-stone-900 border border-[#2D6A4F]/10 dark:border-stone-800 rounded-3xl shadow-premium overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-950/40 text-gray-400 dark:text-stone-400 uppercase font-mono text-[10px] tracking-wider">
-                  <th className="py-3.5 pl-5 pr-2 w-10">
-                    <button
-                      type="button"
-                      onClick={toggleSelectAll}
-                      className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer flex items-center justify-center"
-                      title={filteredInvestors.every(inv => selectedUserIds.includes(inv.id)) ? 'Deselect all visible' : 'Select all visible'}
-                      aria-label="Toggle select all visible accounts"
-                    >
-                      {filteredInvestors.length > 0 && filteredInvestors.every(inv => selectedUserIds.includes(inv.id)) ? (
-                        <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                      ) : (
-                        <Square className="h-4 w-4 text-gray-300 dark:text-stone-600" />
-                      )}
-                    </button>
-                  </th>
-                  <th className="py-3.5 px-3 font-bold select-none">Investor / Account</th>
-                  <th className="py-3.5 px-3 font-bold select-none">Contact</th>
-                  <th className="py-3.5 px-3 font-bold select-none">Role</th>
-                  <th className="py-3.5 px-3 font-bold select-none">Status</th>
-                  <th className="py-3.5 px-3 font-bold select-none hidden xl:table-cell">Account ID</th>
-                  <th className="py-3.5 pl-3 pr-5 font-bold text-right select-none">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
-                {filteredInvestors.map((inv) => {
-                  const isSelected = selectedUserIds.includes(inv.id);
-                  const initials = inv.name
-                    .split(' ')
-                    .filter(Boolean)
-                    .map(n => n[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase();
-                  return (
-                    <tr
-                      key={inv.id}
-                      className={`transition-colors ${
-                        isSelected
-                          ? 'bg-emerald-50/40 dark:bg-emerald-950/20'
-                          : 'hover:bg-[#FBF9F4]/60 dark:hover:bg-stone-800/40'
-                      }`}
-                    >
-                      <td className="py-3.5 pl-5 pr-2 align-middle">
-                        <button
-                          type="button"
-                          onClick={() => toggleSelectUser(inv.id)}
-                          className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer flex items-center justify-center"
-                          title={isSelected ? 'Deselect user' : 'Select user for batch operations'}
-                          aria-label={`Select ${inv.name}`}
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          ) : (
-                            <Square className="h-4 w-4 text-gray-300 dark:text-stone-600 shrink-0" />
-                          )}
-                        </button>
-                      </td>
-                      <td className="py-3.5 px-3 align-middle">
-                        {user.role === UserRole.ADMIN && onSelectInvestor && inv.role === UserRole.INVESTOR ? (
-                          <button
-                            type="button"
-                            onClick={() => onSelectInvestor(inv.id)}
-                            className="flex items-center gap-3 min-w-[180px] text-left group/profile cursor-pointer"
-                            title={`View ${inv.name}'s portfolio & returns`}
-                          >
-                            <div className="w-9 h-9 rounded-full bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] text-[#1B4332] dark:text-[#52B788] group-hover/profile:text-white flex items-center justify-center font-bold text-[11px] shrink-0 transition-colors">
-                              {initials}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-sans font-bold text-xs text-gray-800 dark:text-stone-100 group-hover/profile:text-[#2D6A4F] dark:group-hover/profile:text-[#52B788] group-hover/profile:underline truncate transition-colors">
-                                {inv.name}
-                              </p>
-                              <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
-                            </div>
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-3 min-w-[180px]">
-                            <div className="w-9 h-9 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-[11px] shrink-0">
-                              {initials}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-sans font-bold text-xs text-gray-800 dark:text-stone-100 truncate">
-                                {inv.name}
-                              </p>
-                              <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-3 align-middle">
-                        <div className="space-y-1 min-w-[180px]">
-                          <div className="flex items-center gap-1.5 text-gray-700 dark:text-stone-300">
-                            <Mail className="h-3 w-3 text-gray-400 shrink-0" />
-                            <span className="truncate max-w-[220px]">{inv.email}</span>
-                          </div>
-                          {inv.phone && (
-                            <div className="flex items-center gap-1.5 text-gray-500 dark:text-stone-400 text-[11px]">
-                              <Phone className="h-3 w-3 text-gray-400 shrink-0" />
-                              <span>{inv.phone}</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3 align-middle whitespace-nowrap">
-                        <span
-                          className={`inline-block text-[9px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border ${
-                            inv.role === UserRole.ADMIN
-                              ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800/40'
-                              : inv.role === UserRole.FARM_MANAGER
-                              ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/40'
-                              : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40'
-                          }`}
-                        >
-                          {inv.role.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3 align-middle whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleActive(inv)}
-                          title={inv.isActive !== false ? 'Deactivate Profile' : 'Activate Profile'}
-                          className="inline-flex items-center gap-1.5 cursor-pointer group"
-                        >
-                          {inv.isActive !== false ? (
-                            <ToggleRight className="h-5 w-5 text-emerald-500 group-hover:text-emerald-600 transition" />
-                          ) : (
-                            <ToggleLeft className="h-5 w-5 text-gray-400 group-hover:text-gray-500 transition" />
-                          )}
-                          <span
-                            className={`text-[8.5px] font-mono font-extrabold px-2 py-0.5 rounded-full border ${
-                              inv.isActive !== false
-                                ? 'bg-emerald-50/60 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/20'
-                                : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-700'
-                            }`}
-                          >
-                            {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
-                          </span>
-                        </button>
-                      </td>
-                      <td className="py-3.5 px-3 align-middle hidden xl:table-cell">
-                        <span className="text-[10px] font-mono text-gray-400">{inv.id}</span>
-                      </td>
-                      <td className="py-3.5 pl-3 pr-5 align-middle text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => openMessageModal(inv)}
-                            className="p-2 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/40 rounded-xl transition cursor-pointer"
-                            title="Message / Mail Investor"
-                          >
-                            <Mail className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(inv)}
-                            className="p-2 bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] hover:bg-[#52B788]/20 rounded-xl transition cursor-pointer"
-                            title="Modify Details"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openDeleteModal(inv)}
-                            className="p-2 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 rounded-xl transition cursor-pointer"
-                            title="Permanently Remove Profile"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DataTable
+          columns={investorColumns}
+          data={filteredInvestors}
+          hideSearch
+          pageSize={50}
+          getRowId={inv => inv.id}
+          selectedIds={selectedUserIds}
+          onSelectedIdsChange={setSelectedUserIds}
+          emptyMessage="No accounts match your filters."
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredInvestors.map((inv) => {
@@ -1694,7 +1612,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   className="px-4 py-2 bg-[#1B4332] text-white hover:bg-[#2D6A4F] rounded-xl text-xs font-bold shadow-md cursor-pointer flex items-center gap-1"
                 >
                   {actionLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-                  <span>Dispatch Message</span>
+                  <span>Send message</span>
                 </button>
               </div>
             </form>
@@ -1722,7 +1640,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
               {/* Instructions and Template Download */}
               <div className="p-4 bg-stone-50 dark:bg-stone-850 border border-gray-150 dark:border-stone-800 rounded-2xl text-xs space-y-2.5">
-                <p className="font-semibold text-gray-700 dark:text-stone-300">CSV Bulk Upload Protocol:</p>
+                <p className="font-semibold text-gray-700 dark:text-stone-300">How the CSV upload works:</p>
                 <p className="text-gray-500 dark:text-stone-400 leading-relaxed">
                   Import multiple investors at once by uploading a standard comma-separated values (CSV) file. 
                   The CSV header must strictly contain <code className="bg-stone-200 dark:bg-stone-800 px-1 py-0.5 rounded text-red-700 dark:text-red-400 font-mono">username</code>, 
@@ -1918,8 +1836,8 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               {/* Email fresh login details (e.g. after an import without welcome emails) */}
               {user.role === UserRole.ADMIN && (
                 <button
-                  onClick={() => {
-                    if (confirm(`Email new temporary login details to the ${selectedUserIds.length} selected user(s)? Any password they currently use will stop working.`)) {
+                  onClick={async () => {
+                    if (await confirmDialog({ title: `Send login details to ${selectedUserIds.length} user(s)?`, description: 'Each person gets a new temporary password by email. Any password they use now stops working.', confirmText: 'Send login details' })) {
                       handleBulkAction('send-login-details');
                     }
                   }}
@@ -1933,8 +1851,8 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
               {/* Disable Accounts */}
               <button
-                onClick={() => {
-                  if (confirm(`Are you sure you want to disable accounts for the ${selectedUserIds.length} selected users?`)) {
+                onClick={async () => {
+                  if (await confirmDialog({ title: `Disable ${selectedUserIds.length} account(s)?`, description: 'They will not be able to sign in until re-enabled.', confirmText: 'Disable', destructive: true })) {
                     handleBulkAction('disable-account');
                   }
                 }}
@@ -1960,10 +1878,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               {/* Update Role Select/Dropdown */}
               <div className="relative">
                 <select
-                  onChange={(e) => {
-                    const selectedRole = e.target.value;
+                  onChange={async (e) => {
+                    const select = e.target;
+                    const selectedRole = select.value;
                     if (selectedRole) {
-                      if (confirm(`Change authorization roles to "${selectedRole}" for all ${selectedUserIds.length} selected users?`)) {
+                      select.value = '';
+                      if (await confirmDialog({ title: `Change role for ${selectedUserIds.length} user(s)?`, description: `Their role becomes "${selectedRole.replace('_', ' ')}".`, confirmText: 'Change role' })) {
                         handleBulkAction('update-role', selectedRole);
                       }
                       e.target.value = ''; // Reset select dropdown

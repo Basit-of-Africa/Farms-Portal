@@ -7,6 +7,11 @@ import React, { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { User } from '../types';
 import { PrivacyNoticeContent, PrivacyNoticeData } from './PrivacyNotice';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
+import { Label } from './ui/label';
+import { FormError } from './ui/form';
 
 interface Props {
   token: string;
@@ -44,37 +49,42 @@ export default function PrivacyAcknowledgeModal({ token, notice, isUpdate, onAck
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div role="dialog" aria-modal="true" aria-labelledby="privacy-ack-title" className="bg-white dark:bg-stone-900 rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] text-stone-800 dark:text-stone-100">
-        <div className="p-6 pb-3 flex items-center gap-3 border-b border-stone-100 dark:border-stone-800">
-          <ShieldCheck className="h-6 w-6 text-[#2D6A4F] dark:text-emerald-400" />
-          <h2 id="privacy-ack-title" className="font-bold text-lg text-[#1B4332] dark:text-emerald-400">
-            {isUpdate ? 'Our privacy notice has changed' : 'How we use your personal data'}
-          </h2>
-        </div>
-        <div className="p-6 overflow-y-auto flex-1">
+    <Dialog open>
+      <DialogContent
+        hideClose
+        className="max-w-2xl p-0 gap-0"
+        onEscapeKeyDown={e => e.preventDefault()}
+        onPointerDownOutside={e => e.preventDefault()}
+        onInteractOutside={e => e.preventDefault()}
+      >
+        <DialogHeader className="p-6 pb-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="h-6 w-6 text-primary" aria-hidden="true" />
+            <DialogTitle id="privacy-ack-title">{isUpdate ? 'Our privacy notice has changed' : 'How we use your personal data'}</DialogTitle>
+          </div>
+          <DialogDescription>Please read this notice before continuing to the portal.</DialogDescription>
+        </DialogHeader>
+        <div className="p-6 overflow-y-auto flex-1 min-h-0">
           <PrivacyNoticeContent notice={notice} />
         </div>
-        <div className="p-6 pt-4 border-t border-stone-100 dark:border-stone-800 space-y-3">
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <label className="flex items-start gap-3 text-sm cursor-pointer">
-            <input type="checkbox" className="mt-1 h-4 w-4" checked={read} onChange={e => setRead(e.target.checked)} />
-            <span>I have read and understood this privacy notice.</span>
-          </label>
-          <label className="flex items-start gap-3 text-sm cursor-pointer">
-            <input type="checkbox" className="mt-1 h-4 w-4" checked={marketing} onChange={e => setMarketing(e.target.checked)} />
-            <span>Optional: send me news about new investment opportunities and offers. I can withdraw this at any time.</span>
-          </label>
-          <div className="flex flex-col sm:flex-row gap-3 pt-1">
-            <button onClick={submit} disabled={!read || busy} className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold bg-[#1B4332] hover:bg-[#2D6A4F] text-white disabled:opacity-50 cursor-pointer">
-              Continue
-            </button>
-            <button onClick={onLogout} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 cursor-pointer">
-              Log out
-            </button>
+        <div className="p-6 pt-4 border-t border-border flex flex-col gap-3">
+          <FormError message={error} />
+          <div className="flex items-start gap-3">
+            <Checkbox id="ack-read" checked={read} onCheckedChange={v => setRead(!!v)} className="mt-0.5" />
+            <Label htmlFor="ack-read" className="leading-snug cursor-pointer">I have read and understood this privacy notice.</Label>
           </div>
+          <div className="flex items-start gap-3">
+            <Checkbox id="ack-marketing" checked={marketing} onCheckedChange={v => setMarketing(!!v)} className="mt-0.5" />
+            <Label htmlFor="ack-marketing" className="leading-snug font-normal cursor-pointer">
+              Optional: send me news about new investment opportunities and offers. I can withdraw this at any time.
+            </Label>
+          </div>
+          <DialogFooter className="pt-1">
+            <Button variant="outline" onClick={onLogout}>Log out</Button>
+            <Button onClick={submit} disabled={!read || busy}>Continue</Button>
+          </DialogFooter>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -278,7 +278,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
               <Users className="h-5 w-5 text-[#2D6A4F]" />
               <span>Compose Investor Broadcast Notification</span>
             </h3>
-            <p className="text-xs text-gray-500 font-mono mt-0.5">Dispatches emails, files attachments, and creates direct message system notifications for all selected investors in real-time</p>
+            <p className="text-xs text-gray-500 font-mono mt-0.5">Sends an email (with any attachment) and an in-portal notification to each selected investor</p>
           </div>
 
           {broadcastSuccess && (
@@ -286,7 +286,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
               <div className="font-sans">
                 <p className="font-bold">{broadcastSuccess}</p>
-                <p className="text-[10px] text-emerald-600 mt-0.5 font-mono">Redirecting you to outbox logs to inspect dispatches...</p>
+                <p className="text-[10px] text-emerald-600 mt-0.5 font-mono">Opening the sent emails log…</p>
               </div>
             </div>
           )}
@@ -683,7 +683,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                           <div className="flex items-start gap-2.5">
                             <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
-                              <h4 className="text-xs font-extrabold text-red-800 uppercase tracking-wider font-sans">Email Dispatch Error Details</h4>
+                              <h4 className="text-xs font-extrabold text-red-800 uppercase tracking-wider font-sans">Why the email failed</h4>
                               <p className="text-[10.5px] text-red-700 leading-normal font-mono break-all bg-white border border-red-100 p-2.5 rounded-lg">{selectedEmail.deliveryError}</p>
                             </div>
                           </div>
@@ -710,7 +710,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-left">
                           <div className="flex items-center gap-2 text-[10.5px] text-emerald-800 font-medium font-sans">
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                            <span>Real dispatch completed successfully through your configured active provider channel!</span>
+                            <span>Email sent successfully.</span>
                           </div>
                         </div>
                       )}

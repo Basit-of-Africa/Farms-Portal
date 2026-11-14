@@ -9,10 +9,34 @@
  *    breach register (72-hour clock) and privacy configuration.
  */
 
-import React, { useEffect, useState } from 'react';
-import { Download, ShieldCheck, FileText, AlertTriangle, ScrollText, Settings2, Inbox } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ColumnDef } from '@tanstack/react-table';
+import { Download, ShieldCheck, FileText, AlertTriangle, ScrollText, Settings2, Inbox, Loader2 } from 'lucide-react';
 import { User, UserRole, DataSubjectRequest, DataSubjectRequestType, AuditLogEntry, BreachIncident, PrivacySettings } from '../types';
+import {
+  profileSchema,
+  ProfileInput,
+  dataRequestSchema,
+  DataRequestInput,
+  breachSchema,
+  BreachInput,
+  privacySettingsSchema,
+  PrivacySettingsInput
+} from '../lib/schemas';
 import { usePrivacyNotice } from './PrivacyNotice';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Input, NativeSelect, Textarea } from './ui/input';
+import { Checkbox } from './ui/checkbox';
+import { Label } from './ui/label';
+import { Badge } from './ui/badge';
+import { FormField } from './ui/form';
+import { DataTable } from './ui/data-table';
+import { useConfirm, usePrompt } from './ui/confirm';
+import { toast } from './ui/sonner';
 
 interface PrivacyCenterProps {
   user: User;
@@ -21,249 +45,256 @@ interface PrivacyCenterProps {
 }
 
 const REQUEST_TYPES: Array<{ value: DataSubjectRequestType; label: string; hint: string }> = [
-  { value: 'access', label: 'Access to my data', hint: 'Tip: "Download my data" above gives you an instant copy.' },
-  { value: 'rectification', label: 'Correct my data', hint: 'Tell us what is wrong (you can edit your contact details above yourself).' },
+  { value: 'access', label: 'Access to my data', hint: 'Tip: "Download my data" gives you an instant copy.' },
+  { value: 'rectification', label: 'Correct my data', hint: 'Tell us what is wrong. You can edit your contact details yourself.' },
   { value: 'erasure', label: 'Erase my data', hint: 'Your account will be closed. Records the law requires us to keep are retained without your contact details.' },
   { value: 'restriction', label: 'Restrict processing', hint: 'Ask us to stop using your data while an issue is resolved.' },
   { value: 'objection', label: 'Object to processing', hint: 'Object to processing based on our legitimate interests.' },
   { value: 'portability', label: 'Data portability', hint: 'Ask us to send your data to another organisation.' },
-  { value: 'withdraw_consent', label: 'Withdraw consent', hint: 'You can also switch off promotional messages above.' },
+  { value: 'withdraw_consent', label: 'Withdraw consent', hint: 'You can also switch off promotional messages yourself.' },
   { value: 'other', label: 'Other privacy question', hint: '' }
 ];
 const typeLabel = (t: string) => REQUEST_TYPES.find(r => r.value === t)?.label || t;
-
-const card = 'bg-white dark:bg-stone-900 border border-[#2D6A4F]/10 dark:border-stone-800 rounded-2xl p-5 md:p-6 shadow-sm';
-const input = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]/30';
-const btn = 'px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#1B4332] hover:bg-[#2D6A4F] text-white disabled:opacity-60 cursor-pointer';
-const btnSecondary = 'px-3 py-2 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 cursor-pointer';
 const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');
+const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '—');
 
-function statusBadge(status: string) {
-  const color =
-    status === 'completed' || status === 'closed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-    : status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
-    : status === 'in_progress' || status === 'contained' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-    : 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300';
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${color}`}>{status.replace('_', ' ')}</span>;
+function StatusBadge({ status }: { status: string }) {
+  const variant =
+    status === 'completed' || status === 'closed' ? 'success' : status === 'rejected' ? 'destructive' : status === 'in_progress' || status === 'contained' ? 'warning' : 'muted';
+  return <Badge variant={variant}>{status.replace('_', ' ')}</Badge>;
+}
+
+/** fetch wrapper that throws the server's error message */
+function useApi(token: string) {
+  return async (url: string, method = 'GET', body?: unknown) => {
+    const res = await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  };
 }
 
 export default function PrivacyCenter({ user, token, onUserUpdated }: PrivacyCenterProps) {
   const isAdmin = user.role === UserRole.ADMIN;
-  const [tab, setTab] = useState<'mine' | 'requests' | 'audit' | 'breaches' | 'settings'>('mine');
-  const auth = { Authorization: `Bearer ${token}` };
-  const jsonHeaders = { ...auth, 'Content-Type': 'application/json' };
-
-  const tabs = [
-    { id: 'mine', label: 'My privacy', icon: ShieldCheck },
-    ...(isAdmin
-      ? [
-          { id: 'requests', label: 'Requests', icon: Inbox },
-          { id: 'audit', label: 'Audit log', icon: ScrollText },
-          { id: 'breaches', label: 'Breaches', icon: AlertTriangle },
-          { id: 'settings', label: 'Settings', icon: Settings2 }
-        ]
-      : [])
-  ] as const;
+  const api = useApi(token);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-bold text-2xl text-[#1B4332] dark:text-white">Privacy &amp; Data</h1>
-        <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
+        <h1 className="font-bold text-2xl text-foreground">Privacy &amp; Data</h1>
+        <p className="text-sm text-muted-foreground mt-1">
           Your rights under the Nigeria Data Protection Act 2023 and other data protection laws.{' '}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#2D6A4F] dark:text-emerald-400 underline">Read the privacy notice</a>
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary font-semibold underline underline-offset-4">
+            Read the privacy notice
+          </a>
         </p>
       </div>
 
-      {tabs.length > 1 && (
-        <div className="flex flex-wrap gap-2" role="tablist">
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              onClick={() => setTab(t.id as any)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer border ${
-                tab === t.id ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-700'
-              }`}
-            >
-              <t.icon className="h-3.5 w-3.5" /> {t.label}
-            </button>
-          ))}
-        </div>
+      {isAdmin ? (
+        <Tabs defaultValue="mine">
+          <TabsList>
+            <TabsTrigger value="mine"><ShieldCheck /> My privacy</TabsTrigger>
+            <TabsTrigger value="requests"><Inbox /> Requests</TabsTrigger>
+            <TabsTrigger value="audit"><ScrollText /> Audit log</TabsTrigger>
+            <TabsTrigger value="breaches"><AlertTriangle /> Breaches</TabsTrigger>
+            <TabsTrigger value="settings"><Settings2 /> Settings</TabsTrigger>
+          </TabsList>
+          <TabsContent value="mine"><MyPrivacy user={user} api={api} token={token} onUserUpdated={onUserUpdated} /></TabsContent>
+          <TabsContent value="requests"><AdminRequests api={api} /></TabsContent>
+          <TabsContent value="audit"><AuditLog api={api} /></TabsContent>
+          <TabsContent value="breaches"><Breaches api={api} /></TabsContent>
+          <TabsContent value="settings"><PrivacySettingsForm api={api} /></TabsContent>
+        </Tabs>
+      ) : (
+        <MyPrivacy user={user} api={api} token={token} onUserUpdated={onUserUpdated} />
       )}
-
-      {tab === 'mine' && <MyPrivacy user={user} auth={auth} jsonHeaders={jsonHeaders} onUserUpdated={onUserUpdated} />}
-      {tab === 'requests' && isAdmin && <AdminRequests jsonHeaders={jsonHeaders} auth={auth} />}
-      {tab === 'audit' && isAdmin && <AuditLog auth={auth} />}
-      {tab === 'breaches' && isAdmin && <Breaches auth={auth} jsonHeaders={jsonHeaders} />}
-      {tab === 'settings' && isAdmin && <PrivacySettingsForm auth={auth} jsonHeaders={jsonHeaders} />}
     </div>
   );
 }
+
+type Api = ReturnType<typeof useApi>;
 
 // ---------------------------------------------------------------------------
 // Self-service
 // ---------------------------------------------------------------------------
 
-function MyPrivacy({ user, auth, jsonHeaders, onUserUpdated }: { user: User; auth: any; jsonHeaders: any; onUserUpdated: (u: User) => void }) {
+function MyPrivacy({ user, api, token, onUserUpdated }: { user: User; api: Api; token: string; onUserUpdated: (u: User) => void }) {
   const notice = usePrivacyNotice();
-  const [profile, setProfile] = useState({ name: user.name, email: user.email, phone: user.phone || '' });
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const confirmDialog = useConfirm();
   const [requests, setRequests] = useState<DataSubjectRequest[]>([]);
-  const [reqType, setReqType] = useState<DataSubjectRequestType>('access');
-  const [reqDetails, setReqDetails] = useState('');
-  const [busy, setBusy] = useState(false);
 
-  const loadRequests = () =>
-    fetch('/api/privacy/requests', { headers: auth }).then(r => (r.ok ? r.json() : [])).then(setRequests).catch(() => {});
-  useEffect(() => { loadRequests(); }, []);
+  const profileForm = useForm<ProfileInput>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: { name: user.name, email: user.email, phone: user.phone || '' }
+  });
+  const requestForm = useForm<DataRequestInput>({ resolver: zodResolver(dataRequestSchema), defaultValues: { type: 'access', details: '' } });
+  const reqType = requestForm.watch('type');
 
-  const call = async (url: string, method: string, body?: any) => {
-    const res = await fetch(url, { method, headers: jsonHeaders, body: body ? JSON.stringify(body) : undefined });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    return data;
-  };
+  const loadRequests = () => api('/api/privacy/requests').then(setRequests).catch(() => {});
+  useEffect(() => {
+    loadRequests();
+  }, []);
 
-  const saveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
+  const saveProfile = async (values: ProfileInput) => {
     try {
-      const data = await call('/api/privacy/profile', 'PUT', profile);
+      const data = await api('/api/privacy/profile', 'PUT', values);
       onUserUpdated(data.user);
-      setMessage({ ok: true, text: 'Your details were updated.' });
+      toast.success('Your details were updated.');
     } catch (err: any) {
-      setMessage({ ok: false, text: err.message });
-    } finally {
-      setBusy(false);
+      toast.error(err.message);
     }
   };
 
   const toggleMarketing = async (consent: boolean) => {
     try {
-      const data = await call('/api/privacy/marketing-consent', 'PUT', { consent });
+      const data = await api('/api/privacy/marketing-consent', 'PUT', { consent });
       onUserUpdated(data.user);
-      setMessage({ ok: true, text: consent ? 'You opted in to promotional messages.' : 'You will no longer receive promotional messages.' });
+      toast.success(consent ? 'You opted in to promotional messages.' : 'You will no longer receive promotional messages.');
     } catch (err: any) {
-      setMessage({ ok: false, text: err.message });
+      toast.error(err.message);
     }
   };
 
   const downloadData = async () => {
     try {
-      const res = await fetch('/api/privacy/my-data', { headers: auth });
+      const res = await fetch('/api/privacy/my-data', { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('Could not prepare your data export.');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
       a.href = url;
       a.download = `my-personal-data-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      setMessage({ ok: false, text: err.message });
+      toast.error(err.message);
     }
   };
 
-  const submitRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (reqType === 'erasure' && !window.confirm('Erasure closes your account. Records the law requires us to keep are retained without your contact details. Continue?')) return;
-    setBusy(true);
+  const submitRequest = async (values: DataRequestInput) => {
+    if (values.type === 'erasure') {
+      const ok = await confirmDialog({
+        title: 'Ask us to erase your data?',
+        description: 'Your account will be closed. Records the law requires us to keep (contracts, financial records) are retained without your contact details.',
+        confirmText: 'Submit erasure request',
+        destructive: true
+      });
+      if (!ok) return;
+    }
     try {
-      const r = await call('/api/privacy/requests', 'POST', { type: reqType, details: reqDetails });
-      setReqDetails('');
-      setMessage({ ok: true, text: `Request submitted. We will respond by ${new Date(r.dueAt).toLocaleDateString()}.` });
+      const r = await api('/api/privacy/requests', 'POST', values);
+      requestForm.reset({ type: values.type, details: '' });
+      toast.success(`Request submitted. We will respond by ${fmtDate(r.dueAt)}.`);
       loadRequests();
     } catch (err: any) {
-      setMessage({ ok: false, text: err.message });
-    } finally {
-      setBusy(false);
+      toast.error(err.message);
     }
   };
 
-  const hint = REQUEST_TYPES.find(r => r.value === reqType)?.hint;
-
+  const pErr = profileForm.formState.errors;
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      {message && (
-        <div className={`lg:col-span-2 p-3 rounded-xl text-sm font-medium ${message.ok ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'}`}>
-          {message.text}
-        </div>
-      )}
-
-      <div className={card}>
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mb-3 flex items-center gap-2"><FileText className="h-4 w-4" /> Privacy notice</h2>
-        <p className="text-sm text-stone-600 dark:text-stone-300">
-          {user.privacy?.noticeAcknowledgedAt
-            ? <>You acknowledged version {user.privacy.noticeVersion} on {fmt(user.privacy.noticeAcknowledgedAt)}.</>
-            : 'You have not acknowledged the privacy notice yet.'}
-          {notice && notice.noticeVersion !== user.privacy?.noticeVersion && <> The current version is {notice.noticeVersion}.</>}
-        </p>
-        <a href="/privacy" target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm font-semibold text-[#2D6A4F] dark:text-emerald-400 underline">Open the privacy notice</a>
-
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mt-6 mb-3">Promotional messages</h2>
-        <label className="flex items-start gap-3 text-sm text-stone-600 dark:text-stone-300 cursor-pointer">
-          <input type="checkbox" className="mt-1 h-4 w-4" checked={!!user.privacy?.marketingConsent} onChange={e => toggleMarketing(e.target.checked)} />
-          <span>Send me news about new investment opportunities and offers. Account, investment and payout messages are always sent.</span>
-        </label>
-
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mt-6 mb-3">Your data</h2>
-        <button onClick={downloadData} className={`${btn} inline-flex items-center gap-2`}>
-          <Download className="h-4 w-4" /> Download my data (JSON)
-        </button>
-      </div>
-
-      <form onSubmit={saveProfile} className={card}>
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mb-3">Correct your contact details</h2>
-        <div className="space-y-3">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" /> Privacy notice</CardTitle>
+          <CardDescription>
+            {user.privacy?.noticeAcknowledgedAt
+              ? `You acknowledged version ${user.privacy.noticeVersion} on ${fmt(user.privacy.noticeAcknowledgedAt)}.`
+              : 'You have not acknowledged the privacy notice yet.'}
+            {notice && notice.noticeVersion !== user.privacy?.noticeVersion && ` The current version is ${notice.noticeVersion}.`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6">
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary underline underline-offset-4">
+            Open the privacy notice
+          </a>
           <div>
-            <label htmlFor="pv-name" className="block text-xs font-semibold text-stone-500 mb-1">Full name</label>
-            <input id="pv-name" className={input} value={profile.name} onChange={e => setProfile({ ...profile, name: e.target.value })} required />
+            <h3 className="font-semibold text-sm mb-2">Promotional messages</h3>
+            <div className="flex items-start gap-3">
+              <Checkbox id="marketing" checked={!!user.privacy?.marketingConsent} onCheckedChange={v => toggleMarketing(!!v)} className="mt-0.5" />
+              <Label htmlFor="marketing" className="font-normal leading-snug cursor-pointer">
+                Send me news about new investment opportunities and offers. Account, investment and payout messages are always sent.
+              </Label>
+            </div>
           </div>
           <div>
-            <label htmlFor="pv-email" className="block text-xs font-semibold text-stone-500 mb-1">Email</label>
-            <input id="pv-email" type="email" className={input} value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
+            <h3 className="font-semibold text-sm mb-2">Your data</h3>
+            <Button onClick={downloadData}><Download /> Download my data (JSON)</Button>
           </div>
-          <div>
-            <label htmlFor="pv-phone" className="block text-xs font-semibold text-stone-500 mb-1">Phone</label>
-            <input id="pv-phone" className={input} value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} />
-          </div>
-          <button type="submit" disabled={busy} className={btn}>Save details</button>
-        </div>
-      </form>
+        </CardContent>
+      </Card>
 
-      <form onSubmit={submitRequest} className={card}>
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mb-3">Make a privacy request</h2>
-        <div className="space-y-3">
-          <select aria-label="Request type" className={input} value={reqType} onChange={e => setReqType(e.target.value as DataSubjectRequestType)}>
-            {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          {hint && <p className="text-xs text-stone-500">{hint}</p>}
-          <textarea aria-label="Request details" className={input} rows={3} placeholder="Details (optional)" value={reqDetails} onChange={e => setReqDetails(e.target.value)} />
-          <button type="submit" disabled={busy} className={btn}>Submit request</button>
-        </div>
-      </form>
+      <Card>
+        <CardHeader>
+          <CardTitle>Correct your contact details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={profileForm.handleSubmit(saveProfile)} className="flex flex-col gap-4" noValidate>
+            <FormField id="pv-name" label="Full name" error={pErr.name}>
+              <Input autoComplete="name" {...profileForm.register('name')} />
+            </FormField>
+            <FormField id="pv-email" label="Email" error={pErr.email}>
+              <Input type="email" autoComplete="email" {...profileForm.register('email')} />
+            </FormField>
+            <FormField id="pv-phone" label="Phone" error={pErr.phone} hint="Include the country code, e.g. +234 803 000 0000.">
+              <Input type="tel" autoComplete="tel" {...profileForm.register('phone')} />
+            </FormField>
+            <div>
+              <Button type="submit" disabled={profileForm.formState.isSubmitting}>Save details</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-      <div className={card}>
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mb-3">Your requests</h2>
-        {requests.length === 0 ? (
-          <p className="text-sm text-stone-500">No requests yet.</p>
-        ) : (
-          <ul className="divide-y divide-stone-100 dark:divide-stone-800">
-            {requests.map(r => (
-              <li key={r.id} className="py-2.5 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{typeLabel(r.type)}</span>
-                  {statusBadge(r.status)}
-                </div>
-                <p className="text-xs text-stone-500 mt-0.5">Submitted {fmt(r.createdAt)} · Due {new Date(r.dueAt).toLocaleDateString()}</p>
-                {r.resolutionNote && <p className="text-xs text-stone-600 dark:text-stone-300 mt-1">{r.resolutionNote}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Make a privacy request</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={requestForm.handleSubmit(submitRequest)} className="flex flex-col gap-4" noValidate>
+            <FormField id="dsr-type" label="What would you like us to do?" hint={REQUEST_TYPES.find(r => r.value === reqType)?.hint || undefined}>
+              <NativeSelect {...requestForm.register('type')}>
+                {REQUEST_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </NativeSelect>
+            </FormField>
+            <FormField id="dsr-details" label="Details (optional)" error={requestForm.formState.errors.details}>
+              <Textarea rows={3} {...requestForm.register('details')} />
+            </FormField>
+            <div>
+              <Button type="submit" disabled={requestForm.formState.isSubmitting}>Submit request</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Your requests</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {requests.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No requests yet.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {requests.map(r => (
+                <li key={r.id} className="py-3 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">{typeLabel(r.type)}</span>
+                    <StatusBadge status={r.status} />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">Submitted {fmt(r.createdAt)} · Due {fmtDate(r.dueAt)}</p>
+                  {r.resolutionNote && <p className="text-sm mt-1">{r.resolutionNote}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -272,66 +303,125 @@ function MyPrivacy({ user, auth, jsonHeaders, onUserUpdated }: { user: User; aut
 // Admin: request queue
 // ---------------------------------------------------------------------------
 
-function AdminRequests({ jsonHeaders, auth }: { jsonHeaders: any; auth: any }) {
-  const [requests, setRequests] = useState<Array<DataSubjectRequest & { userName?: string; userEmail?: string }>>([]);
-  const [error, setError] = useState<string | null>(null);
-  const load = () => fetch('/api/privacy/requests', { headers: auth }).then(r => r.json()).then(setRequests).catch(() => {});
-  useEffect(() => { load(); }, []);
+type AdminRequest = DataSubjectRequest & { userName?: string; userEmail?: string };
 
-  const resolve = async (r: DataSubjectRequest, status: string) => {
-    const note = status === 'in_progress' ? '' : window.prompt(status === 'rejected' ? 'Reason for rejecting (sent to the person):' : 'Note to the person (optional):') ?? null;
-    if (note === null) return;
-    const res = await fetch(`/api/privacy/requests/${r.id}/resolve`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ status, note }) });
-    const data = await res.json();
-    if (!res.ok) setError(data.error); else { setError(null); load(); }
+function AdminRequests({ api }: { api: Api }) {
+  const confirmDialog = useConfirm();
+  const prompt = usePrompt();
+  const [requests, setRequests] = useState<AdminRequest[]>([]);
+  const load = () => api('/api/privacy/requests').then(setRequests).catch(() => {});
+  useEffect(() => {
+    load();
+  }, []);
+
+  const resolve = async (r: AdminRequest, status: 'in_progress' | 'completed' | 'rejected') => {
+    let note = '';
+    if (status !== 'in_progress') {
+      const answer = await prompt({
+        title: status === 'rejected' ? 'Reject this request?' : 'Mark this request as completed?',
+        description: 'Your note is emailed to the person, together with how to complain to the NDPC.',
+        label: status === 'rejected' ? 'Reason for rejecting' : 'Note to the person (optional)',
+        multiline: true,
+        required: status === 'rejected',
+        confirmText: status === 'rejected' ? 'Reject request' : 'Mark completed'
+      });
+      if (answer === null) return;
+      note = answer;
+    }
+    try {
+      await api(`/api/privacy/requests/${r.id}/resolve`, 'POST', { status, note });
+      toast.success('Request updated.');
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
-  const erase = async (r: DataSubjectRequest & { userName?: string }) => {
-    const username = window.prompt(`Erase all personal data of ${r.userName}? This cannot be undone. Type their username to confirm:`);
-    if (!username) return;
-    const res = await fetch(`/api/admin/privacy/users/${r.userId}/anonymise`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ confirm: username }) });
-    const data = await res.json();
-    if (!res.ok) setError(data.error); else { setError(null); load(); }
+  const erase = async (r: AdminRequest) => {
+    const users = await api('/api/admin/users').catch(() => []);
+    const username = users.find((u: User) => u.id === r.userId)?.username;
+    if (!username) return toast.error('User not found.');
+    const ok = await confirmDialog({
+      title: `Erase all personal data of ${r.userName}?`,
+      description: 'Their account is closed and their identity removed. Contracts and financial records are kept without identifiers. This cannot be undone.',
+      confirmText: 'Erase data',
+      destructive: true,
+      requireText: username
+    });
+    if (!ok) return;
+    try {
+      await api(`/api/admin/privacy/users/${r.userId}/anonymise`, 'POST', { confirm: username });
+      toast.success('Personal data erased.');
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
   const now = Date.now();
+  const columns = useMemo<ColumnDef<AdminRequest>[]>(
+    () => [
+      {
+        accessorKey: 'userName',
+        header: 'Person',
+        cell: ({ row }) => (
+          <div>
+            <div className="font-semibold">{row.original.userName || row.original.userId}</div>
+            <div className="text-xs text-muted-foreground">{row.original.userEmail}</div>
+          </div>
+        )
+      },
+      {
+        accessorKey: 'type',
+        header: 'Request',
+        cell: ({ row }) => (
+          <div className="max-w-xs whitespace-normal">
+            <div>{typeLabel(row.original.type)}</div>
+            {row.original.details && <div className="text-xs text-muted-foreground">{row.original.details}</div>}
+          </div>
+        )
+      },
+      {
+        accessorKey: 'dueAt',
+        header: 'Due',
+        cell: ({ row }) => {
+          const open = row.original.status === 'open' || row.original.status === 'in_progress';
+          const overdue = open && new Date(row.original.dueAt).getTime() < now;
+          return <span className={overdue ? 'text-destructive font-bold whitespace-nowrap' : 'whitespace-nowrap'}>{fmtDate(row.original.dueAt)}{overdue && ' (overdue)'}</span>;
+        }
+      },
+      { accessorKey: 'status', header: 'Status', cell: ({ getValue }) => <StatusBadge status={getValue() as string} /> },
+      {
+        id: 'actions',
+        header: 'Actions',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          if (r.status !== 'open' && r.status !== 'in_progress') return null;
+          return (
+            <div className="flex flex-wrap gap-1.5">
+              {r.status === 'open' && <Button size="sm" variant="outline" onClick={() => resolve(r, 'in_progress')}>Start</Button>}
+              <Button size="sm" variant="outline" onClick={() => resolve(r, 'completed')}>Complete</Button>
+              <Button size="sm" variant="outline" onClick={() => resolve(r, 'rejected')}>Reject</Button>
+              {r.type === 'erasure' && <Button size="sm" variant="destructive" onClick={() => erase(r)}>Erase data</Button>}
+            </div>
+          );
+        }
+      }
+    ],
+    [requests]
+  );
+
   return (
-    <div className={card}>
-      <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mb-1">Data subject requests</h2>
-      <p className="text-xs text-stone-500 mb-4">Respond before the due date. Verify the requester's identity before releasing or erasing data.</p>
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-      {requests.length === 0 ? <p className="text-sm text-stone-500">No requests.</p> : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-stone-500"><th className="py-2 pr-3">Person</th><th className="pr-3">Request</th><th className="pr-3">Due</th><th className="pr-3">Status</th><th>Actions</th></tr></thead>
-            <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-              {requests.map(r => {
-                const open = r.status === 'open' || r.status === 'in_progress';
-                const overdue = open && new Date(r.dueAt).getTime() < now;
-                return (
-                  <tr key={r.id} className="align-top">
-                    <td className="py-2.5 pr-3"><div className="font-semibold">{r.userName || r.userId}</div><div className="text-xs text-stone-500">{r.userEmail}</div></td>
-                    <td className="pr-3 py-2.5"><div>{typeLabel(r.type)}</div>{r.details && <div className="text-xs text-stone-500 max-w-xs">{r.details}</div>}</td>
-                    <td className={`pr-3 py-2.5 whitespace-nowrap ${overdue ? 'text-red-600 font-bold' : ''}`}>{new Date(r.dueAt).toLocaleDateString()}{overdue && ' (overdue)'}</td>
-                    <td className="pr-3 py-2.5">{statusBadge(r.status)}</td>
-                    <td className="py-2.5">
-                      {open && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {r.status === 'open' && <button className={btnSecondary} onClick={() => resolve(r, 'in_progress')}>Start</button>}
-                          <button className={btnSecondary} onClick={() => resolve(r, 'completed')}>Complete</button>
-                          <button className={btnSecondary} onClick={() => resolve(r, 'rejected')}>Reject</button>
-                          {r.type === 'erasure' && <button className={`${btnSecondary} !bg-red-600 !text-white`} onClick={() => erase(r)}>Erase data</button>}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Data subject requests</CardTitle>
+        <CardDescription>Respond before the due date. Verify the person's identity before releasing or erasing data.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DataTable columns={columns} data={requests} searchPlaceholder="Search requests…" emptyMessage="No requests." />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -339,45 +429,42 @@ function AdminRequests({ jsonHeaders, auth }: { jsonHeaders: any; auth: any }) {
 // Admin: audit trail
 // ---------------------------------------------------------------------------
 
-function AuditLog({ auth }: { auth: any }) {
-  const [entries, setEntries] = useState<Array<AuditLogEntry & { actorName?: string }>>([]);
+type AuditRow = AuditLogEntry & { actorName?: string };
+
+function AuditLog({ api }: { api: Api }) {
+  const [entries, setEntries] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [filter, setFilter] = useState('');
-  const load = () => {
-    const q = filter ? `?action=${encodeURIComponent(filter)}` : '';
-    fetch(`/api/admin/audit-logs${q}`, { headers: auth }).then(r => r.json()).then(d => { setEntries(d.entries || []); setTotal(d.total || 0); }).catch(() => {});
-  };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    api('/api/admin/audit-logs?limit=1000')
+      .then(d => {
+        setEntries(d.entries || []);
+        setTotal(d.total || 0);
+      })
+      .catch(() => {});
+  }, []);
+
+  const columns = useMemo<ColumnDef<AuditRow>[]>(
+    () => [
+      { accessorKey: 'at', header: 'When', cell: ({ getValue }) => <span className="whitespace-nowrap">{fmt(getValue() as string)}</span> },
+      { id: 'who', header: 'Who', accessorFn: e => e.actorName || e.actorId || 'system' },
+      { accessorKey: 'action', header: 'Action', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() as string}</span> },
+      { id: 'target', header: 'Target', accessorFn: e => (e.targetType ? `${e.targetType}:${e.targetId}` : ''), cell: ({ getValue }) => <span className="text-xs">{getValue() as string}</span> },
+      { accessorKey: 'details', header: 'Details', cell: ({ getValue }) => <span className="text-xs">{getValue() as string}</span> },
+      { accessorKey: 'ip', header: 'IP', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() as string}</span> }
+    ],
+    []
+  );
+
   return (
-    <div className={card}>
-      <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-        <div>
-          <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400">Audit log</h2>
-          <p className="text-xs text-stone-500">Sign-ins, access to personal data and administrative changes. Showing {entries.length} of {total}.</p>
-        </div>
-        <form onSubmit={e => { e.preventDefault(); load(); }} className="flex gap-2">
-          <input aria-label="Filter by action" className={input} placeholder="Filter, e.g. privacy or user." value={filter} onChange={e => setFilter(e.target.value)} />
-          <button className={btnSecondary} type="submit">Filter</button>
-        </form>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead><tr className="text-left text-stone-500"><th className="py-2 pr-3">When</th><th className="pr-3">Who</th><th className="pr-3">Action</th><th className="pr-3">Target</th><th className="pr-3">Details</th><th>IP</th></tr></thead>
-          <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-            {entries.map(e => (
-              <tr key={e.id}>
-                <td className="py-2 pr-3 whitespace-nowrap">{fmt(e.at)}</td>
-                <td className="pr-3">{e.actorName || (e.actorId ? e.actorId : 'system')}</td>
-                <td className="pr-3 font-mono">{e.action}</td>
-                <td className="pr-3">{e.targetType ? `${e.targetType}:${e.targetId}` : ''}</td>
-                <td className="pr-3">{e.details}</td>
-                <td className="font-mono">{e.ip}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Audit log</CardTitle>
+        <CardDescription>Sign-ins, access to personal data and administrative changes. Showing the latest {entries.length} of {total}.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DataTable columns={columns} data={entries} searchPlaceholder="Search, e.g. privacy or a name…" pageSize={50} emptyMessage="No audit entries yet." />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -385,80 +472,117 @@ function AuditLog({ auth }: { auth: any }) {
 // Admin: breach register
 // ---------------------------------------------------------------------------
 
-function Breaches({ auth, jsonHeaders }: { auth: any; jsonHeaders: any }) {
+function Breaches({ api }: { api: Api }) {
   const [list, setList] = useState<BreachIncident[]>([]);
-  const [form, setForm] = useState({ title: '', description: '', dataCategories: '', estimatedAffected: '', likelyHighRisk: false, containmentActions: '', detectedAt: '' });
-  const [error, setError] = useState<string | null>(null);
-  const load = () => fetch('/api/admin/breaches', { headers: auth }).then(r => r.json()).then(setList).catch(() => {});
-  useEffect(() => { load(); }, []);
-
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await fetch('/api/admin/breaches', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ ...form, detectedAt: form.detectedAt || undefined }) });
-    const data = await res.json();
-    if (!res.ok) return setError(data.error);
-    setError(null);
-    setForm({ title: '', description: '', dataCategories: '', estimatedAffected: '', likelyHighRisk: false, containmentActions: '', detectedAt: '' });
+  const form = useForm<BreachInput>({ resolver: zodResolver(breachSchema), defaultValues: { title: '', likelyHighRisk: false } });
+  const load = () => api('/api/admin/breaches').then(setList).catch(() => {});
+  useEffect(() => {
     load();
+  }, []);
+
+  const create = async (values: BreachInput) => {
+    try {
+      await api('/api/admin/breaches', 'POST', { ...values, detectedAt: values.detectedAt || undefined });
+      toast.success('Breach logged. The 72-hour clock is shown in the register.');
+      form.reset({ title: '', likelyHighRisk: false });
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
   const update = async (id: string, body: any) => {
-    await fetch(`/api/admin/breaches/${id}/update`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
-    load();
+    try {
+      await api(`/api/admin/breaches/${id}/update`, 'POST', body);
+      load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
+  const e = form.formState.errors;
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <form onSubmit={create} className={card}>
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mb-1">Log a personal data breach</h2>
-        <p className="text-xs text-stone-500 mb-4">
-          If the breach is likely to risk people's rights, notify the Nigeria Data Protection Commission within 72 hours of becoming aware of it,
-          and tell affected people immediately if the risk is high. Record every breach here, even if you decide not to notify.
-        </p>
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-        <div className="space-y-3">
-          <input aria-label="Title" className={input} placeholder="Short title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
-          <label className="block text-xs font-semibold text-stone-500">When did you become aware? (leave empty for now)
-            <input type="datetime-local" className={`${input} mt-1`} value={form.detectedAt} onChange={e => setForm({ ...form, detectedAt: e.target.value })} />
-          </label>
-          <textarea aria-label="What happened" className={input} rows={3} placeholder="What happened?" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <input aria-label="Data affected" className={input} placeholder="Data affected (e.g. names, emails, contracts)" value={form.dataCategories} onChange={e => setForm({ ...form, dataCategories: e.target.value })} />
-          <input aria-label="People affected" type="number" min={0} className={input} placeholder="Estimated number of people affected" value={form.estimatedAffected} onChange={e => setForm({ ...form, estimatedAffected: e.target.value })} />
-          <textarea aria-label="Containment" className={input} rows={2} placeholder="Containment and mitigation actions" value={form.containmentActions} onChange={e => setForm({ ...form, containmentActions: e.target.value })} />
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.likelyHighRisk} onChange={e => setForm({ ...form, likelyHighRisk: e.target.checked })} /> Likely high risk to individuals (e.g. fraud, identity theft, sensitive data)</label>
-          <button type="submit" className={btn}>Log breach</button>
-        </div>
-      </form>
+      <Card>
+        <CardHeader>
+          <CardTitle>Log a personal data breach</CardTitle>
+          <CardDescription>
+            If the breach is likely to put people's rights at risk, notify the Nigeria Data Protection Commission within 72 hours of becoming aware of it,
+            and tell affected people immediately if the risk is high. Record every breach here, even if you decide not to notify.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={form.handleSubmit(create)} className="flex flex-col gap-4" noValidate>
+            <FormField id="br-title" label="Short title" error={e.title}>
+              <Input {...form.register('title')} />
+            </FormField>
+            <FormField id="br-detected" label="When did you become aware?" hint="Leave empty for now.">
+              <Input type="datetime-local" {...form.register('detectedAt')} />
+            </FormField>
+            <FormField id="br-desc" label="What happened?" error={e.description}>
+              <Textarea rows={3} {...form.register('description')} />
+            </FormField>
+            <FormField id="br-cats" label="Data affected" hint="e.g. names, emails, contracts">
+              <Input {...form.register('dataCategories')} />
+            </FormField>
+            <FormField id="br-count" label="Estimated number of people affected" error={e.estimatedAffected}>
+              <Input type="number" min={0} {...form.register('estimatedAffected')} />
+            </FormField>
+            <FormField id="br-contain" label="Containment and mitigation actions">
+              <Textarea rows={2} {...form.register('containmentActions')} />
+            </FormField>
+            <div className="flex items-start gap-3">
+              <Checkbox id="br-risk" checked={form.watch('likelyHighRisk')} onCheckedChange={v => form.setValue('likelyHighRisk', !!v)} className="mt-0.5" />
+              <Label htmlFor="br-risk" className="font-normal leading-snug cursor-pointer">Likely high risk to individuals (e.g. fraud, identity theft, sensitive data)</Label>
+            </div>
+            <div>
+              <Button type="submit" disabled={form.formState.isSubmitting}>Log breach</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-      <div className={card}>
-        <h2 className="font-bold text-sm text-[#1B4332] dark:text-emerald-400 mb-3">Breach register</h2>
-        {list.length === 0 ? <p className="text-sm text-stone-500">No breaches recorded.</p> : (
-          <ul className="space-y-4">
-            {list.map(b => {
-              const deadline = new Date(b.detectedAt).getTime() + 72 * 3600 * 1000;
-              const hoursLeft = Math.round((deadline - Date.now()) / 3600000);
-              return (
-                <li key={b.id} className="border border-stone-100 dark:border-stone-800 rounded-xl p-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{b.title}</span>
-                    {statusBadge(b.status)}
-                  </div>
-                  <p className="text-xs text-stone-500 mt-1">Aware since {fmt(b.detectedAt)} · ~{b.estimatedAffected} people · {b.likelyHighRisk ? 'high risk' : 'risk not marked high'}</p>
-                  <p className={`text-xs mt-1 font-semibold ${b.regulatorNotifiedAt ? 'text-emerald-700' : hoursLeft < 0 ? 'text-red-600' : 'text-amber-700'}`}>
-                    {b.regulatorNotifiedAt ? `NDPC notified ${fmt(b.regulatorNotifiedAt)}` : hoursLeft < 0 ? `72-hour NDPC deadline passed ${-hoursLeft}h ago` : `NDPC deadline in ${hoursLeft}h (${new Date(deadline).toLocaleString()})`}
-                  </p>
-                  {b.subjectsNotifiedAt && <p className="text-xs text-emerald-700">Individuals notified {fmt(b.subjectsNotifiedAt)}</p>}
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {!b.regulatorNotifiedAt && <button className={btnSecondary} onClick={() => update(b.id, { regulatorNotified: true })}>Mark NDPC notified</button>}
-                    {!b.subjectsNotifiedAt && <button className={btnSecondary} onClick={() => update(b.id, { subjectsNotified: true })}>Mark individuals notified</button>}
-                    {b.status === 'open' && <button className={btnSecondary} onClick={() => update(b.id, { status: 'contained' })}>Contained</button>}
-                    {b.status !== 'closed' && <button className={btnSecondary} onClick={() => update(b.id, { status: 'closed' })}>Close</button>}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Breach register</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {list.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No breaches recorded.</p>
+          ) : (
+            <ul className="flex flex-col gap-4">
+              {list.map(b => {
+                const deadline = new Date(b.detectedAt).getTime() + 72 * 3600 * 1000;
+                const hoursLeft = Math.round((deadline - Date.now()) / 3600000);
+                return (
+                  <li key={b.id} className="rounded-2xl border border-border p-4 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">{b.title}</span>
+                      <StatusBadge status={b.status} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Aware since {fmt(b.detectedAt)} · about {b.estimatedAffected} people · {b.likelyHighRisk ? 'high risk' : 'not marked high risk'}
+                    </p>
+                    <p className={`text-sm mt-2 font-semibold ${b.regulatorNotifiedAt ? 'text-success' : hoursLeft < 0 ? 'text-destructive' : 'text-warning'}`}>
+                      {b.regulatorNotifiedAt
+                        ? `NDPC notified ${fmt(b.regulatorNotifiedAt)}`
+                        : hoursLeft < 0
+                          ? `72-hour NDPC deadline passed ${-hoursLeft}h ago`
+                          : `NDPC deadline in ${hoursLeft}h (${new Date(deadline).toLocaleString()})`}
+                    </p>
+                    {b.subjectsNotifiedAt && <p className="text-sm text-success">Individuals notified {fmt(b.subjectsNotifiedAt)}</p>}
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {!b.regulatorNotifiedAt && <Button size="sm" variant="outline" onClick={() => update(b.id, { regulatorNotified: true })}>Mark NDPC notified</Button>}
+                      {!b.subjectsNotifiedAt && <Button size="sm" variant="outline" onClick={() => update(b.id, { subjectsNotified: true })}>Mark individuals notified</Button>}
+                      {b.status === 'open' && <Button size="sm" variant="outline" onClick={() => update(b.id, { status: 'contained' })}>Contained</Button>}
+                      {b.status !== 'closed' && <Button size="sm" variant="outline" onClick={() => update(b.id, { status: 'closed' })}>Close</Button>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -467,63 +591,99 @@ function Breaches({ auth, jsonHeaders }: { auth: any; jsonHeaders: any }) {
 // Admin: privacy settings
 // ---------------------------------------------------------------------------
 
-function PrivacySettingsForm({ auth, jsonHeaders }: { auth: any; jsonHeaders: any }) {
-  const [s, setS] = useState<PrivacySettings | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  useEffect(() => { fetch('/api/admin/privacy/settings', { headers: auth }).then(r => r.json()).then(setS).catch(() => {}); }, []);
-  if (!s) return <p className="text-sm text-stone-500">Loading…</p>;
+function PrivacySettingsForm({ api }: { api: Api }) {
+  const confirmDialog = useConfirm();
+  const [meta, setMeta] = useState<{ noticeVersion: string; noticeLastUpdated: string } | null>(null);
+  const form = useForm<PrivacySettingsInput>({ resolver: zodResolver(privacySettingsSchema) });
 
-  const save = async (publishNewVersion = false) => {
-    if (publishNewVersion && !window.confirm('Publish a new notice version? Every user will be asked to review it at their next sign-in.')) return;
-    const res = await fetch('/api/admin/privacy/settings', { method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ ...s, publishNewVersion }) });
-    const data = await res.json();
-    if (res.ok) { setS(data); setMessage(publishNewVersion ? `Published notice version ${data.noticeVersion}.` : 'Saved.'); } else setMessage(data.error);
+  useEffect(() => {
+    api('/api/admin/privacy/settings')
+      .then((s: PrivacySettings) => {
+        setMeta({ noticeVersion: s.noticeVersion, noticeLastUpdated: s.noticeLastUpdated });
+        form.reset(s);
+      })
+      .catch(() => {});
+  }, []);
+
+  const save = async (values: PrivacySettingsInput, publishNewVersion = false) => {
+    if (publishNewVersion) {
+      const ok = await confirmDialog({
+        title: 'Publish a new notice version?',
+        description: 'Every user will be asked to review the notice again at their next sign-in.',
+        confirmText: 'Publish'
+      });
+      if (!ok) return;
+    }
+    try {
+      const data = await api('/api/admin/privacy/settings', 'PUT', { ...values, publishNewVersion });
+      setMeta({ noticeVersion: data.noticeVersion, noticeLastUpdated: data.noticeLastUpdated });
+      form.reset(data);
+      toast.success(publishNewVersion ? `Published notice version ${data.noticeVersion}.` : 'Privacy settings saved.');
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
+
   const runRetention = async () => {
-    const res = await fetch('/api/admin/privacy/run-retention', { method: 'POST', headers: auth });
-    const data = await res.json();
-    setMessage(`Retention purge removed ${data.emailsRemoved} email log entries and ${data.auditRemoved} audit entries.`);
+    try {
+      const data = await api('/api/admin/privacy/run-retention', 'POST');
+      toast.success(`Removed ${data.emailsRemoved} old email log entries and ${data.auditRemoved} old audit entries.`);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
-  const field = (key: keyof PrivacySettings, label: string, type = 'text') => (
-    <label className="block text-xs font-semibold text-stone-500">
-      {label}
-      <input type={type} className={`${input} mt-1`} value={String(s[key] ?? '')} onChange={e => setS({ ...s, [key]: type === 'number' ? Number(e.target.value) : e.target.value })} />
-    </label>
+  if (!meta) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+      </p>
+    );
+  }
+
+  const e = form.formState.errors;
+  const field = (key: keyof PrivacySettingsInput, label: string, type = 'text', hint?: string) => (
+    <FormField id={`ps-${key}`} label={label} error={e[key]} hint={hint}>
+      <Input type={type} {...form.register(key)} />
+    </FormField>
   );
 
   return (
-    <div className={card}>
-      <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs">
-        The privacy notice is generated from these settings and is a starting template. Have it reviewed by a qualified data protection
-        lawyer or DPO before relying on it. Notice version {s.noticeVersion}, last updated {s.noticeLastUpdated}.
-      </div>
-      {message && <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-400">{message}</p>}
-      <div className="grid gap-3 md:grid-cols-2">
-        {field('controllerName', 'Organisation (data controller) name')}
-        {field('controllerEmail', 'Organisation privacy email', 'email')}
-        {field('controllerAddress', 'Registered address')}
-        {field('dpoName', 'Data Protection Officer name')}
-        {field('dpoEmail', 'DPO email', 'email')}
-        {field('dpoPhone', 'DPO phone')}
-        {field('dsrResponseDays', 'Days to respond to requests', 'number')}
-        {field('retentionFinancialRecordsYears', 'Keep financial/contract records (years)', 'number')}
-        {field('retentionEmailLogDays', 'Keep email log (days)', 'number')}
-        {field('retentionAuditLogDays', 'Keep audit log (days)', 'number')}
-      </div>
-      <label className="block text-xs font-semibold text-stone-500 mt-3">
-        Hosting and transfer details (e.g. "Application hosted on Google Cloud Run, europe-west1")
-        <input className={`${input} mt-1`} value={s.hostingDescription} onChange={e => setS({ ...s, hostingDescription: e.target.value })} />
-      </label>
-      <label className="block text-xs font-semibold text-stone-500 mt-3">
-        Additional notice text
-        <textarea rows={4} className={`${input} mt-1`} value={s.additionalNoticeText} onChange={e => setS({ ...s, additionalNoticeText: e.target.value })} />
-      </label>
-      <div className="flex flex-wrap gap-2 mt-4">
-        <button className={btn} onClick={() => save(false)}>Save settings</button>
-        <button className={btnSecondary} onClick={() => save(true)}>Save and publish new notice version</button>
-        <button className={btnSecondary} onClick={runRetention}>Run retention purge now</button>
-      </div>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Privacy settings</CardTitle>
+        <CardDescription>
+          Notice version {meta.noticeVersion}, last updated {meta.noticeLastUpdated}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5">
+        <div className="rounded-2xl bg-warning/10 p-3 text-sm text-warning">
+          The privacy notice is generated from these settings and is a starting template. Have it reviewed by a qualified data protection lawyer or DPO before relying on it.
+        </div>
+        <form onSubmit={form.handleSubmit(v => save(v))} className="flex flex-col gap-5" noValidate>
+          <div className="grid gap-4 md:grid-cols-2">
+            {field('controllerName', 'Organisation (data controller) name')}
+            {field('controllerEmail', 'Organisation privacy email', 'email')}
+            {field('controllerAddress', 'Registered address')}
+            {field('dpoName', 'Data Protection Officer name')}
+            {field('dpoEmail', 'DPO email', 'email')}
+            {field('dpoPhone', 'DPO phone')}
+            {field('dsrResponseDays', 'Days to respond to requests', 'number')}
+            {field('retentionFinancialRecordsYears', 'Keep financial and contract records (years)', 'number', 'Confirm with your accountant.')}
+            {field('retentionEmailLogDays', 'Keep email log (days)', 'number')}
+            {field('retentionAuditLogDays', 'Keep audit log (days)', 'number')}
+          </div>
+          {field('hostingDescription', 'Hosting and transfer details', 'text', 'e.g. "Application hosted on Google Cloud Run, europe-west1"')}
+          <FormField id="ps-additionalNoticeText" label="Additional notice text" error={e.additionalNoticeText}>
+            <Textarea rows={4} {...form.register('additionalNoticeText')} />
+          </FormField>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={form.formState.isSubmitting}>Save settings</Button>
+            <Button type="button" variant="outline" onClick={form.handleSubmit(v => save(v, true))}>Save and publish new notice version</Button>
+            <Button type="button" variant="ghost" onClick={runRetention}>Run retention clean-up now</Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

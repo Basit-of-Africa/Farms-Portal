@@ -442,7 +442,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                         </div>
                         <div>
                           <p className="font-bold text-gray-800">Upload Deed/File</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Dispatch secure contractual file</p>
+                          <p className="text-[10px] text-gray-400 font-normal">Upload a contract or document</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -458,7 +458,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                         </div>
                         <div>
                           <p className="font-bold text-gray-800">Post Update</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Publish chronicles across estates</p>
+                          <p className="text-[10px] text-gray-400 font-normal">Post an update to a farm</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -478,7 +478,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                           <Sprout className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Publish Chronicle</p>
+                          <p className="font-bold text-gray-800">Post update</p>
                           <p className="text-[10px] text-gray-400 font-normal">Broadcast soil development updates</p>
                         </div>
                       </div>
@@ -551,7 +551,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                     </div>
                     <div>
                       <p className="font-bold text-gray-800">Re-Align Farm Nodes</p>
-                      <p className="text-[10px] text-gray-400 font-normal">Synchronize latest telemetry</p>
+                      <p className="text-[10px] text-gray-400 font-normal">Refresh data</p>
                     </div>
                   </div>
                 </button>
@@ -853,14 +853,14 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">System Authorization level *</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Role *</label>
                       <select
                         value={newRole}
                         onChange={(e) => setNewRole(e.target.value as any)}
                         className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
                         required
                       >
-                        <option value="investor">Deeded Estate Investor</option>
+                        <option value="investor">Investor</option>
                         <option value="farm_manager">Operational Farm Manager</option>
                         <option value="admin">Portal Administrator</option>
                       </select>
@@ -988,7 +988,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Chronicle title *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Update title *</label>
                         <input
                           type="text"
                           placeholder="e.g., Wet season planting completed"

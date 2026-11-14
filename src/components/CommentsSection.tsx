@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MessageSquare, CornerDownRight, Trash2, Send, X, Shield, Star, UserCheck } from 'lucide-react';
 import { User, FarmUpdateComment } from '../types';
+import { useConfirm } from './ui/confirm';
 
 interface CommentsSectionProps {
   updateId: string;
@@ -17,6 +18,7 @@ export default function CommentsSection({
   token,
   onCommentAdded
 }: CommentsSectionProps) {
+  const confirmDialog = useConfirm();
   const [rootCommentText, setRootCommentText] = useState('');
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -76,7 +78,7 @@ export default function CommentsSection({
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!window.confirm('Are you sure you want to delete this comment and all its replies?')) {
+    if (!(await confirmDialog({ title: 'Delete this comment?', description: 'Its replies will be deleted too.', confirmText: 'Delete', destructive: true }))) {
       return;
     }
     setError(null);

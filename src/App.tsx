@@ -413,7 +413,7 @@ export default function App() {
         {/* Desktop Top Header Bar with Live Alerts */}
         <div className="hidden lg:flex justify-between items-center bg-white dark:bg-stone-900 border border-[#2D6A4F]/10 dark:border-stone-800 px-6 py-4.5 rounded-3xl shadow-premium transition-colors duration-300">
           <div>
-            <span className="text-[10px] font-mono font-bold text-[#2D6A4F]/60 dark:text-[#52B788]/60 uppercase tracking-widest">Active Secure Session</span>
+            <span className="text-[10px] font-mono font-bold text-[#2D6A4F]/60 dark:text-[#52B788]/60 uppercase tracking-widest">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             <h2 className="font-serif font-extrabold text-[#1B4332] dark:text-[#52B788] text-xl mt-0.5 animate-fade-in">Welcome back, {currentUser.name}</h2>
           </div>
 

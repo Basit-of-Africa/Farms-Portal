@@ -29,6 +29,7 @@ import {
 import { User, FinancialStatus } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { toast } from './ui/sonner';
 
 const periodOrder: Record<string, number> = {
   'Q1': 1, 'Q2': 2, 'Q3': 3, 'Q4': 4,
@@ -366,7 +367,7 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
       doc.save(`adubiaro_financial_statement_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
       console.error('Failed to export PDF:', err);
-      alert('An error occurred during PDF generation. Please try again.');
+      toast.error('An error occurred during PDF generation. Please try again.');
     }
   };
 

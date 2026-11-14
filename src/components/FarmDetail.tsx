@@ -33,6 +33,8 @@ import {
 import { User as UserType, Farm, FarmPlot, FarmMapNote, FarmUpdate, Document, UserRole, PlotStatus } from '../types';
 import CommentsSection from './CommentsSection';
 import { getRelativeTime } from '../utils/time';
+import { toast } from './ui/sonner';
+import { useConfirm } from './ui/confirm';
 
 interface FarmDetailProps {
   user: UserType;
@@ -44,6 +46,7 @@ interface FarmDetailProps {
 }
 
 export default function FarmDetail({ user, token, farmId, onBack, onSelectInvestor, refreshSignal }: FarmDetailProps) {
+  const confirmDialog = useConfirm();
   const [data, setData] = useState<{
     farm: Farm;
     plots: FarmPlot[];
@@ -95,14 +98,14 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
       setClickedCoords(null);
       setNewPinNote('');
     } catch (err: any) {
-      alert(err.message || 'Error occurred saving pin');
+      toast.error(err.message || 'Error occurred saving pin');
     } finally {
       setSavingPin(false);
     }
   };
 
   const handleDeletePin = async (pinId: string) => {
-    if (!window.confirm('Are you sure you want to delete this pinned note?')) return;
+    if (!(await confirmDialog({ title: 'Delete this map note?', confirmText: 'Delete', destructive: true }))) return;
 
     try {
       const res = await fetch(`/api/farms/${farmId}/map-notes/${pinId}`, {
@@ -120,7 +123,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
       setSelectedPin(null);
       await fetchFarmDetails(); // reload details
     } catch (err: any) {
-      alert(err.message || 'Error occurred deleting pin');
+      toast.error(err.message || 'Error occurred deleting pin');
     }
   };
 
@@ -170,7 +173,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
       link.click();
       link.parentNode?.removeChild(link);
     } catch (e: any) {
-      alert(e.message || 'You do not have authorization to download this secure document.');
+      toast.error(e.message || 'You do not have authorization to download this secure document.');
     }
   };
 
@@ -360,7 +363,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
                     <Filter className="h-4 w-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-gray-800">Filter Field Chronicles</h4>
+                    <h4 className="text-xs font-bold text-gray-800">Filter farm updates</h4>
                     <p className="text-[10px] text-gray-500 font-mono">
                       {filterStartDate || filterEndDate ? (
                         <span className="text-emerald-600 font-semibold">Active filter: showing {filteredUpdates.length} of {updates.length} logs</span>
@@ -410,7 +413,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
 
             {updates.length === 0 ? (
               <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-gray-200">
-                <p className="text-xs text-gray-400">No field chronicle updates yet posted for this estate.</p>
+                <p className="text-xs text-gray-400">No updates have been posted for this farm yet.</p>
               </div>
             ) : filteredUpdates.length === 0 ? (
               <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-gray-200 space-y-3">
@@ -480,7 +483,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-[10px] font-mono text-gray-400 border-t border-gray-50">
                     <div className="flex items-center gap-2">
                       <User className="h-3.5 w-3.5" />
-                      <span>Dispatched by Supervisor: <b className="text-gray-600">{up.postedByName}</b></span>
+                      <span>Posted by: <b className="text-gray-600">{up.postedByName}</b></span>
                     </div>
                     <div className="flex items-center gap-1.5 text-gray-500 bg-gray-50 px-2.5 py-0.5 rounded-md border border-gray-100">
                       <Clock className="h-3.5 w-3.5 text-[#2D6A4F]" />

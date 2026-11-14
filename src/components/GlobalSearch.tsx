@@ -18,6 +18,7 @@ import {
   User
 } from 'lucide-react';
 import { User as UserType } from '../types';
+import { toast } from './ui/sonner';
 
 interface GlobalSearchProps {
   token: string;
@@ -86,7 +87,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
     } else if (type === 'document') {
       // Direct file download/open or link to download
       if (item.fileUrl && item.fileUrl.startsWith('#')) {
-        alert(`Simulating access to document "${item.title}". Real file: ${item.fileName}`);
+        toast.info(`Simulating access to document "${item.title}". Real file: ${item.fileName}`);
       } else {
         window.open(`/api/documents/${item.id}/download`, '_blank'); // authenticated by the session cookie
       }
@@ -140,7 +141,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
           {loading && !results ? (
             <div className="p-8 text-center text-xs text-gray-400 dark:text-stone-500 font-mono flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-[#2D6A4F]" />
-              <span>Scanning platform registry...</span>
+              <span>Searching…</span>
             </div>
           ) : !hasResults ? (
             <div className="p-8 text-center text-xs text-gray-400 dark:text-stone-500 font-mono">

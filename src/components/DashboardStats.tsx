@@ -73,18 +73,18 @@ export default function DashboardStats({ stats, loading }: DashboardStatsProps) 
             <Coins className="h-6 w-6" />
           </div>
           <span className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 text-[10px] font-mono font-bold tracking-wider uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
-            Active Assets <ArrowUpRight className="h-3 w-3" />
+            Investments <ArrowUpRight className="h-3 w-3" />
           </span>
         </div>
         <div className="mt-4">
           <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-stone-500 font-bold block">
-            Total Active Investments
+            Total invested
           </span>
           <h3 className="text-2xl font-serif font-extrabold text-[#1B4332] dark:text-[#52B788] mt-1 tracking-tight">
             {formatCurrency(activeInvestmentsValue)}
           </h3>
           <p className="text-[11px] text-gray-500 dark:text-stone-400 mt-2 font-sans flex items-center gap-1.5">
-            <span className="font-bold text-[#2D6A4F] dark:text-[#52B788]">{activeInvestmentsCount}</span> deeded plot active holdings configured
+            <span className="font-bold text-[#2D6A4F] dark:text-[#52B788]">{activeInvestmentsCount}</span> plots held by investors
           </p>
         </div>
       </div>
@@ -102,13 +102,13 @@ export default function DashboardStats({ stats, loading }: DashboardStatsProps) 
         </div>
         <div className="mt-4">
           <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-stone-500 font-bold block">
-            Total Payouts This Month
+            Payouts this month
           </span>
           <h3 className="text-2xl font-serif font-extrabold text-[#1B4332] dark:text-[#52B788] mt-1 tracking-tight">
             {formatCurrency(payoutsThisMonth)}
           </h3>
           <p className="text-[11px] text-gray-500 dark:text-stone-400 mt-2 font-sans">
-            Net investment yield audits scheduled for {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+            Payouts dated in {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}
           </p>
         </div>
       </div>
@@ -121,18 +121,18 @@ export default function DashboardStats({ stats, loading }: DashboardStatsProps) 
             <Sprout className="h-6 w-6" />
           </div>
           <span className="bg-[#52B788]/10 dark:bg-[#52B788]/15 text-emerald-800 dark:text-[#52B788] text-[10px] font-mono font-bold tracking-wider uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
-            Farm Estates <MapPin className="h-3 w-3" />
+            Farms <MapPin className="h-3 w-3" />
           </span>
         </div>
         <div className="mt-4">
           <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-stone-500 font-bold block">
-            Number of Active Farms
+            Active farms
           </span>
           <h3 className="text-2xl font-serif font-extrabold text-[#1B4332] dark:text-[#52B788] mt-1 tracking-tight">
-            {activeFarms} <span className="text-xs text-gray-400 dark:text-stone-500 font-sans font-normal">/ {totalFarms} Configured</span>
+            {activeFarms} <span className="text-xs text-gray-400 dark:text-stone-500 font-sans font-normal">/ {totalFarms} total</span>
           </h3>
           <p className="text-[11px] text-gray-500 dark:text-stone-400 mt-2 font-sans">
-            Estates actively broadcasting vegetation indices & smart logs
+            Farms currently active
           </p>
         </div>
       </div>

@@ -38,6 +38,8 @@ import {
   Key
 } from 'lucide-react';
 import { User, UserRole, SystemSettings } from '../types';
+import { useConfirm } from './ui/confirm';
+import DangerZone from './DangerZone';
 
 interface SettingsViewProps {
   user: User;
@@ -49,6 +51,7 @@ interface SettingsViewProps {
 type SettingsTab = 'config' | 'backups' | 'roles' | 'branding' | 'emails';
 
 export default function SettingsView({ user, token, triggerRefreshSignal, refreshSignal }: SettingsViewProps) {
+  const confirmDialog = useConfirm();
   const [activeSubTab, setActiveSubTab] = useState<SettingsTab>('config');
 
   // --- Theme / Settings State ---
@@ -435,7 +438,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
     
     const inputElement = e.target;
     
-    if (!window.confirm('WARNING: Restoring/Importing a database will completely overwrite all existing records (farms, users, settings, financial logs, payout history, alerts, and outbox logs). This action is IRREVERSIBLE. Are you sure you want to proceed?')) {
+    if (!(await confirmDialog({ title: 'Replace the whole database with this backup?', description: 'All current farms, users, settings, financial records and email logs are overwritten. Privacy and audit records are merged and kept. This cannot be undone.', confirmText: 'Restore backup', destructive: true, requireText: 'RESTORE' }))) {
       inputElement.value = '';
       return;
     }
@@ -665,7 +668,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
       return;
     }
 
-    if (!window.confirm(`Are you absolutely sure you want to permanently delete user "${targetUser.name}"? This action cannot be undone and will revoke all access immediately.`)) {
+    if (!(await confirmDialog({ title: `Delete ${targetUser.name}?`, description: 'This permanently removes the account and revokes access immediately. It cannot be undone.', confirmText: 'Delete user', destructive: true }))) {
       return;
     }
 
@@ -954,7 +957,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
                           <div className="flex items-center justify-between p-3">
                             <div className="text-left">
-                              <span className="text-xs font-bold text-gray-700 block">Dispatch Live Email Outboxes</span>
+                              <span className="text-xs font-bold text-gray-700 block">Send real emails</span>
                               <span className="text-[9px] font-mono text-gray-400">Record mock email communication outputs in detail.</span>
                             </div>
                             <button
@@ -1363,7 +1366,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
             {/* Backups Logs Table */}
             <div className="space-y-4">
-              <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Archived snapshot log registries</h4>
+              <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Backup history</h4>
               
               <div className="bg-white rounded-2xl border border-gray-150 overflow-hidden shadow-sm">
                 {loadingBackups ? (
@@ -1517,7 +1520,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">System Authorization level *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Role *</label>
                       <select
                         value={newUserRole}
                         onChange={(e) => setNewUserRole(e.target.value as UserRole)}
@@ -1647,7 +1650,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">System Authorization level *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Role *</label>
                       <select
                         value={editUserRole}
                         onChange={(e) => setEditUserRole(e.target.value as UserRole)}
@@ -1715,7 +1718,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                 {loadingUsers ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-2">
                     <RefreshCw className="animate-spin text-[#1B4332] h-6 w-6" />
-                    <span className="text-[10px] font-mono text-gray-400">Inspecting credential store registries...</span>
+                    <span className="text-[10px] font-mono text-gray-400">Loading users…</span>
                   </div>
                 ) : usersList && usersList.length > 0 ? (
                   <div className="overflow-x-auto animate-fade-in">
@@ -2044,7 +2047,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                             className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm cursor-pointer"
                           >
                             <option value="simulation">Simulated Outbox Logging (Development & Demo mode)</option>
-                            <option value="smtp">Real Custom SMTP Server (Nodemailer protocol)</option>
+                            <option value="smtp">Your own SMTP email server</option>
                             <option value="brevo">Brevo SMTP Third-Party API (Recommended)</option>
                           </select>
                         </div>
@@ -2236,7 +2239,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                           ) : (
                             <>
                               <Play className="h-3.5 w-3.5" />
-                              <span>Dispatch Live Test Email</span>
+                              <span>Send a test email</span>
                             </>
                           )}
                         </button>
@@ -2250,7 +2253,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                       )}
                       {testEmailError && (
                         <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-[10.5px] text-red-800 leading-normal animate-slide-up font-sans font-medium">
-                          ❌ <strong>Dispatch Failed:</strong> {testEmailError}
+                          ❌ <strong>Sending failed:</strong> {testEmailError}
                         </div>
                       )}
                     </div>
@@ -2262,6 +2265,9 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         )}
 
       </div>
+
+      {/* Irreversible actions live here, not on the dashboard */}
+      <DangerZone token={token} onDone={triggerRefreshSignal} />
 
     </div>
   );

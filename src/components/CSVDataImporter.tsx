@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { parseCsvRecords, INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
 import { useImportReview } from './ImportReviewModal';
+import { toast } from './ui/sonner';
 
 interface CSVDataImporterProps {
   token: string;
@@ -54,7 +55,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
       setExportPreviewData(data);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Error loading system records for export');
+      toast.error(err.message || 'Error loading system records for export');
     } finally {
       setExportLoading(false);
     }
@@ -137,7 +138,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
   const handleExecuteExport = () => {
     const dataToExport = getFilteredExportData();
     if (dataToExport.length === 0) {
-      alert('No system data matched the current filter and search query.');
+      toast.error('No system data matched the current filter and search query.');
       return;
     }
 
@@ -201,13 +202,13 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
       try {
         const { headers, records: parsed } = parseCsvRecords(text);
         if (headers.length === 0) {
-          alert('CSV file is empty.');
+          toast.error('CSV file is empty.');
           return;
         }
         setRecords(parsed);
       } catch (err: any) {
         console.error(err);
-        alert('Failed to parse CSV. Please make sure the format is valid.');
+        toast.error('Failed to parse CSV. Please make sure the format is valid.');
       }
     };
     reader.readAsText(selectedFile);
@@ -215,7 +216,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
 
   const handleSubmit = async () => {
     if (records.length === 0) {
-      alert('No valid records found in the CSV file.');
+      toast.error('No valid records found in the CSV file.');
       return;
     }
 
@@ -233,7 +234,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
         onSuccess();
       }
     } catch (err: any) {
-      alert(err.message || 'An error occurred during CSV data import.');
+      toast.error(err.message || 'An error occurred during CSV data import.');
     } finally {
       setUploading(false);
     }
@@ -361,7 +362,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                   if (droppedFile && droppedFile.name.endsWith('.csv')) {
                     parseCSV(droppedFile);
                   } else {
-                    alert('Please upload a valid CSV file.');
+                    toast.error('Please upload a valid CSV file.');
                   }
                 }}
                 className={`border-2 border-dashed rounded-3xl p-8 transition-all duration-300 text-center relative ${

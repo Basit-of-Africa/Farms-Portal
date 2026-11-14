@@ -4,8 +4,16 @@
  */
 
 import React, { useState } from 'react';
-import { KeyRound, X } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { KeyRound, Loader2 } from 'lucide-react';
 import { User } from '../types';
+import { changePasswordSchema, ChangePasswordInput } from '../lib/schemas';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { FormField, FormError } from './ui/form';
+import { toast } from './ui/sonner';
 
 interface ChangePasswordModalProps {
   token: string;
@@ -17,113 +25,72 @@ interface ChangePasswordModalProps {
 }
 
 export default function ChangePasswordModal({ token, forced, onSuccess, onClose, onLogout }: ChangePasswordModalProps) {
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<ChangePasswordInput>({ resolver: zodResolver(changePasswordSchema) });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (newPassword !== confirmPassword) {
-      setError('The new passwords do not match.');
-      return;
-    }
-    setSubmitting(true);
+  const onSubmit = async (values: ChangePasswordInput) => {
+    setServerError(null);
     try {
       const res = await fetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ currentPassword, newPassword })
+        body: JSON.stringify({ currentPassword: values.currentPassword, newPassword: values.newPassword })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not change password.');
+      toast.success('Your password was changed.');
       onSuccess(data.token, data.user);
     } catch (err: any) {
-      setError(err.message || 'Could not change password.');
-    } finally {
-      setSubmitting(false);
+      setServerError(err.message || 'Could not change password.');
     }
   };
 
-  const inputClass =
-    'w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]/30 focus:border-[#1B4332]';
-
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div
-        className="bg-white dark:bg-stone-900 border border-[#2D6A4F]/20 dark:border-stone-800 rounded-3xl w-full max-w-md p-6 md:p-8 shadow-2xl relative text-stone-800 dark:text-stone-100"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="change-password-title"
+    <Dialog open onOpenChange={open => !open && !forced && onClose()}>
+      <DialogContent
+        hideClose={forced}
+        onEscapeKeyDown={e => forced && e.preventDefault()}
+        onPointerDownOutside={e => forced && e.preventDefault()}
+        onInteractOutside={e => forced && e.preventDefault()}
       >
-        {!forced && (
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        )}
-
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 bg-[#1B4332]/10 dark:bg-[#52B788]/10 rounded-2xl text-[#1B4332] dark:text-[#52B788]">
-            <KeyRound className="h-6 w-6" />
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-accent text-accent-foreground">
+              <KeyRound className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <DialogTitle id="change-password-title">{forced ? 'Choose a new password' : 'Change password'}</DialogTitle>
           </div>
-          <h3 id="change-password-title" className="font-bold text-lg text-[#1B4332] dark:text-emerald-400">
-            {forced ? 'Choose a new password' : 'Change password'}
-          </h3>
-        </div>
+          <DialogDescription>
+            {forced ? 'You signed in with a temporary password. Please choose your own password to continue.' : 'Changing your password signs you out on other devices.'}
+          </DialogDescription>
+        </DialogHeader>
 
-        {forced && (
-          <p className="text-sm text-stone-600 dark:text-stone-300 mb-4">
-            You signed in with a temporary password. Please choose your own password to continue.
-          </p>
-        )}
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-xl text-red-700 text-xs font-semibold">{error}</div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label htmlFor="cp-current" className="block text-xs font-semibold mb-1 text-stone-500">
-              {forced ? 'Temporary password' : 'Current password'}
-            </label>
-            <input id="cp-current" type="password" required autoComplete="current-password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className={inputClass} />
-          </div>
-          <div>
-            <label htmlFor="cp-new" className="block text-xs font-semibold mb-1 text-stone-500">New password</label>
-            <input id="cp-new" type="password" required minLength={8} autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} />
-            <p className="text-[11px] text-stone-400 mt-1">At least 8 characters, with letters and numbers.</p>
-          </div>
-          <div>
-            <label htmlFor="cp-confirm" className="block text-xs font-semibold mb-1 text-stone-500">Confirm new password</label>
-            <input id="cp-confirm" type="password" required minLength={8} autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} />
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 pt-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold bg-[#1B4332] hover:bg-[#2D6A4F] text-white disabled:opacity-60 cursor-pointer"
-            >
-              {submitting ? 'Saving…' : 'Save password'}
-            </button>
-            {forced ? (
-              <button type="button" onClick={onLogout} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 cursor-pointer">
-                Log out
-              </button>
-            ) : (
-              <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 cursor-pointer">
-                Cancel
-              </button>
-            )}
-          </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+          <FormError message={serverError} />
+          <FormField id="cp-current" label={forced ? 'Temporary password' : 'Current password'} error={errors.currentPassword}>
+            <Input type="password" autoComplete="current-password" {...register('currentPassword')} />
+          </FormField>
+          <FormField id="cp-new" label="New password" error={errors.newPassword} hint="At least 8 characters, with letters and numbers.">
+            <Input type="password" autoComplete="new-password" {...register('newPassword')} />
+          </FormField>
+          <FormField id="cp-confirm" label="Confirm new password" error={errors.confirmPassword}>
+            <Input type="password" autoComplete="new-password" {...register('confirmPassword')} />
+          </FormField>
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={forced ? onLogout : onClose}>
+              {forced ? 'Log out' : 'Cancel'}
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="animate-spin" />}
+              Save password
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
