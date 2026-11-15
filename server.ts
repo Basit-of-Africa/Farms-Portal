@@ -5361,8 +5361,20 @@ async function startServer() {
   } else {
     // Production Assets serving
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Caching: hashed build assets never change; the page and service worker
+    // must always be re-checked so a deploy reaches every browser immediately.
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        const rel = path.relative(distPath, filePath).split(path.sep).join('/');
+        if (rel.startsWith('assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (rel === 'index.html' || rel === 'sw.js' || rel === 'manifest.json') {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      }
+    }));
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
