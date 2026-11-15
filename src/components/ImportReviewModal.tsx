@@ -93,7 +93,8 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
     return (preview.rows || []).map((r: any) => ({ ...r, row: r.row + rowOffset, errors: issues.get(r.row)?.errors || [], warnings: issues.get(r.row)?.warnings || [] }));
   }, [preview, rowOffset]);
 
-  const changeCount = (preview?.successCount || 0) + (preview?.amountsUpdated || 0);
+  const updatedRows = (preview?.rows || []).filter((r: any) => r.status === 'amount_updated').length;
+  const changeCount = (preview?.successCount || 0) + updatedRows + (preview?.accountsRepaired || 0);
   const issueCount = rows.filter(r => r.errors.length || r.warnings.length).length;
   const visibleRows = onlyIssues ? rows.filter(r => r.errors.length || r.warnings.length) : rows;
 
@@ -120,11 +121,16 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
         )
       },
       { accessorKey: 'farm', header: 'Farm' },
-      { accessorKey: 'size', header: 'Size', cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() as string}</span> },
+      { accessorKey: 'size', header: 'Size of farm', cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() as string}</span> },
       { accessorKey: 'crop', header: 'Crop' },
       {
         accessorKey: 'amount',
-        header: 'Amount',
+        header: 'Invested',
+        cell: ({ getValue }) => <span className="whitespace-nowrap">{(getValue() as number) ? formatNaira(getValue() as number) : '—'}</span>
+      },
+      {
+        accessorKey: 'roi',
+        header: 'ROI paid',
         cell: ({ getValue }) => <span className="whitespace-nowrap">{(getValue() as number) ? formatNaira(getValue() as number) : '—'}</span>
       },
       {
@@ -188,8 +194,10 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
           {result && (
             <div className="p-4 rounded-2xl bg-accent text-accent-foreground text-sm space-y-1">
               <p className="font-semibold flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" /> Added {result.successCount} holding(s){result.amountsUpdated ? ` and filled in ${result.amountsUpdated} amount(s)` : ''}.
+                <CheckCircle2 className="h-4 w-4" /> Added {result.successCount} farm(s){result.amountsUpdated ? ` and updated ${result.amountsUpdated} amount(s)` : ''}.
               </p>
+              {result.roiRecorded > 0 && <p>Recorded {formatNaira(result.roiTotal)} ROI paid across {result.roiRecorded} farm(s).</p>}
+              {result.accountsRepaired > 0 && <p>Corrected {result.accountsRepaired} account(s) whose name and email were the wrong way round.</p>}
               {result.holdingsAlreadyPresent > 0 && <p>{result.holdingsAlreadyPresent} row(s) were already in the portal and were left as they are.</p>}
               <p>
                 {result.usersCreatedCount} new account(s), {result.farmsCreatedCount} new farm(s), {result.plotsCreatedCount} plot(s).
@@ -202,16 +210,36 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
             </div>
           )}
 
+          {result?.verification && result.verification.checked > 0 && (
+            result.verification.problems.length === 0 ? (
+              <div className="p-4 rounded-2xl border border-success/40 bg-success/10 text-sm">
+                <p className="font-semibold flex items-center gap-2 text-success"><CheckCircle2 className="h-4 w-4" /> Checked after saving: all {result.verification.checked} row(s) are showing correctly.</p>
+                <p className="text-muted-foreground mt-1">Each is a farm in its estate, owned by that person, with the amount invested ({formatNaira(result.verification.sheetInvested)} in total) and ROI paid ({formatNaira(result.verification.sheetRoi)} in total) from the sheet.</p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl border border-destructive/40 bg-destructive/10 text-sm space-y-1">
+                <p className="font-semibold flex items-center gap-2 text-destructive"><XCircle className="h-4 w-4" /> Checked after saving: {result.verification.ok} of {result.verification.checked} row(s) are correct. These are not:</p>
+                <ul className="list-disc pl-5">
+                  {result.verification.problems.slice(0, 30).map((p: any, i: number) => (
+                    <li key={i}>Row {p.row + rowOffset} ({p.name}): {p.problem}</li>
+                  ))}
+                </ul>
+              </div>
+            )
+          )}
+
           {preview && !result && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   ['Rows', preview.total],
-                  ['New holdings', preview.successCount],
+                  ['New farms owned', preview.successCount],
                   ['Already in portal', preview.holdingsAlreadyPresent ?? 0],
-                  ['Amounts filled in', preview.amountsUpdated ?? 0],
+                  ['Amounts / ROI updated', updatedRows],
+                  ['ROI paid in sheet', formatNaira(preview.roiTotal ?? 0)],
+                  ['Accounts corrected', preview.accountsRepaired ?? 0],
                   ['New accounts', preview.usersCreatedCount],
-                  ['New farms', preview.farmsCreatedCount]
+                  ['New estates', preview.farmsCreatedCount]
                 ].map(([label, value]) => (
                   <div key={label as string} className="p-3 rounded-2xl bg-muted">
                     <div className="text-xs text-muted-foreground">{label}</div>

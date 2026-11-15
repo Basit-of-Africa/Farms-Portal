@@ -166,6 +166,11 @@ export function buildOwnershipOverview(db: any) {
   const userById = new Map(users.map(u => [u.id, u]));
   const farmById = new Map(farms.map(f => [f.id, f]));
   const plotById = new Map(plots.map(p => [p.id, p]));
+  // Returns already paid, per plot (pending payouts are not counted)
+  const paidByPlot = new Map<string, number>();
+  (db.financials || []).forEach((fin: any) => {
+    if (String(fin.status).toLowerCase() === 'paid') paidByPlot.set(fin.plotId, (paidByPlot.get(fin.plotId) || 0) + (Number(fin.payoutAmount) || 0));
+  });
 
   const keyCounts = new Map<string, number>();
   farms.forEach(f => keyCounts.set(farmKeyOf(f.name || ''), (keyCounts.get(farmKeyOf(f.name || '')) || 0) + 1));
@@ -178,6 +183,7 @@ export function buildOwnershipOverview(db: any) {
       farmPlots.forEach(p => addLand(land, p.sizeUnit, p.sizeHectares));
       const byInvestor = new Map<string, any>();
       let invested = 0;
+      let roiPaid = 0;
       let farmHoldings = 0;
       holdings
         .filter(h => plotIds.has(h.plotId))
@@ -185,9 +191,14 @@ export function buildOwnershipOverview(db: any) {
           const p = plotById.get(h.plotId);
           const u = userById.get(h.investorId);
           const key = u ? u.id : `missing:${h.investorId}`;
-          const row = byInvestor.get(key) || { id: u?.id || null, name: u ? u.name : '(account missing)', email: u?.email || '', land: {} as Land, invested: 0, holdings: 0 };
+          const row = byInvestor.get(key) || { id: u?.id || null, name: u ? u.name : '(account missing)', email: u?.email || '', land: {} as Land, invested: 0, roiPaid: 0, holdings: 0 };
           addLand(row.land, p?.sizeUnit, p?.sizeHectares);
           row.invested += Number(h.investmentAmount) || 0;
+          // Split a plot's returns by ownership share when several people own it
+          const share = holdings.filter(o => o.plotId === h.plotId).length > 1 ? (Number(h.ownershipPercentage) || 0) / 100 : 1;
+          const paid = (paidByPlot.get(h.plotId) || 0) * (share || 1);
+          row.roiPaid += paid;
+          roiPaid += paid;
           row.holdings += 1;
           byInvestor.set(key, row);
           invested += Number(h.investmentAmount) || 0;
@@ -206,7 +217,8 @@ export function buildOwnershipOverview(db: any) {
         landText: landText(land),
         holdings: farmHoldings,
         investors,
-        invested
+        invested,
+        roiPaid
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -243,6 +255,7 @@ export function buildOwnershipOverview(db: any) {
       activeHoldings: holdings.length,
       investorsWithHoldings: new Set(holdings.map(h => h.investorId)).size,
       invested: holdings.reduce((s, h) => s + (Number(h.investmentAmount) || 0), 0),
+      roiPaid: [...new Set(holdings.map(h => h.plotId))].reduce((s, pid) => s + (paidByPlot.get(pid) || 0), 0),
       holdingsWithAmount: holdings.filter(h => Number(h.investmentAmount) > 0).length,
       landText: landText(totalLand)
     }

@@ -22,13 +22,13 @@ import { HoldingDialog } from './HoldingDialogs';
 import { toast } from './ui/sonner';
 import { formatNaira } from '../lib/utils';
 
-interface InvestorRow { id: string | null; name: string; email: string; landText: string; invested: number; holdings: number }
-interface FarmRow { id: string; name: string; location: string; duplicateName: boolean; plots: number; landText: string; holdings: number; investors: InvestorRow[]; invested: number }
+interface InvestorRow { id: string | null; name: string; email: string; landText: string; invested: number; roiPaid: number; holdings: number }
+interface FarmRow { id: string; name: string; location: string; duplicateName: boolean; plots: number; landText: string; holdings: number; investors: InvestorRow[]; invested: number; roiPaid: number }
 interface Overview {
   generatedAt: string;
   farms: FarmRow[];
   unlinked: Array<{ holdingId: string; investorId: string | null; investorName: string; email: string; reason: string; land: string; invested: number }>;
-  totals: { farms: number; plots: number; activeHoldings: number; investorsWithHoldings: number; invested: number; holdingsWithAmount: number; landText: string };
+  totals: { farms: number; plots: number; activeHoldings: number; investorsWithHoldings: number; invested: number; holdingsWithAmount: number; landText: string; roiPaid: number };
 }
 
 export default function OwnershipOverview({ token, onSelectFarm, onSelectInvestor }: { token: string; onSelectFarm: (id: string) => void; onSelectInvestor: (id: string) => void }) {
@@ -71,8 +71,8 @@ export default function OwnershipOverview({ token, onSelectFarm, onSelectInvesto
     const t = data.totals;
     const lines = [
       `Estates summary (${new Date(data.generatedAt).toLocaleString()})`,
-      `Totals: ${t.farms} farms, ${t.plots} plots, ${t.activeHoldings} active holdings (${t.holdingsWithAmount} with an amount), ${t.investorsWithHoldings} investors with holdings, ${formatNaira(t.invested)} invested, land ${t.landText}`,
-      ...data.farms.map(f => `- ${f.name}${f.duplicateName ? ' [DUPLICATE NAME]' : ''}: ${f.plots} plots (${f.landText}), ${f.holdings} holdings, ${f.investors.length} investors, ${formatNaira(f.invested)}`),
+      `Totals: ${t.farms} farms, ${t.plots} plots, ${t.activeHoldings} active holdings (${t.holdingsWithAmount} with an amount), ${t.investorsWithHoldings} investors with holdings, ${formatNaira(t.invested)} invested, ${formatNaira(t.roiPaid)} ROI paid, land ${t.landText}`,
+      ...data.farms.map(f => `- ${f.name}${f.duplicateName ? ' [DUPLICATE NAME]' : ''}: ${f.plots} plots (${f.landText}), ${f.holdings} holdings, ${f.investors.length} investors, ${formatNaira(f.invested)} invested, ${formatNaira(f.roiPaid)} ROI paid`),
       `Holdings not linked to any farm: ${data.unlinked.length} (${formatNaira(data.unlinked.reduce((s, u) => s + u.invested, 0))})`,
       ...Object.entries(data.unlinked.reduce((m: Record<string, number>, u) => ((m[u.reason.replace(/\(.*\)/, '').trim()] = (m[u.reason.replace(/\(.*\)/, '').trim()] || 0) + 1), m), {})).map(([r, n]) => `  - ${r}: ${n}`)
     ];
@@ -105,14 +105,15 @@ export default function OwnershipOverview({ token, onSelectFarm, onSelectInvesto
         </div>
       </div>
 
-      <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" aria-label="Totals">
+      <section className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3" aria-label="Totals">
         {[
           ['Estates', t.farms],
           ['Farms', t.plots],
           ['Land', t.landText],
           ['Farm owners', t.investorsWithHoldings],
           ['Farms owned', `${t.activeHoldings} (${t.holdingsWithAmount} with amount)`],
-          ['Total invested', formatNaira(t.invested)]
+          ['Total invested', formatNaira(t.invested)],
+          ['ROI paid', formatNaira(t.roiPaid)]
         ].map(([label, value]) => (
           <Card key={label as string} className="p-4">
             <div className="text-sm text-muted-foreground">{label}</div>
@@ -174,6 +175,7 @@ export default function OwnershipOverview({ token, onSelectFarm, onSelectInvesto
                 <span className="text-sm"><span className="text-muted-foreground">Land </span><b>{f.landText}</b></span>
                 <span className="text-sm"><span className="text-muted-foreground">Farm owners </span><b>{f.investors.length}</b></span>
                 <span className="text-sm"><span className="text-muted-foreground">Invested </span><b>{formatNaira(f.invested)}</b></span>
+                <span className="text-sm"><span className="text-muted-foreground">ROI paid </span><b>{formatNaira(f.roiPaid)}</b></span>
                 <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
               </button>
               {isOpen && (
@@ -183,7 +185,7 @@ export default function OwnershipOverview({ token, onSelectFarm, onSelectInvesto
                   ) : (
                     <Table>
                       <TableHeader>
-                        <TableRow><TableHead>Farm owner</TableHead><TableHead>Size of farm</TableHead><TableHead>Farms</TableHead><TableHead className="text-right">Invested</TableHead></TableRow>
+                        <TableRow><TableHead>Farm owner</TableHead><TableHead>Size of farm</TableHead><TableHead>Farms</TableHead><TableHead className="text-right">Invested</TableHead><TableHead className="text-right">ROI paid</TableHead></TableRow>
                       </TableHeader>
                       <TableBody>
                         {f.investors.map(i => (
@@ -195,6 +197,7 @@ export default function OwnershipOverview({ token, onSelectFarm, onSelectInvesto
                             <TableCell className="whitespace-nowrap">{i.landText}</TableCell>
                             <TableCell>{i.holdings}</TableCell>
                             <TableCell className={`text-right whitespace-nowrap font-semibold ${i.invested ? '' : 'text-warning'}`}>{i.invested ? formatNaira(i.invested) : 'No amount'}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{i.roiPaid ? formatNaira(i.roiPaid) : '—'}</TableCell>
                           </TableRow>
                         ))}
                         <TableRow className="bg-muted/40 font-semibold hover:bg-muted/40">
@@ -202,6 +205,7 @@ export default function OwnershipOverview({ token, onSelectFarm, onSelectInvesto
                           <TableCell className="whitespace-nowrap">{f.landText}</TableCell>
                           <TableCell>{f.holdings}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">{formatNaira(f.invested)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{formatNaira(f.roiPaid)}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>

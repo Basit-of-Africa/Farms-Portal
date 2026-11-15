@@ -3432,6 +3432,10 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     existingUsersMatchedCount: 0,
     holdingsAlreadyPresent: 0,
     amountsUpdated: 0,
+    accountsRepaired: 0,
+    roiRecorded: 0,
+    roiTotal: 0,
+    verification: null as null | { checked: number; ok: number; sheetInvested: number; sheetRoi: number; problems: Array<{ row: number; name: string; problem: string }> },
     farmsCreatedCount: 0,
     farmsCreated: [] as string[],
     plotsCreatedCount: 0,
@@ -3441,7 +3445,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     errors: [] as { row: number; username?: string; name?: string; error: string }[],
     warnings: [] as { row: number; name?: string; message: string }[],
     globalWarnings,
-    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number }>
+    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number; roi: number }>
   };
 
   const isManager = currentUser.role === UserRole.FARM_MANAGER;
@@ -3473,6 +3477,49 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     existingPool.set(k, [...(existingPool.get(k) || []), h]);
   }
   const amountUpdates: Array<() => void> = [];
+  const accountRepairs = new Map<string, () => void>();
+  // Which holding each sheet row ended up on, to verify after saving
+  const rowLinks: Array<{ row: number; name: string; farm: string; holdingId: string; amount: number; roi: number }> = [];
+  const financialsToAdd: FinancialSummary[] = [];
+  // "Total ROI paid" from the sheet becomes one paid payout per farm, marked
+  // so a re-import updates it instead of adding another.
+  const IMPORTED_ROI_PERIOD = 'Paid before the portal';
+  const recordRoi = (plotId: string, r: NormalizedImportRow, invested: number) => {
+    if (!(r.roiPaid > 0)) return;
+    const pct = invested > 0 ? Math.round((r.roiPaid / invested) * 10000) / 100 : 0;
+    const existing = db.financials.find(fin => fin.plotId === plotId && fin.period === IMPORTED_ROI_PERIOD) ||
+      financialsToAdd.find(fin => fin.plotId === plotId && fin.period === IMPORTED_ROI_PERIOD);
+    if (existing) {
+      if (Number(existing.payoutAmount) !== r.roiPaid) amountUpdates.push(() => { existing.payoutAmount = r.roiPaid; existing.roiPercentage = pct; });
+      else return;
+    } else {
+      financialsToAdd.push({
+        id: `fin-imp-${Date.now()}-${r.rowNum}-${Math.random().toString(36).slice(2, 6)}`,
+        plotId,
+        uploadedBy: currentUser.id,
+        period: IMPORTED_ROI_PERIOD,
+        year: new Date().getFullYear(),
+        roiPercentage: pct,
+        payoutAmount: r.roiPaid,
+        payoutDate: new Date().toISOString().split('T')[0],
+        status: FinancialStatus.PAID,
+        notes: 'Total returns paid before the portal, imported from spreadsheet.'
+      } as FinancialSummary);
+    }
+    results.roiRecorded++;
+    results.roiTotal += r.roiPaid;
+  };
+  // An earlier import may have stored the name in the email field and the
+  // email in the name field. Find such an account so it is repaired, not duplicated.
+  const findSwappedAccount = (r: NormalizedImportRow) => {
+    const nameKey = r.name.trim().toLowerCase();
+    return db.users.find(u =>
+      u.role === UserRole.INVESTOR &&
+      !u.privacy?.anonymisedAt &&
+      ((u.name || '').trim().toLowerCase() === r.email ||
+        ((u.email || '').trim().toLowerCase() === nameKey && !/@/.test(u.email || '')))
+    );
+  };
   // When several accounts share an email, use the one that already holds plots
   const pickAccount = (email: string) => {
     const candidates = db.users.filter(u => (u.email || '').toLowerCase() === email);
@@ -3484,7 +3531,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     r.warnings.forEach(message => results.warnings.push({ row: rowNum, name: r.name, message }));
     const sizeLabel = `${r.size} ${r.sizeUnit}${r.size === 1 ? '' : 's'}`;
     const report = (status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error') =>
-      results.rows.push({ row: rowNum, status, name: r.name, email: r.email, username: r.username, farm: r.farmName, size: r.farmName ? sizeLabel : '', crop: r.farmName ? r.cropType : '', amount: r.investmentAmount });
+      results.rows.push({ row: rowNum, status, name: r.name, email: r.email, username: r.username, farm: r.farmName, size: r.farmName ? sizeLabel : '', crop: r.farmName ? r.cropType : '', amount: r.investmentAmount, roi: r.roiPaid });
 
     if (r.errors.length > 0) {
       results.failCount++;
@@ -3541,14 +3588,27 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     }
 
     // Find or create the investor account (matched by email, then username)
+    let repairedFrom: string | null = null;
+    if (!usersToAdd.some(u => u.email.toLowerCase() === r.email) && !pickAccount(r.email)) {
+      const broken = findSwappedAccount(r);
+      if (broken) {
+        repairedFrom = (broken.email || '').trim().toLowerCase();
+        if (!accountRepairs.has(broken.id)) {
+          accountRepairs.set(broken.id, () => { broken.name = r.name; broken.email = r.email; if (r.phone && !broken.phone) broken.phone = r.phone; });
+          results.accountsRepaired++;
+          results.warnings.push({ row: rowNum, name: r.name, message: 'An existing account had the name and email the wrong way round; it was corrected.' });
+        }
+      }
+    }
     let targetUser: User | undefined =
       usersToAdd.find(u => u.email.toLowerCase() === r.email) ||
       pickAccount(r.email) ||
+      (repairedFrom !== null ? findSwappedAccount(r) : undefined) ||
       (!r.usernameGenerated ? usersToAdd.find(u => u.username.toLowerCase() === r.username.toLowerCase()) || db.users.find(u => u.username.toLowerCase() === r.username.toLowerCase()) : undefined);
 
     let isNewUser = false;
     if (targetUser) {
-      if (targetUser.email.toLowerCase() !== r.email) {
+      if (repairedFrom === null && targetUser.email.toLowerCase() !== r.email) {
         results.failCount++;
         results.errors.push({ row: rowNum, username: r.username, name: r.name, error: `Username "${r.username}" already belongs to a different email address.` });
         report('error');
@@ -3593,17 +3653,24 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     }
 
     if (matchedFarm && !isNewUser && !usersToAdd.includes(targetUser)) {
-      const pool = existingPool.get(holdingKey(r.email, farmKeyOf(matchedFarm.name), r.size, r.sizeUnit));
+      const pool = existingPool.get(holdingKey(r.email, farmKeyOf(matchedFarm.name), r.size, r.sizeUnit)) ||
+        (repairedFrom ? existingPool.get(holdingKey(repairedFrom, farmKeyOf(matchedFarm.name), r.size, r.sizeUnit)) : undefined);
       if (pool && pool.length > 0) {
         const existing = pool.shift()!;
-        if (!(Number(existing.investmentAmount) > 0) && r.investmentAmount > 0) {
-          // Holding exists but has no amount: fill it in from the spreadsheet
+        rowLinks.push({ row: rowNum, name: r.name, farm: r.farmName, holdingId: existing.id, amount: r.investmentAmount, roi: r.roiPaid });
+        const roiBefore = results.roiRecorded;
+        recordRoi(existing.plotId, r, r.investmentAmount || Number(existing.investmentAmount) || 0);
+        const roiChanged = results.roiRecorded > roiBefore;
+        if (r.investmentAmount > 0 && Number(existing.investmentAmount) !== r.investmentAmount) {
+          // The sheet has an amount the portal lacks (or a corrected one): use it
           amountUpdates.push(() => {
             existing.investmentAmount = r.investmentAmount;
             if (r.startDate) existing.startDate = r.startDate;
           });
           results.amountsUpdated++;
           results.totalInvestment += r.investmentAmount;
+          report('amount_updated');
+        } else if (roiChanged) {
           report('amount_updated');
         } else {
           results.holdingsAlreadyPresent++;
@@ -3676,8 +3743,10 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
         });
       }
 
+      const newHoldingId = `invplot-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`;
+      rowLinks.push({ row: rowNum, name: r.name, farm: r.farmName, holdingId: newHoldingId, amount: r.investmentAmount, roi: r.roiPaid });
       investorPlotsToAdd.push({
-        id: `invplot-${Date.now()}-${rowNum}-${Math.random().toString(36).slice(2, 6)}`,
+        id: newHoldingId,
         investorId: targetUser.id,
         plotId: assignedPlotId,
         investmentAmount: r.investmentAmount,
@@ -3686,6 +3755,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
         contractRef: r.contractRef ? String(r.contractRef).trim() : `CON-BLK-${Date.now().toString().slice(-5)}-${rowNum}`,
         isActive: true
       });
+      recordRoi(assignedPlotId, r, r.investmentAmount);
       affectedFarmIds.add(matchedFarm.id);
       results.plotsCreatedCount++;
       results.totalInvestment += r.investmentAmount;
@@ -3701,8 +3771,10 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
   }
 
   // Persist changes if any succeeded
-  if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0 || amountUpdates.length > 0) {
+  if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0 || amountUpdates.length > 0 || accountRepairs.size > 0 || financialsToAdd.length > 0) {
+    accountRepairs.forEach(apply => apply());
     amountUpdates.forEach(apply => apply());
+    db.financials.push(...financialsToAdd);
     db.farms.push(...farmsToAdd);
     db.users.push(...usersToAdd);
     plotUpdates.forEach(apply => apply());
@@ -3722,7 +3794,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     });
 
     recordAudit(db, currentUser, 'data.import_investors', {
-      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; amountsUpdated=${amountUpdates.length}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
+      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; amountsUpdated=${amountUpdates.length}; accountsRepaired=${accountRepairs.size}; roiPayouts=${results.roiRecorded}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
     });
     saveDb();
 
@@ -3734,6 +3806,30 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
       }
     }
   }
+
+  // Read back what was saved: every sheet row should now be a farm in its
+  // estate, owned by that person, with the sheet's amount and ROI paid.
+  const problems: Array<{ row: number; name: string; problem: string }> = [];
+  for (const link of rowLinks) {
+    const h = db.investorPlots.find(x => x.id === link.holdingId && x.isActive !== false);
+    const plot = h && db.plots.find(p => p.id === h.plotId);
+    const farm = plot && db.farms.find(f => f.id === plot.farmId);
+    const owner = h && db.users.find(u => u.id === h.investorId);
+    if (!h || !plot || !farm || !owner) { problems.push({ row: link.row, name: link.name, problem: 'Not linked to a farm in an estate.' }); continue; }
+    if (farmKeyOf(farm.name) !== farmKeyOf(link.farm)) problems.push({ row: link.row, name: link.name, problem: `Saved under "${farm.name}" instead of "${link.farm}".` });
+    if (link.amount > 0 && Number(h.investmentAmount) !== link.amount) problems.push({ row: link.row, name: link.name, problem: `Amount shows ₦${Number(h.investmentAmount).toLocaleString()} instead of ₦${link.amount.toLocaleString()}.` });
+    if (link.roi > 0) {
+      const paid = db.financials.filter(fin => fin.plotId === plot.id && String(fin.status).toLowerCase() === 'paid').reduce((s2, fin) => s2 + (Number(fin.payoutAmount) || 0), 0);
+      if (paid < link.roi) problems.push({ row: link.row, name: link.name, problem: `ROI paid shows ₦${paid.toLocaleString()} instead of ₦${link.roi.toLocaleString()}.` });
+    }
+  }
+  results.verification = {
+    checked: dryRun ? 0 : rowLinks.length,
+    ok: dryRun ? 0 : rowLinks.length - new Set(problems.map(p => p.row)).size,
+    sheetInvested: rowLinks.reduce((s2, l) => s2 + l.amount, 0),
+    sheetRoi: rowLinks.reduce((s2, l) => s2 + l.roi, 0),
+    problems: dryRun ? [] : problems
+  };
 
   return results;
 }

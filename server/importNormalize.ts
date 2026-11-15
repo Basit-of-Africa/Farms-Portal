@@ -33,6 +33,8 @@ export interface NormalizedImportRow {
   sizeUnit: SizeUnit;
   cropType: string;
   investmentAmount: number;
+  /** Total returns already paid to this owner for this farm (₦), 0 if none */
+  roiPaid: number;
   ownershipPercentage: number;
   contractRef?: string;
   startDate?: string;
@@ -434,7 +436,15 @@ export function normalizeImportRows(rawRows: Array<Record<string, unknown>>, ctx
       }
     }
 
-    if (v.roiPaid) roiColumnRows++;
+    let roiPaid = 0;
+    if (v.roiPaid) {
+      const amt = parseAmount(v.roiPaid);
+      if (amt === null || amt < 0) warnings.push(`Total ROI paid "${v.roiPaid}" could not be read; it was left out.`);
+      else if (amt > 0) {
+        roiPaid = amt;
+        roiColumnRows++;
+      }
+    }
 
     return {
       rowNum,
@@ -456,6 +466,7 @@ export function normalizeImportRows(rawRows: Array<Record<string, unknown>>, ctx
       sizeUnit: unit,
       cropType,
       investmentAmount,
+      roiPaid,
       ownershipPercentage,
       contractRef: v.contractRef,
       startDate,
@@ -562,7 +573,7 @@ export function normalizeImportRows(rawRows: Array<Record<string, unknown>>, ctx
   if (inferredCrops) globalWarnings.push(`Crop was taken from the farm name for ${inferredCrops} row(s).`);
   if (defaultedCrops) globalWarnings.push(`Crop defaulted to "Oil Palm" for ${defaultedCrops} row(s).`);
   if (missingAmounts) globalWarnings.push(`${missingAmounts} holding(s) have no investment amount and will be recorded as ₦0.`);
-  if (roiColumnRows) globalWarnings.push('ROI/returns paid values are not imported. Record payouts in the Ledger so each has a period and date.');
+  if (roiColumnRows) globalWarnings.push(`${roiColumnRows} row(s) have a total ROI paid. Each is recorded as one paid payout ("Paid before the portal"), which you can edit or split by period later.`);
   if (unknownColumns.size) globalWarnings.push(`These columns were not recognised and were ignored: ${[...unknownColumns].join(', ')}.`);
 
   return { rows, globalWarnings };
