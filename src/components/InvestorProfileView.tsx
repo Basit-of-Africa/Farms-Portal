@@ -23,6 +23,11 @@ import {
   Calendar
 } from 'lucide-react';
 import { User as UserType, UserRole, FinancialStatus } from '../types';
+import { HoldingDialog, PayoutDialog, HoldingRecord, PayoutRecord } from './HoldingDialogs';
+import { Button } from './ui/button';
+import { useConfirm } from './ui/confirm';
+import { toast } from './ui/sonner';
+import { Pencil, Trash2, Plus } from 'lucide-react';
 
 interface InvestorProfileViewProps {
   investorId: string;
@@ -107,13 +112,31 @@ export default function InvestorProfileView({
   const [profile, setProfile] = useState<InvestorProfileResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [holdingDialog, setHoldingDialog] = useState<{ open: boolean; holding: HoldingRecord | null }>({ open: false, holding: null });
+  const [payoutDialog, setPayoutDialog] = useState<{ open: boolean; payout: PayoutRecord | null }>({ open: false, payout: null });
+  const confirmDialog = useConfirm();
+  const reload = () => setReloadKey(k => k + 1);
+
+  const deleteRecord = async (url: string, title: string, description: string) => {
+    if (!(await confirmDialog({ title, description, confirmText: 'Delete', destructive: true }))) return;
+    try {
+      const res = await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not delete.');
+      toast.success('Deleted.');
+      reload();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
 
   useEffect(() => {
     let isCancelled = false;
 
     const fetchProfile = async () => {
       try {
-        setLoading(true);
+        if (reloadKey === 0) setLoading(true);
         setError(null);
         const res = await fetch(`/api/admin/investors/${encodeURIComponent(investorId)}/profile`, {
           headers: {
@@ -143,7 +166,7 @@ export default function InvestorProfileView({
     return () => {
       isCancelled = true;
     };
-  }, [investorId, token, refreshSignal]);
+  }, [investorId, token, refreshSignal, reloadKey]);
 
   const getStatusBadgeClass = (status: FinancialStatus | string) => {
     switch (status) {
@@ -456,9 +479,12 @@ export default function InvestorProfileView({
               </p>
             </div>
           </div>
-          <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-muted dark:bg-stone-800 text-foreground/80 dark:text-stone-300">
-            {holdings.length} Plot{holdings.length === 1 ? '' : 's'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-muted dark:bg-stone-800 text-foreground/80 dark:text-stone-300">
+              {holdings.length} Plot{holdings.length === 1 ? '' : 's'}
+            </span>
+            <Button size="sm" onClick={() => setHoldingDialog({ open: true, holding: null })}><Plus /> Add holding</Button>
+          </div>
         </div>
 
         {holdings.length === 0 ? (
@@ -478,7 +504,8 @@ export default function InvestorProfileView({
                   <th className="py-3.5 px-3 font-bold text-right">Amount Invested</th>
                   <th className="py-3.5 px-3 font-bold text-right">Returns Earned</th>
                   <th className="py-3.5 px-3 font-bold">Contract Ref</th>
-                  <th className="py-3.5 px-5 font-bold text-center">Status</th>
+                  <th className="py-3.5 px-3 font-bold text-center">Status</th>
+                  <th className="py-3.5 px-5 font-bold text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border dark:divide-stone-800">
@@ -535,6 +562,19 @@ export default function InvestorProfileView({
                         {h.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
                       </span>
                     </td>
+                    <td className="py-4 px-5 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="icon" aria-label={`Edit holding ${h.plotNumber}`} title="Edit holding" onClick={() => setHoldingDialog({ open: true, holding: h })}><Pencil /></Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:bg-destructive/10"
+                        aria-label={`Delete holding ${h.plotNumber}`}
+                        title="Delete holding"
+                        onClick={() => deleteRecord(`/api/admin/holdings/${h.id}`, `Delete holding on ${h.farmName}, plot ${h.plotNumber}?`, 'The investor will no longer own this plot. Payouts already recorded for the plot are kept. To keep the record but hide it, edit the holding and untick "Active" instead.')}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -557,9 +597,12 @@ export default function InvestorProfileView({
               </p>
             </div>
           </div>
-          <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-muted dark:bg-stone-800 text-foreground/80 dark:text-stone-300">
-            {financials.length} Record{financials.length === 1 ? '' : 's'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-muted dark:bg-stone-800 text-foreground/80 dark:text-stone-300">
+              {financials.length} Record{financials.length === 1 ? '' : 's'}
+            </span>
+            <Button size="sm" disabled={holdings.length === 0} title={holdings.length === 0 ? 'Add a holding first' : undefined} onClick={() => setPayoutDialog({ open: true, payout: null })}><Plus /> Record payout</Button>
+          </div>
         </div>
 
         {financials.length === 0 ? (
@@ -578,7 +621,8 @@ export default function InvestorProfileView({
                   <th className="py-3.5 px-3 font-bold text-center">Yield ROI %</th>
                   <th className="py-3.5 px-3 font-bold">Payout Date</th>
                   <th className="py-3.5 px-3 font-bold text-center">Status</th>
-                  <th className="py-3.5 px-5 font-bold">Notes</th>
+                  <th className="py-3.5 px-3 font-bold">Notes</th>
+                  <th className="py-3.5 px-5 font-bold text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border dark:divide-stone-800">
@@ -610,8 +654,21 @@ export default function InvestorProfileView({
                         {fin.status}
                       </span>
                     </td>
-                    <td className="py-4 px-5 text-muted-foreground dark:text-stone-400 max-w-[240px] truncate" title={fin.notes}>
+                    <td className="py-4 px-3 text-muted-foreground dark:text-stone-400 max-w-[240px] truncate" title={fin.notes}>
                       {fin.notes || '—'}
+                    </td>
+                    <td className="py-4 px-5 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="icon" aria-label={`Edit payout ${fin.period} ${fin.year}`} title="Edit payout" onClick={() => setPayoutDialog({ open: true, payout: fin })}><Pencil /></Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:bg-destructive/10"
+                        aria-label={`Delete payout ${fin.period} ${fin.year}`}
+                        title="Delete payout"
+                        onClick={() => deleteRecord(`/api/admin/payouts/${fin.id}`, `Delete the ${fin.period} ${fin.year} payout?`, 'It will be removed from this investor\'s payouts and statements.')}
+                      >
+                        <Trash2 />
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -620,6 +677,23 @@ export default function InvestorProfileView({
           </div>
         )}
       </div>
+      <HoldingDialog
+        token={token}
+        open={holdingDialog.open}
+        holding={holdingDialog.holding}
+        investorId={investor.id}
+        investorName={investor.name}
+        onClose={() => setHoldingDialog({ open: false, holding: null })}
+        onSaved={reload}
+      />
+      <PayoutDialog
+        token={token}
+        open={payoutDialog.open}
+        payout={payoutDialog.payout}
+        plots={holdings.map(h => ({ plotId: h.plotId, label: `${h.farmName} · plot ${h.plotNumber} (${h.sizeHectares} ${h.sizeUnit})` }))}
+        onClose={() => setPayoutDialog({ open: false, payout: null })}
+        onSaved={reload}
+      />
     </div>
   );
 }

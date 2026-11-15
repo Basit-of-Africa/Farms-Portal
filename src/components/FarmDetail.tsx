@@ -19,6 +19,7 @@ import { Input, Textarea } from './ui/input';
 import { Label } from './ui/label';
 import { DataTable } from './ui/data-table';
 import { formatNaira } from '../lib/utils';
+import { HoldingDialog } from './HoldingDialogs';
 
 interface FarmDetailProps {
   user: UserType;
@@ -73,6 +74,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
   const [filterStart, setFilterStart] = useState('');
   const [filterEnd, setFilterEnd] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [addHoldingOpen, setAddHoldingOpen] = useState(false);
 
   const isStaff = user.role === UserRole.ADMIN || user.role === UserRole.FARM_MANAGER;
   const isAdmin = user.role === UserRole.ADMIN;
@@ -438,7 +440,23 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
         {/* INVESTORS (staff) */}
         {isStaff && (
           <TabsContent value="owners" className="flex flex-col gap-3">
-            {isAdmin && onSelectInvestor && <p className="text-sm text-muted-foreground">Select a name to open that investor's profile.</p>}
+            {isAdmin && (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {onSelectInvestor ? "Select a name to open that investor's profile, where holdings and payouts can be edited." : 'Investors with holdings on this farm.'}
+                </p>
+                <Button size="sm" onClick={() => setAddHoldingOpen(true)}><Users /> Add investor to this farm</Button>
+              </div>
+            )}
+            {isAdmin && (
+              <HoldingDialog
+                token={token}
+                open={addHoldingOpen}
+                farmId={farmId}
+                onClose={() => setAddHoldingOpen(false)}
+                onSaved={() => fetchFarmDetails(false)}
+              />
+            )}
             <DataTable columns={ownerColumns} data={farmInvestors} searchPlaceholder="Search investors…" emptyMessage="No investors hold plots on this farm yet." />
           </TabsContent>
         )}

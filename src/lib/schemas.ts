@@ -95,3 +95,36 @@ export const farmDocumentSchema = z.object({
   description: z.string().trim().max(1000).optional().default('')
 });
 export type FarmDocumentInput = z.infer<typeof farmDocumentSchema>;
+
+const moneySchema = z.coerce.number({ invalid_type_error: 'Enter an amount in naira.' }).min(0, 'Amount cannot be negative.').max(1e12, 'Amount is too large.');
+const dateSchema = z.string().trim().refine(v => v === '' || !isNaN(new Date(v).getTime()), 'Enter a valid date.');
+
+/** A holding = one investor's ownership of one plot on a farm. */
+export const holdingSchema = z.object({
+  investorId: z.string().min(1, 'Choose the investor.'),
+  farmId: z.string().min(1, 'Choose the farm.'),
+  plotNumber: z.string().trim().max(50).optional().default(''),
+  size: z.coerce.number({ invalid_type_error: 'Enter the size as a number.' }).positive('Size must be more than 0.').max(100000),
+  sizeUnit: z.enum(['acre', 'hectare', 'plot']),
+  cropType: z.string().trim().min(1, 'Enter the crop.').max(100),
+  investmentAmount: moneySchema,
+  ownershipPercentage: z.coerce.number().min(0.01, 'Ownership must be more than 0%.').max(100, 'Ownership cannot be more than 100%.'),
+  startDate: dateSchema.optional().default(''),
+  contractRef: z.string().trim().max(100).optional().default(''),
+  isActive: z.boolean().optional().default(true)
+});
+export type HoldingInput = z.infer<typeof holdingSchema>;
+
+export const payoutStatuses = ['pending', 'paid', 'partial', 'overdue'] as const;
+/** A payout (return) recorded against a plot for a period. */
+export const payoutSchema = z.object({
+  plotId: z.string().min(1, 'Choose the plot.'),
+  period: z.string().trim().min(1, 'Enter the period, e.g. Q1 or Annual.').max(20),
+  year: z.coerce.number().int().min(2000, 'Enter a valid year.').max(2100, 'Enter a valid year.'),
+  payoutAmount: moneySchema,
+  roiPercentage: z.coerce.number({ invalid_type_error: 'Enter the return as a percentage.' }).min(0, 'Cannot be negative.').max(1000, 'That return looks too high.'),
+  payoutDate: dateSchema.optional().default(''),
+  status: z.enum(payoutStatuses),
+  notes: z.string().trim().max(1000).optional().default('')
+});
+export type PayoutInput = z.infer<typeof payoutSchema>;

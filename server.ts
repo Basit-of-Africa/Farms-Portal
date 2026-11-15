@@ -40,6 +40,7 @@ import {
 } from './server/privacy';
 import { normalizeImportRows, farmKeyOf, NormalizedImportRow } from './server/importNormalize';
 import { buildHealthReport } from './server/dataHealth';
+import { registerHoldingRoutes } from './server/holdings';
 import {
   User,
   UserRole,
@@ -3379,6 +3380,8 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     skippedCount: 0,
     usersCreatedCount: 0,
     existingUsersMatchedCount: 0,
+    holdingsAlreadyPresent: 0,
+    amountsUpdated: 0,
     farmsCreatedCount: 0,
     farmsCreated: [] as string[],
     plotsCreatedCount: 0,
@@ -3388,7 +3391,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     errors: [] as { row: number; username?: string; name?: string; error: string }[],
     warnings: [] as { row: number; name?: string; message: string }[],
     globalWarnings,
-    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number }>
+    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number }>
   };
 
   const isManager = currentUser.role === UserRole.FARM_MANAGER;
@@ -3404,11 +3407,33 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
   const findFarm = (list: Farm[], r: NormalizedImportRow) =>
     list.find(f => (r.farmId && f.id === r.farmId) || farmKeyOf(f.name) === r.farmKey);
 
+  // Holdings already in the portal, keyed by owner email + farm + size, so a
+  // re-imported spreadsheet adds only what is missing instead of duplicating.
+  // Keyed by email (not account) so holdings on duplicate accounts still count.
+  const holdingKey = (email: string, farmKey: string, size: number, unit: string) =>
+    `${email.toLowerCase()}|${farmKey}|${Math.round((Number(size) || 0) * 10000) / 10000}|${(unit || 'acre').toLowerCase()}`;
+  const existingPool = new Map<string, InvestorPlot[]>();
+  for (const h of db.investorPlots) {
+    if (h.isActive === false) continue;
+    const owner = db.users.find(u => u.id === h.investorId);
+    const plot = db.plots.find(p => p.id === h.plotId);
+    const farm = plot ? db.farms.find(f => f.id === plot.farmId) : undefined;
+    if (!owner || !plot || !farm) continue;
+    const k = holdingKey(owner.email || '', farmKeyOf(farm.name), Number(plot.sizeHectares), plot.sizeUnit || 'acre');
+    existingPool.set(k, [...(existingPool.get(k) || []), h]);
+  }
+  const amountUpdates: Array<() => void> = [];
+  // When several accounts share an email, use the one that already holds plots
+  const pickAccount = (email: string) => {
+    const candidates = db.users.filter(u => (u.email || '').toLowerCase() === email);
+    return candidates.find(u => db.investorPlots.some(h => h.investorId === u.id)) || candidates[0];
+  };
+
   for (const r of rows) {
     const rowNum = r.rowNum;
     r.warnings.forEach(message => results.warnings.push({ row: rowNum, name: r.name, message }));
     const sizeLabel = `${r.size} ${r.sizeUnit}${r.size === 1 ? '' : 's'}`;
-    const report = (status: 'new_user' | 'existing_user' | 'skipped' | 'error') =>
+    const report = (status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error') =>
       results.rows.push({ row: rowNum, status, name: r.name, email: r.email, username: r.username, farm: r.farmName, size: r.farmName ? sizeLabel : '', crop: r.farmName ? r.cropType : '', amount: r.investmentAmount });
 
     if (r.errors.length > 0) {
@@ -3468,7 +3493,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     // Find or create the investor account (matched by email, then username)
     let targetUser: User | undefined =
       usersToAdd.find(u => u.email.toLowerCase() === r.email) ||
-      db.users.find(u => u.email.toLowerCase() === r.email) ||
+      pickAccount(r.email) ||
       (!r.usernameGenerated ? usersToAdd.find(u => u.username.toLowerCase() === r.username.toLowerCase()) || db.users.find(u => u.username.toLowerCase() === r.username.toLowerCase()) : undefined);
 
     let isNewUser = false;
@@ -3515,6 +3540,27 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
       usersToAdd.push(targetUser);
       results.usersCreatedCount++;
       isNewUser = true;
+    }
+
+    if (matchedFarm && !isNewUser && !usersToAdd.includes(targetUser)) {
+      const pool = existingPool.get(holdingKey(r.email, farmKeyOf(matchedFarm.name), r.size, r.sizeUnit));
+      if (pool && pool.length > 0) {
+        const existing = pool.shift()!;
+        if (!(Number(existing.investmentAmount) > 0) && r.investmentAmount > 0) {
+          // Holding exists but has no amount: fill it in from the spreadsheet
+          amountUpdates.push(() => {
+            existing.investmentAmount = r.investmentAmount;
+            if (r.startDate) existing.startDate = r.startDate;
+          });
+          results.amountsUpdated++;
+          results.totalInvestment += r.investmentAmount;
+          report('amount_updated');
+        } else {
+          results.holdingsAlreadyPresent++;
+          report('already_present');
+        }
+        continue;
+      }
     }
 
     if (matchedFarm) {
@@ -3583,7 +3629,8 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
   }
 
   // Persist changes if any succeeded
-  if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0) {
+  if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0 || amountUpdates.length > 0) {
+    amountUpdates.forEach(apply => apply());
     db.farms.push(...farmsToAdd);
     db.users.push(...usersToAdd);
     plotUpdates.forEach(apply => apply());
@@ -3603,7 +3650,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     });
 
     recordAudit(db, currentUser, 'data.import_investors', {
-      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
+      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; amountsUpdated=${amountUpdates.length}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
     });
     saveDb();
 
@@ -5261,6 +5308,9 @@ app.post('/api/admin/database/import', requireAuth, async (req, res) => {
     res.status(500).json({ error: `Failed to restore database state: ${err.message || 'Unknown error'}` });
   }
 });
+
+// Admin: add, edit and delete holdings and payouts
+registerHoldingRoutes(app, { getDb: () => db, saveDb, getSettings, requireAuth });
 
 // Admin: read-only integrity report (broken links, duplicates, hidden records)
 app.get('/api/admin/data-health', requireAuth, (req, res) => {

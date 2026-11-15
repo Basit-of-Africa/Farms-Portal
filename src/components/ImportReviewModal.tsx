@@ -33,7 +33,7 @@ interface ImportReviewModalProps {
 
 interface PreviewRow {
   row: number;
-  status: 'new_user' | 'existing_user' | 'skipped' | 'error';
+  status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error';
   name: string;
   email: string;
   username: string;
@@ -45,9 +45,11 @@ interface PreviewRow {
   warnings: string[];
 }
 
-const STATUS: Record<PreviewRow['status'], { label: string; variant: 'success' | 'default' | 'muted' | 'destructive' }> = {
+const STATUS: Record<PreviewRow['status'], { label: string; variant: 'success' | 'default' | 'muted' | 'destructive' | 'warning' }> = {
   new_user: { label: 'New account', variant: 'success' },
   existing_user: { label: 'Add to account', variant: 'default' },
+  already_present: { label: 'Already in portal', variant: 'muted' },
+  amount_updated: { label: 'Amount filled in', variant: 'warning' },
   skipped: { label: 'Skipped', variant: 'muted' },
   error: { label: 'Error', variant: 'destructive' }
 };
@@ -91,6 +93,7 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
     return (preview.rows || []).map((r: any) => ({ ...r, row: r.row + rowOffset, errors: issues.get(r.row)?.errors || [], warnings: issues.get(r.row)?.warnings || [] }));
   }, [preview, rowOffset]);
 
+  const changeCount = (preview?.successCount || 0) + (preview?.amountsUpdated || 0);
   const issueCount = rows.filter(r => r.errors.length || r.warnings.length).length;
   const visibleRows = onlyIssues ? rows.filter(r => r.errors.length || r.warnings.length) : rows;
 
@@ -147,7 +150,7 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
   const confirmImport = async () => {
     if (preview.failCount > 0) {
       const ok = await confirmDialog({
-        title: `Import ${preview.successCount} row(s) and leave out ${preview.failCount}?`,
+        title: `Save ${changeCount} change(s) and leave out ${preview.failCount} row(s)?`,
         description: 'Rows with errors are not imported. You can fix them in the file and import them later.',
         confirmText: 'Import'
       });
@@ -185,8 +188,9 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
           {result && (
             <div className="p-4 rounded-2xl bg-accent text-accent-foreground text-sm space-y-1">
               <p className="font-semibold flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" /> Imported {result.successCount} holding(s).
+                <CheckCircle2 className="h-4 w-4" /> Added {result.successCount} holding(s){result.amountsUpdated ? ` and filled in ${result.amountsUpdated} amount(s)` : ''}.
               </p>
+              {result.holdingsAlreadyPresent > 0 && <p>{result.holdingsAlreadyPresent} row(s) were already in the portal and were left as they are.</p>}
               <p>
                 {result.usersCreatedCount} new account(s), {result.farmsCreatedCount} new farm(s), {result.plotsCreatedCount} plot(s).
               </p>
@@ -200,14 +204,14 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
 
           {preview && !result && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                 {[
                   ['Rows', preview.total],
-                  ['Will import', preview.successCount],
+                  ['New holdings', preview.successCount],
+                  ['Already in portal', preview.holdingsAlreadyPresent ?? 0],
+                  ['Amounts filled in', preview.amountsUpdated ?? 0],
                   ['New accounts', preview.usersCreatedCount],
-                  ['Existing accounts', preview.existingUsersMatchedCount],
-                  ['New farms', preview.farmsCreatedCount],
-                  ['Total invested', formatNaira(preview.totalInvestment)]
+                  ['New farms', preview.farmsCreatedCount]
                 ].map(([label, value]) => (
                   <div key={label as string} className="p-3 rounded-2xl bg-muted">
                     <div className="text-xs text-muted-foreground">{label}</div>
@@ -284,9 +288,9 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
             ) : (
               <>
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
-                <Button onClick={confirmImport} disabled={loading || !preview || preview.successCount === 0}>
+                <Button onClick={confirmImport} disabled={loading || !preview || changeCount === 0}>
                   {loading && preview && <Loader2 className="animate-spin" />}
-                  Import {preview?.successCount ?? 0} holding(s)
+                  {changeCount === 0 ? 'Nothing to change' : `Save ${changeCount} change(s)`}
                 </Button>
               </>
             )}
