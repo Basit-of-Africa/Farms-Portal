@@ -1284,7 +1284,7 @@ async function initPostgres() {
   }
 
   if (!isPostgresConfigured()) {
-    console.log('💡 DATABASE_URL not set or set to dummy value. Running in local JSON file mode.');
+    console.log('💡 DATABASE_URL not set: PostgreSQL disabled (Firestore and a local cache file are used).');
     usePostgres = false;
     return;
   }
@@ -1878,7 +1878,8 @@ function migrateUserCredentials(): boolean {
 
   const locked = db.users.filter(u => !isPasswordHash(u.password));
   if (locked.length > 0) {
-    console.warn(`🔒 ${locked.length} account(s) have no password and cannot sign in until an admin sets one: ${locked.map(u => u.username).join(', ')}`);
+    // Count only: logs must not contain personal data (names, emails)
+    console.warn(`🔒 ${locked.length} account(s) have no password and cannot sign in until an admin sends login details (Investors → select → Send login details).`);
   }
   return changed;
 }
