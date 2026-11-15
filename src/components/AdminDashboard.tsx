@@ -955,7 +955,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {investorsList.map((usr) => {
             // Find owned plots
-            const holdings = stats?.investorPlots?.filter((ip: any) => ip.investorId === usr.id && ip.isActive) || [];
+            const holdings = stats?.investorPlots?.filter((ip: any) => ip.investorId === usr.id && ip.isActive !== false) || [];
             const totalInvestedAmount = holdings.reduce((sum: number, ip: any) => sum + ip.investmentAmount, 0);
 
             return (
@@ -1160,7 +1160,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {managersList.map((usr) => {
             // Find manager assignments
-            const managerAssignments = stats?.assignments?.filter((a: any) => a.managerId === usr.id && a.isActive) || [];
+            const managerAssignments = stats?.assignments?.filter((a: any) => a.managerId === usr.id && a.isActive !== false) || [];
 
             return (
               <div 

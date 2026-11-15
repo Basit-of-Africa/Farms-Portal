@@ -39,6 +39,7 @@ import {
   Processor
 } from './server/privacy';
 import { normalizeImportRows, farmKeyOf, NormalizedImportRow } from './server/importNormalize';
+import { buildHealthReport } from './server/dataHealth';
 import {
   User,
   UserRole,
@@ -1799,11 +1800,11 @@ function canAccessDocument(user: User, doc: Document): boolean {
   if (user.role === UserRole.ADMIN) return true;
   if (user.role === UserRole.FARM_MANAGER) {
     // Farm managers can see general docs for farms they manage, but not financial ones
-    const managesFarm = db.assignments.some(a => a.managerId === user.id && a.farmId === doc.farmId && a.isActive);
+    const managesFarm = db.assignments.some(a => a.managerId === user.id && a.farmId === doc.farmId && a.isActive !== false);
     return managesFarm && doc.category !== DocumentCategory.FINANCIAL;
   }
   if (user.role === UserRole.INVESTOR) {
-    const plotIds = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive).map(ip => ip.plotId);
+    const plotIds = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false).map(ip => ip.plotId);
     const ownsPlotInFarm = db.plots.some(p => p.farmId === doc.farmId && plotIds.includes(p.id));
     if (!ownsPlotInFarm) return false;
     if (doc.visibility === DocumentVisibility.FARM) return true;
@@ -1814,7 +1815,7 @@ function canAccessDocument(user: User, doc: Document): boolean {
 
 /** Investor ids linked to farms the manager is actively assigned to. */
 function investorIdsForManager(managerId: string): Set<string> {
-  const farmIds = new Set(db.assignments.filter(a => a.managerId === managerId && a.isActive).map(a => a.farmId));
+  const farmIds = new Set(db.assignments.filter(a => a.managerId === managerId && a.isActive !== false).map(a => a.farmId));
   const plotIds = new Set(db.plots.filter(p => farmIds.has(p.farmId)).map(p => p.id));
   return new Set(db.investorPlots.filter(ip => plotIds.has(ip.plotId)).map(ip => ip.investorId));
 }
@@ -2024,13 +2025,13 @@ app.get('/api/admin/system-stats', requireAuth, (req, res) => {
   const totalInvestors = db.users.filter(u => u.role === UserRole.INVESTOR).length;
   const totalManagers = db.users.filter(u => u.role === UserRole.FARM_MANAGER).length;
   const totalFarms = db.farms.length;
-  const totalActiveFarms = db.farms.filter(f => f.isActive).length;
+  const totalActiveFarms = db.farms.filter(f => f.isActive !== false).length;
   const totalPlotsCount = db.plots.length;
   
   // Calculate total investments
   const totalInvestment = db.investorPlots.reduce((sum, p) => sum + p.investmentAmount, 0);
-  const totalActiveInvestmentCount = db.investorPlots.filter(ip => ip.isActive).length;
-  const totalActiveInvestmentAmount = db.investorPlots.filter(ip => ip.isActive).reduce((sum, p) => sum + p.investmentAmount, 0);
+  const totalActiveInvestmentCount = db.investorPlots.filter(ip => ip.isActive !== false).length;
+  const totalActiveInvestmentAmount = db.investorPlots.filter(ip => ip.isActive !== false).reduce((sum, p) => sum + p.investmentAmount, 0);
   
   // Calculate total paid and pending payouts
   let totalPaidPayouts = 0;
@@ -2141,7 +2142,7 @@ app.get('/api/search', requireAuth, (req, res) => {
   } else if (user.role === UserRole.FARM_MANAGER) {
     // Get assigned farm IDs
     const assignedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
 
     // 1. Farms
@@ -2186,7 +2187,7 @@ app.get('/api/search', requireAuth, (req, res) => {
     matchedFinancials = [];
   } else if (user.role === UserRole.INVESTOR) {
     // Get owned plot IDs
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const ownedPlotIds = investorPlotsList.map(ip => ip.plotId);
     
     // Find farms for those owned plots
@@ -2290,7 +2291,7 @@ app.get('/api/farms', requireAuth, (req, res) => {
   if (user.role === UserRole.FARM_MANAGER) {
     // Get farms assigned to this manager
     const assignedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
     const assignedFarms = db.farms.filter(f => assignedFarmIds.includes(f.id));
     return res.json(assignedFarms.map(enrichFarm));
@@ -2397,7 +2398,7 @@ app.get('/api/updates/manager', requireAuth, (req, res) => {
     assignedFarmIds = db.farms.map(f => f.id);
   } else if (user.role === UserRole.FARM_MANAGER) {
     assignedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
   } else {
     return res.status(403).json({ error: 'Access denied' });
@@ -2438,9 +2439,9 @@ app.post('/api/updates/:updateId/comments', requireAuth, async (req, res) => {
   if (user.role === UserRole.ADMIN) {
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
-    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === update.farmId && a.isActive);
+    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === update.farmId && a.isActive !== false);
   } else if (user.role === UserRole.INVESTOR) {
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     const ownsPlotInFarm = db.plots.some(p => p.farmId === update.farmId && plotIds.includes(p.id));
     const isTargeted = !update.targetInvestorIds || update.targetInvestorIds.length === 0 || update.targetInvestorIds.includes(user.id);
@@ -2542,13 +2543,13 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
     accessAllowed = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     assignedAsManager = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
     if (assignedAsManager) {
       accessAllowed = true;
     }
   } else if (user.role === UserRole.INVESTOR) {
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     const ownsPlotInFarm = db.plots.some(p => p.farmId === farmId && plotIds.includes(p.id));
     if (ownsPlotInFarm) {
@@ -2564,7 +2565,7 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
   let plots = db.plots.filter(p => p.farmId === farmId);
   // If role is investor, format/filter plots so they only see details of their owned plots
   if (user.role === UserRole.INVESTOR) {
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     plots = plots.filter(p => plotIds.includes(p.id));
   }
@@ -2601,7 +2602,7 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
     documents = documents.filter(d => d.category !== DocumentCategory.FINANCIAL);
   } else if (user.role === UserRole.INVESTOR) {
     // Investors can see farm-wide, or specific plot documents matching their holdings
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     documents = documents.filter(
       d => d.visibility === DocumentVisibility.FARM || (d.plotId && plotIds.includes(d.plotId))
@@ -2767,7 +2768,7 @@ app.delete('/api/farms/:id/map-notes/:noteId', requireAuth, (req, res) => {
   // Allow if admin or if manager is the author or manager is assigned to the farm
   let authorized = user.role === UserRole.ADMIN || note.authorId === user.id;
   if (!authorized && user.role === UserRole.FARM_MANAGER) {
-    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === note.farmId && a.isActive);
+    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === note.farmId && a.isActive !== false);
   }
 
   if (!authorized) {
@@ -2790,7 +2791,7 @@ app.get('/api/farms/:id/investors', requireAuth, (req, res) => {
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     authorized = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
   }
 
@@ -2803,7 +2804,7 @@ app.get('/api/farms/:id/investors', requireAuth, (req, res) => {
   const farmPlotIds = farmPlots.map(p => p.id);
 
   // Find all active investorPlot relationships mapping to those plots
-  const ownerships = db.investorPlots.filter(ip => farmPlotIds.includes(ip.plotId) && ip.isActive);
+  const ownerships = db.investorPlots.filter(ip => farmPlotIds.includes(ip.plotId) && ip.isActive !== false);
   const investorIds = [...new Set(ownerships.map(ip => ip.investorId))];
 
   // Map to distinct users who are investors
@@ -2840,7 +2841,7 @@ app.post('/api/updates/farm/:id/new', requireAuth, upload.array('photos', 5), as
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     authorized = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
   }
 
@@ -2899,7 +2900,7 @@ app.post('/api/updates/farm/:id/new', requireAuth, upload.array('photos', 5), as
   // EMAIL TRIGGER 1: New farm update posted → email all investors who own plots in that farm (or selected target ones if personalized)
   const investorPlotsOnFarm = db.plots.filter(p => p.farmId === farmId);
   const investorIdsOnFarm = db.investorPlots
-    .filter(ip => ip.isActive && investorPlotsOnFarm.some(p => p.id === ip.plotId))
+    .filter(ip => ip.isActive !== false && investorPlotsOnFarm.some(p => p.id === ip.plotId))
     .map(ip => ip.investorId);
   
   const distinctInvestors = db.users.filter(u => u.role === UserRole.INVESTOR && investorIdsOnFarm.includes(u.id));
@@ -2958,7 +2959,7 @@ app.post('/api/documents/farm/:id/upload', requireAuth, upload.single('file'), a
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     authorized = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
   }
 
@@ -3014,14 +3015,14 @@ app.post('/api/documents/farm/:id/upload', requireAuth, upload.single('file'), a
   // EMAIL TRIGGER 2: New document uploaded → email affected investors
   let targetedInvestors: User[] = [];
   if (newDoc.visibility === DocumentVisibility.PLOT && newDoc.plotId) {
-    const ownerships = db.investorPlots.filter(ip => ip.plotId === newDoc.plotId && ip.isActive);
+    const ownerships = db.investorPlots.filter(ip => ip.plotId === newDoc.plotId && ip.isActive !== false);
     const investorIds = ownerships.map(ip => ip.investorId);
     targetedInvestors = db.users.filter(u => u.role === UserRole.INVESTOR && investorIds.includes(u.id));
   } else {
     // Farm-wide document: email all investors that hold plots on this farm
     const plotsInFarm = db.plots.filter(p => p.farmId === farmId);
     const plotIds = plotsInFarm.map(p => p.id);
-    const farmInvestorsIds = db.investorPlots.filter(ip => ip.isActive && plotIds.includes(ip.plotId)).map(ip => ip.investorId);
+    const farmInvestorsIds = db.investorPlots.filter(ip => ip.isActive !== false && plotIds.includes(ip.plotId)).map(ip => ip.investorId);
     targetedInvestors = db.users.filter(u => u.role === UserRole.INVESTOR && farmInvestorsIds.includes(u.id));
   }
 
@@ -3136,7 +3137,7 @@ app.get('/api/financials/my', requireAuth, (req, res) => {
     const allPayouts = db.financials.map(fin => {
       const plot = db.plots.find(p => p.id === fin.plotId);
       const farm = plot ? db.farms.find(f => f.id === plot.farmId) : null;
-      const ownerShip = db.investorPlots.find(ip => ip.plotId === fin.plotId && ip.isActive);
+      const ownerShip = db.investorPlots.find(ip => ip.plotId === fin.plotId && ip.isActive !== false);
       const investorName = ownerShip ? (db.users.find(u => u.id === ownerShip.investorId)?.name || 'Unknown') : 'Unassigned';
       return {
         ...fin,
@@ -3151,7 +3152,7 @@ app.get('/api/financials/my', requireAuth, (req, res) => {
 
   if (user.role === UserRole.INVESTOR) {
     // Investor sees only their owned plots' summaries
-    const ownerships = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const ownerships = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const ownedPlotIds = ownerships.map(ip => ip.plotId);
     
     const summaries = db.financials
@@ -3233,7 +3234,7 @@ app.post('/api/financials/upload', requireAuth, (req, res) => {
 
   // EMAIL TRIGGER 3: Financial record added → email the specific plot investor
   const plot = db.plots.find(p => p.id === plotId);
-  const investorPlotSetting = db.investorPlots.find(ip => ip.plotId === plotId && ip.isActive);
+  const investorPlotSetting = db.investorPlots.find(ip => ip.plotId === plotId && ip.isActive !== false);
   if (investorPlotSetting) {
     const investor = db.users.find(u => u.id === investorPlotSetting.investorId && u.role === UserRole.INVESTOR);
     if (investor) {
@@ -3391,7 +3392,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
   };
 
   const isManager = currentUser.role === UserRole.FARM_MANAGER;
-  const managedFarmIds = new Set(db.assignments.filter(a => a.managerId === currentUser.id && a.isActive).map(a => a.farmId));
+  const managedFarmIds = new Set(db.assignments.filter(a => a.managerId === currentUser.id && a.isActive !== false).map(a => a.farmId));
 
   const usersToAdd: User[] = [];
   const plotsToAdd: FarmPlot[] = [];
@@ -4473,7 +4474,7 @@ app.post('/api/admin/assignments/create', requireAuth, (req, res) => {
 
   const { managerId, farmId } = req.body;
   
-  const alreadyAssigned = db.assignments.find(a => a.managerId === managerId && a.farmId === farmId && a.isActive);
+  const alreadyAssigned = db.assignments.find(a => a.managerId === managerId && a.farmId === farmId && a.isActive !== false);
   if (alreadyAssigned) {
     return res.status(400).json({ error: 'Manager is already assigned to this farm.' });
   }
@@ -4626,7 +4627,7 @@ app.get('/api/emails/outbox', requireAuth, (req, res) => {
   if (user.role === UserRole.FARM_MANAGER) {
     // Farm Managers should see only messages/emails they shared with their attached investors
     const managedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
     
     const managedPlotIds = db.plots
@@ -4634,7 +4635,7 @@ app.get('/api/emails/outbox', requireAuth, (req, res) => {
       .map(p => p.id);
     
     const managedInvestorPlots = db.investorPlots
-      .filter(ip => ip.isActive && managedPlotIds.includes(ip.plotId));
+      .filter(ip => ip.isActive !== false && managedPlotIds.includes(ip.plotId));
     
     const attachedInvestorIds = [...new Set(managedInvestorPlots.map(ip => ip.investorId))];
     
@@ -4698,13 +4699,13 @@ app.get('/api/notifications', requireAuth, (req, res) => {
   const notifications: any[] = [];
 
   // 1. Gather investor plots/farms if needed
-  const myInvestorPlots = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+  const myInvestorPlots = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
   const myPlotIds = myInvestorPlots.map(ip => ip.plotId);
   const myInvestorFarmsList = db.plots.filter(p => myPlotIds.includes(p.id));
   const myInvestorFarmIds = [...new Set(myInvestorFarmsList.map(p => p.farmId))];
 
   // 2. Gather manager farms if needed
-  const myAssignments = db.assignments.filter(a => a.managerId === user.id && a.isActive);
+  const myAssignments = db.assignments.filter(a => a.managerId === user.id && a.isActive !== false);
   const myManagedFarmIds = myAssignments.map(a => a.farmId);
 
   // Gather ROI Payouts
@@ -5259,6 +5260,16 @@ app.post('/api/admin/database/import', requireAuth, async (req, res) => {
     console.error('❌ Database state import error:', err);
     res.status(500).json({ error: `Failed to restore database state: ${err.message || 'Unknown error'}` });
   }
+});
+
+// Admin: read-only integrity report (broken links, duplicates, hidden records)
+app.get('/api/admin/data-health', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  if (user.role !== UserRole.ADMIN) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  recordAudit(db, user, 'system.data_check', { req });
+  res.json(buildHealthReport(db));
 });
 
 // Health check for uptime monitors / keep-alive pings. Public, tiny, and

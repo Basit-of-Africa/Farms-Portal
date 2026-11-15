@@ -40,6 +40,7 @@ import {
 import { User, UserRole, SystemSettings } from '../types';
 import { useConfirm } from './ui/confirm';
 import DangerZone from './DangerZone';
+import DataHealthCard from './DataHealthCard';
 
 interface SettingsViewProps {
   user: User;
@@ -2265,6 +2266,9 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         )}
 
       </div>
+
+      {/* Read-only integrity report */}
+      <DataHealthCard token={token} />
 
       {/* Irreversible actions live here, not on the dashboard */}
       <DangerZone token={token} onDone={triggerRefreshSignal} />
