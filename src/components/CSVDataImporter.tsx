@@ -246,38 +246,38 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
     <div id="unified-data-console" className="space-y-6 text-left">
       {reviewModal}
       {/* Console Sub-header Navigation */}
-      <div className="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-4">
+      <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-4">
         <div>
-          <h3 className="font-sans font-extrabold text-base text-gray-800 flex items-center gap-2">
+          <h3 className="font-sans font-extrabold text-base text-foreground flex items-center gap-2">
             <Database className="h-5 w-5 text-[#2D6A4F] shrink-0" />
-            Unified Data Migration Wizard
+            Import and export
           </h3>
-          <p className="text-xs text-gray-400 mt-1">
-            Perform bulk CSV imports or extract real-time system states atomically.
+          <p className="text-xs text-muted-foreground mt-1">
+            Import investors from a spreadsheet, or export your data.
           </p>
         </div>
 
         {/* Custom Tab Switcher */}
-        <div className="bg-gray-100 p-1 rounded-xl flex items-center gap-1">
+        <div className="bg-muted p-1 rounded-xl flex items-center gap-1">
           <button
             onClick={() => setActiveSubTab('import')}
             className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
               activeSubTab === 'import' 
                 ? 'bg-[#1B4332] text-white shadow-sm font-bold' 
-                : 'text-gray-500 hover:text-gray-800'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Import Wizard
+            Import
           </button>
           <button
             onClick={() => setActiveSubTab('export')}
             className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
               activeSubTab === 'export' 
                 ? 'bg-[#1B4332] text-white shadow-sm font-bold' 
-                : 'text-gray-500 hover:text-gray-800'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Export Wizard
+            Export
           </button>
         </div>
       </div>
@@ -285,14 +285,14 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
       {/* ==================== IMPORT TAB INTERFACE ==================== */}
       {activeSubTab === 'import' && (
         <div className="space-y-6">
-          <div className="bg-[#52B788]/5 border border-[#2D6A4F]/10 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-[#52B788]/5 border border-border rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h4 className="font-sans font-bold text-sm text-[#1B4332] flex items-center gap-2">
+              <h4 className="font-sans font-bold text-sm text-primary flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-[#2D6A4F] animate-pulse" />
-                CSV Bulk Importer
+                Import from a CSV file
               </h4>
-              <p className="text-[11px] text-gray-500 mt-0.5 max-w-lg">
-                Onboard new investors, establish associated farm estates, and assign land plots atomically using a pre-formatted CSV template.
+              <p className="text-[11px] text-muted-foreground mt-0.5 max-w-lg">
+                Add investors, farms and plots from a spreadsheet. You review everything before it is saved.
               </p>
             </div>
             <button
@@ -300,34 +300,34 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
               className="bg-[#1B4332] text-white hover:bg-[#1B4332]/90 text-[10px] font-mono uppercase tracking-wider py-2 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shrink-0 self-start sm:self-auto"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Download Import Template</span>
+              <span>Download template</span>
             </button>
           </div>
 
           {results && (
             <div className="p-4.5 bg-emerald-50/70 border border-emerald-100 rounded-2xl space-y-3.5">
-              <div className="flex items-center gap-2 text-[#1B4332] font-semibold text-xs">
+              <div className="flex items-center gap-2 text-primary font-semibold text-xs">
                 <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
                 <span>CSV Import Completed!</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
-                  <span className="block text-[9px] uppercase font-mono text-gray-400">Total Rows</span>
-                  <span className="text-base font-black font-mono text-gray-800">{results.total || 0}</span>
+                <div className="p-3 bg-card rounded-xl border border-emerald-100/50">
+                  <span className="block text-[9px] uppercase font-mono text-muted-foreground">Total Rows</span>
+                  <span className="text-base font-black font-mono text-foreground">{results.total || 0}</span>
                 </div>
-                <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                <div className="p-3 bg-card rounded-xl border border-emerald-100/50">
                   <span className="block text-[9px] uppercase font-mono text-emerald-500">Users Registered</span>
                   <span className="text-base font-black font-mono text-emerald-600">{results.successCount || 0}</span>
                 </div>
-                <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                <div className="p-3 bg-card rounded-xl border border-emerald-100/50">
                   <span className="block text-[9px] uppercase font-mono text-amber-500">Estates Formed</span>
                   <span className="text-base font-black font-mono text-amber-600">{results.farmsCreatedCount || 0}</span>
                 </div>
-                <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                <div className="p-3 bg-card rounded-xl border border-emerald-100/50">
                   <span className="block text-[9px] uppercase font-mono text-blue-500">Plots Mapped</span>
                   <span className="text-base font-black font-mono text-blue-600">{results.plotsCreatedCount || 0}</span>
                 </div>
-                <div className="p-3 bg-white rounded-xl border border-emerald-100/50">
+                <div className="p-3 bg-card rounded-xl border border-emerald-100/50">
                   <span className="block text-[9px] uppercase font-mono text-rose-400">Skipped / Failed</span>
                   <span className="text-base font-black font-mono text-rose-500">{results.failCount || 0}</span>
                 </div>
@@ -370,7 +370,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                     ? 'border-[#2D6A4F] bg-emerald-50/40' 
                     : file 
                       ? 'border-emerald-200 bg-emerald-50/10' 
-                      : 'border-gray-200 hover:border-[#2D6A4F]/20 bg-white'
+                      : 'border-border hover:border-[#2D6A4F]/20 bg-card'
                 }`}
               >
                 <input
@@ -386,16 +386,16 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                   </div>
                   {file ? (
                     <div>
-                      <p className="text-xs font-mono font-bold text-gray-700 flex items-center justify-center gap-1">
+                      <p className="text-xs font-mono font-bold text-foreground flex items-center justify-center gap-1">
                         <FileText className="h-4 w-4 text-emerald-600" />
                         {file.name}
                       </p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{(file.size / 1024).toFixed(1)} KB • Click or drop a new file to replace</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{(file.size / 1024).toFixed(1)} KB • Click or drop a new file to replace</p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-xs font-sans font-bold text-gray-700">Drag & drop your customized CSV template here</p>
-                      <p className="text-[10px] text-gray-400 mt-1">or click to browse local files</p>
+                      <p className="text-xs font-sans font-bold text-foreground">Drag & drop your customized CSV template here</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">or click to browse local files</p>
                     </div>
                   )}
                 </label>
@@ -403,15 +403,15 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
             </div>
 
             {records.length > 0 && (
-              <div className="md:col-span-12 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                <div className="bg-gray-50/60 px-4 py-2.5 flex items-center justify-between border-b border-gray-100">
-                  <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider">CSV Data Content Preview ({records.length} records parsed)</span>
-                  <span className="text-[9px] bg-emerald-100 text-[#1B4332] px-2 py-0.5 rounded-full font-bold uppercase font-mono border border-emerald-200/50">Validation Passed</span>
+              <div className="md:col-span-12 bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+                <div className="bg-muted/40 px-4 py-2.5 flex items-center justify-between border-b border-border">
+                  <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider">CSV Data Content Preview ({records.length} records parsed)</span>
+                  <span className="text-[9px] bg-emerald-100 text-primary px-2 py-0.5 rounded-full font-bold uppercase font-mono border border-emerald-200/50">Validation Passed</span>
                 </div>
 
                 <div className="max-h-60 overflow-y-auto px-4">
                   <table className="w-full text-[11px] font-mono text-left">
-                    <thead className="bg-gray-100/80 text-gray-400 sticky top-0 uppercase text-[9px] tracking-wider">
+                    <thead className="bg-gray-100/80 text-muted-foreground sticky top-0 uppercase text-[9px] tracking-wider">
                       <tr>
                         <th className="p-2">User details</th>
                         <th className="p-2">Farm estate</th>
@@ -419,27 +419,27 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                         <th className="p-2">Investment (NGN)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-border">
                       {records.map((rec, i) => (
-                        <tr key={i} className="hover:bg-gray-50/50">
+                        <tr key={i} className="hover:bg-muted/60">
                           <td className="p-2">
-                            <div className="font-bold text-gray-700">{rec.name || rec.username}</div>
-                            <div className="text-[10px] text-gray-400">{rec.email}</div>
+                            <div className="font-bold text-foreground">{rec.name || rec.username}</div>
+                            <div className="text-[10px] text-muted-foreground">{rec.email}</div>
                           </td>
-                          <td className="p-2 text-gray-600">
+                          <td className="p-2 text-foreground/80">
                             {rec.farmEstate ? (
                               <div>
-                                <span className="font-semibold text-gray-800">{rec.farmEstate}</span>
-                                {rec.farmLocation && <div className="text-[9px] text-gray-400">{rec.farmLocation}, {rec.farmState || 'Ondo'}</div>}
+                                <span className="font-semibold text-foreground">{rec.farmEstate}</span>
+                                {rec.farmLocation && <div className="text-[9px] text-muted-foreground">{rec.farmLocation}, {rec.farmState || 'Ondo'}</div>}
                               </div>
                             ) : (
                               <span className="text-gray-300">—</span>
                             )}
                           </td>
-                          <td className="p-2 text-gray-600">
+                          <td className="p-2 text-foreground/80">
                             {rec.plotNumber || rec.sizeHectares || rec.farmEstate || rec.farmLocation ? (
                               <div>
-                                Plot No: <span className="font-semibold text-gray-800">{rec.plotNumber || 'Auto-assigned'}</span>
+                                Plot No: <span className="font-semibold text-foreground">{rec.plotNumber || 'Auto-assigned'}</span>
                                 <div>{rec.sizeHectares || '1.0'} {rec.sizeUnit || 'acre'} ({rec.cropType || 'Oil Palm'})</div>
                               </div>
                             ) : (
@@ -457,10 +457,10 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                   </table>
                 </div>
 
-                <div className="p-4 bg-gray-50/30 border-t border-gray-100 flex items-center justify-end gap-2.5">
+                <div className="p-4 bg-muted/40 border-t border-border flex items-center justify-end gap-2.5">
                   <button
                     onClick={() => { setFile(null); setRecords([]); }}
-                    className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 text-[10px] font-mono uppercase tracking-wider py-2 px-4 rounded-xl cursor-pointer"
+                    className="bg-card hover:bg-muted/60 border border-border text-foreground/80 text-[10px] font-mono uppercase tracking-wider py-2 px-4 rounded-xl cursor-pointer"
                   >
                     Clear File
                   </button>
@@ -499,7 +499,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                   <FileSpreadsheet className="h-4.5 w-4.5 text-amber-700" />
                   Extract & Export System Data
                 </h4>
-                <p className="text-[11px] text-gray-500 mt-0.5">
+                <p className="text-[11px] text-muted-foreground mt-0.5">
                   Download a snapshot of users, estates, and plot structures in either standardized CSV or structured JSON formats.
                 </p>
               </div>
@@ -511,7 +511,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                   className={`px-3 py-1.5 text-xs font-mono font-bold rounded-lg border cursor-pointer transition-all ${
                     exportFormat === 'csv' 
                       ? 'bg-amber-600 text-white border-amber-600 shadow-sm' 
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      : 'bg-card text-foreground/80 border-border hover:bg-muted/60'
                   }`}
                 >
                   CSV Format
@@ -521,7 +521,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                   className={`px-3 py-1.5 text-xs font-mono font-bold rounded-lg border cursor-pointer transition-all ${
                     exportFormat === 'json' 
                       ? 'bg-amber-600 text-white border-amber-600 shadow-sm' 
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      : 'bg-card text-foreground/80 border-border hover:bg-muted/60'
                   }`}
                 >
                   JSON Format
@@ -533,13 +533,13 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 pt-1.5">
               {/* Role filter */}
               <div className="sm:col-span-4 space-y-1">
-                <label className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1">
+                <label className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                   <Filter className="h-3 w-3" /> Role Classification
                 </label>
                 <select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 focus:outline-none focus:border-amber-500"
+                  className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:border-amber-500"
                 >
                   <option value="ALL">All System Roles</option>
                   <option value="INVESTOR">Investors Only</option>
@@ -550,7 +550,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
 
               {/* Text Search filter */}
               <div className="sm:col-span-5 space-y-1">
-                <label className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1">
+                <label className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                   <Search className="h-3 w-3" /> Live Query Filtering
                 </label>
                 <div className="relative">
@@ -559,9 +559,9 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                     placeholder="Search by name, username, email, or estate..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs text-gray-700 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-card border border-border rounded-xl pl-9 pr-3 py-2 text-xs text-foreground focus:outline-none focus:border-amber-500"
                   />
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400" />
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                 </div>
               </div>
 
@@ -570,7 +570,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                 <button
                   onClick={fetchExportData}
                   disabled={exportLoading}
-                  className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 p-2 rounded-xl cursor-pointer shrink-0"
+                  className="bg-card hover:bg-muted/60 border border-border text-foreground/80 p-2 rounded-xl cursor-pointer shrink-0"
                   title="Reload Latest Data"
                 >
                   <RefreshCw className={`h-4 w-4 ${exportLoading ? 'animate-spin' : ''}`} />
@@ -589,9 +589,9 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
           </div>
 
           {/* Export Records Preview Table */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider">
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            <div className="bg-muted/50 px-4 py-3 border-b border-border flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider">
                 System Export Preview ({filteredExportData.length} matches out of {exportPreviewData.length} records)
               </span>
               <span className="text-[9px] bg-amber-100 text-amber-800 font-mono font-bold px-2 py-0.5 rounded-full border border-amber-200">
@@ -603,15 +603,15 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
               {exportLoading ? (
                 <div className="py-12 text-center space-y-2">
                   <RefreshCw className="h-8 w-8 text-amber-500 animate-spin mx-auto" />
-                  <p className="text-xs text-gray-400 font-mono">Syncing system database schema records...</p>
+                  <p className="text-xs text-muted-foreground font-mono">Syncing system database schema records...</p>
                 </div>
               ) : filteredExportData.length === 0 ? (
-                <div className="py-12 text-center text-gray-400 font-mono text-xs">
+                <div className="py-12 text-center text-muted-foreground font-mono text-xs">
                   No matches found for your current filtering parameters.
                 </div>
               ) : (
                 <table className="w-full text-[11px] font-mono text-left">
-                  <thead className="bg-gray-100 text-gray-400 sticky top-0 uppercase text-[9px] tracking-wider">
+                  <thead className="bg-muted text-muted-foreground sticky top-0 uppercase text-[9px] tracking-wider">
                     <tr>
                       <th className="p-2">User / Role</th>
                       <th className="p-2">Contact details</th>
@@ -619,25 +619,25 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                       <th className="p-2">Investment</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-border">
                     {filteredExportData.map((rec, i) => (
-                      <tr key={i} className="hover:bg-gray-50/50">
+                      <tr key={i} className="hover:bg-muted/60">
                         <td className="p-2">
-                          <div className="font-bold text-gray-700">{rec.name}</div>
+                          <div className="font-bold text-foreground">{rec.name}</div>
                           <div className="text-[10px] text-[#2D6A4F] font-semibold">{rec.username}</div>
-                          <span className="inline-block text-[8px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase mt-0.5 font-mono">
+                          <span className="inline-block text-[8px] font-bold bg-muted text-foreground/80 px-1.5 py-0.5 rounded uppercase mt-0.5 font-mono">
                             {rec.role || 'INVESTOR'}
                           </span>
                         </td>
-                        <td className="p-2 text-gray-600">
+                        <td className="p-2 text-foreground/80">
                           <div>{rec.email}</div>
-                          <div className="text-[10px] text-gray-400">{rec.phone || '—'}</div>
+                          <div className="text-[10px] text-muted-foreground">{rec.phone || '—'}</div>
                         </td>
-                        <td className="p-2 text-gray-600">
+                        <td className="p-2 text-foreground/80">
                           {rec.farmEstate ? (
                             <div>
-                              <span className="font-bold text-gray-800">{rec.farmEstate}</span>
-                              <div className="text-[10px] text-gray-400">
+                              <span className="font-bold text-foreground">{rec.farmEstate}</span>
+                              <div className="text-[10px] text-muted-foreground">
                                 {rec.plotNumber ? `Plot: ${rec.plotNumber}` : 'Unassigned'} • {rec.sizeHectares || '0'} {rec.sizeUnit || 'acre'} ({rec.cropType || 'Oil Palm'})
                               </div>
                             </div>
@@ -645,7 +645,7 @@ export default function CSVDataImporter({ token, onSuccess }: CSVDataImporterPro
                             <span className="text-gray-300">No linked plot</span>
                           )}
                         </td>
-                        <td className="p-2 font-black text-[#1B4332]">
+                        <td className="p-2 font-black text-primary">
                           {rec.investmentAmount ? `₦${parseFloat(rec.investmentAmount).toLocaleString()}` : '—'}
                         </td>
                       </tr>

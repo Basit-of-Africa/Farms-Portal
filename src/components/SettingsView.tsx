@@ -727,25 +727,25 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-[#1B4332]" />
+            <Shield className="h-5 w-5 text-primary" />
             <span className="text-[10px] font-mono font-bold text-[#2D6A4F]/70 uppercase tracking-widest">
-              Core Administrative Workspace
+              Administration
             </span>
           </div>
-          <h1 className="font-serif font-extrabold text-[#1B4332] text-2xl sm:text-3xl mt-1">
-            Super Admin Control Center
+          <h1 className="font-serif font-extrabold text-primary text-2xl sm:text-3xl mt-1">
+            Settings
           </h1>
-          <p className="text-xs text-[#2c3e35]/70 mt-1 max-w-2xl">
-            Configure global business rules, view live infrastructure logs, configure system credentials, and personalize look-and-feel branding modules dynamically.
+          <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+            Business rules, backups, staff accounts, branding and email.
           </p>
         </div>
 
         {/* DB Connection Status Overview Card */}
-        <div className="bg-white border border-[#2D6A4F]/10 rounded-2xl px-4.5 py-3 shadow-premium flex items-center gap-3">
+        <div className="bg-card border border-border rounded-2xl px-4.5 py-3 shadow-premium flex items-center gap-3">
           <div className={`h-2.5 w-2.5 rounded-full ${dbStatus?.configured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-pulse'}`} />
           <div className="text-left font-sans">
-            <p className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-wider leading-none">Database Mode</p>
-            <p className="text-xs font-bold text-gray-700 mt-1 leading-none">
+            <p className="text-[9px] font-mono font-bold text-muted-foreground uppercase tracking-wider leading-none">Database Mode</p>
+            <p className="text-xs font-bold text-foreground mt-1 leading-none">
               {dbStatus?.connectionType === 'PostgreSQL' ? 'Active Cloud PostgreSQL' : 'Offline JSON db.json'}
             </p>
           </div>
@@ -765,18 +765,18 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
       )}
 
       {/* Primary Sub-Tabbed Menu Bar */}
-      <div className="flex flex-wrap border-b border-gray-150 gap-1 pb-px bg-white/40 p-1.5 rounded-2xl border border-gray-100">
+      <div className="flex flex-wrap gap-1 bg-muted/60 p-1.5 rounded-2xl border border-border">
         <button
           id="btn-subtab-config"
           onClick={() => setActiveSubTab('config')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold font-sans transition-all duration-300 cursor-pointer ${
             activeSubTab === 'config'
               ? 'bg-[#1B4332] text-white shadow-md'
-              : 'text-[#2c3e35]/70 hover:bg-white/60 hover:text-[#1B4332]'
+              : 'text-muted-foreground hover:bg-white/60 hover:text-primary'
           }`}
         >
           <Sliders className="h-4 w-4" />
-          <span>System Configurations</span>
+          <span>Business rules</span>
         </button>
 
         <button
@@ -785,11 +785,11 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold font-sans transition-all duration-300 cursor-pointer ${
             activeSubTab === 'backups'
               ? 'bg-[#1B4332] text-white shadow-md'
-              : 'text-[#2c3e35]/70 hover:bg-white/60 hover:text-[#1B4332]'
+              : 'text-muted-foreground hover:bg-white/60 hover:text-primary'
           }`}
         >
           <Database className="h-4 w-4" />
-          <span>Infrastructure & Backups</span>
+          <span>Backups & database</span>
         </button>
 
         <button
@@ -798,11 +798,11 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold font-sans transition-all duration-300 cursor-pointer ${
             activeSubTab === 'roles'
               ? 'bg-[#1B4332] text-white shadow-md'
-              : 'text-[#2c3e35]/70 hover:bg-white/60 hover:text-[#1B4332]'
+              : 'text-muted-foreground hover:bg-white/60 hover:text-primary'
           }`}
         >
           <Users className="h-4 w-4" />
-          <span>Role Management</span>
+          <span>Staff accounts</span>
         </button>
 
         <button
@@ -811,11 +811,11 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold font-sans transition-all duration-300 cursor-pointer ${
             activeSubTab === 'branding'
               ? 'bg-[#1B4332] text-white shadow-md'
-              : 'text-[#2c3e35]/70 hover:bg-white/60 hover:text-[#1B4332]'
+              : 'text-muted-foreground hover:bg-white/60 hover:text-primary'
           }`}
         >
           <Palette className="h-4 w-4" />
-          <span>UI Branding Settings</span>
+          <span>Branding</span>
         </button>
 
         <button
@@ -824,29 +824,29 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold font-sans transition-all duration-300 cursor-pointer ${
             activeSubTab === 'emails'
               ? 'bg-[#1B4332] text-white shadow-md'
-              : 'text-[#2c3e35]/70 hover:bg-white/60 hover:text-[#1B4332]'
+              : 'text-muted-foreground hover:bg-white/60 hover:text-primary'
           }`}
         >
           <Mail className="h-4 w-4" />
-          <span>Email Configuration</span>
+          <span>Email</span>
         </button>
       </div>
 
       {/* Main Workspace Frame container */}
-      <div className="bg-white rounded-3xl border border-[#2D6A4F]/10 p-6 sm:p-8 shadow-premium min-h-[400px]">
+      <div className="bg-card rounded-3xl border border-border p-6 sm:p-8 shadow-premium min-h-[400px]">
 
         {/* --- 1. SYSTEM CONFIGURATIONS TAB --- */}
         {activeSubTab === 'config' && (
           <div className="space-y-8 animate-fade-in">
-            <div className="border-b border-gray-100 pb-4">
-              <h3 className="text-base font-extrabold text-gray-800 font-sans">Business Logic & Engine Configurations</h3>
-              <p className="text-[11.5px] text-gray-500 mt-1">Configure global transaction permissions, network simulations, and dynamic crop whitelists.</p>
+            <div className="border-b border-border pb-4">
+              <h3 className="text-base font-extrabold text-foreground font-sans">Business rules</h3>
+              <p className="text-[11.5px] text-muted-foreground mt-1">Payout limits, crops and notifications.</p>
             </div>
 
             {loadingSysSettings || !sysSettings ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <RefreshCw className="animate-spin text-[#1B4332] h-7 w-7" />
-                <span className="text-xs font-mono text-gray-400">Fetching core parameters config...</span>
+                <RefreshCw className="animate-spin text-primary h-7 w-7" />
+                <span className="text-xs font-mono text-muted-foreground">Fetching core parameters config...</span>
               </div>
             ) : (
               <div className="space-y-8">
@@ -867,28 +867,28 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* Left Column: Connection and Limits */}
                   <div className="space-y-6">
-                    <div className="bg-[#FBF9F4]/70 rounded-2xl p-5 border border-gray-100 space-y-4">
-                      <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Database Routing Constraints</h4>
+                    <div className="bg-muted/40 rounded-2xl p-5 border border-border space-y-4">
+                      <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Database</h4>
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-[10px] uppercase font-mono font-bold text-gray-500 mb-1">Connection Strategy</label>
+                          <label className="block text-[10px] uppercase font-mono font-bold text-muted-foreground mb-1">Where data is stored</label>
                           <select
                             value={sysSettings.databaseMode}
                             onChange={(e) => handleSaveSettings({ ...sysSettings, databaseMode: e.target.value as any })}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-700 outline-none focus:border-[#1B4332] cursor-pointer shadow-sm"
+                            className="w-full bg-card border border-border rounded-xl px-3 py-2.5 text-xs text-foreground outline-none focus:border-ring cursor-pointer shadow-sm"
                           >
                             <option value="auto">Automatic Choice (Prefer Postgres with local backup)</option>
                             <option value="local_json">Enforced Local JSON DB Mode (Bypass Postgres)</option>
                             <option value="postgres_forced">Forced PostgreSQL Cloud Mode (Error if unavailable)</option>
                           </select>
-                          <p className="text-[9.5px] font-mono text-gray-400 mt-1.5 leading-tight">
+                          <p className="text-[9.5px] font-mono text-muted-foreground mt-1.5 leading-tight">
                             "Automatic Choice" dynamically checks cloud connection. "Enforced Local JSON" decouples the app safely for testing offline caches in sandboxed developer containers.
                           </p>
                         </div>
 
                         <div>
-                          <label className="block text-[10px] uppercase font-mono font-bold text-gray-500 mb-1">Active Payout ROI Guard (%)</label>
+                          <label className="block text-[10px] uppercase font-mono font-bold text-muted-foreground mb-1">Minimum return for a payout (%)</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
@@ -897,23 +897,23 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                               value={sysSettings.minimumPayoutRoi || ''}
                               onChange={(e) => setSysSettings({ ...sysSettings, minimumPayoutRoi: parseFloat(e.target.value) || 0 })}
                               onBlur={() => handleSaveSettings({ ...sysSettings, minimumPayoutRoi: sysSettings.minimumPayoutRoi })}
-                              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-semibold"
+                              className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-semibold"
                             />
-                            <span className="text-xs font-mono font-bold text-gray-500 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200">% ROI</span>
+                            <span className="text-xs font-mono font-bold text-muted-foreground bg-muted/50 px-3 py-2 rounded-xl border border-border">% ROI</span>
                           </div>
-                          <p className="text-[9.5px] font-mono text-gray-400 mt-1.5 leading-tight">
+                          <p className="text-[9.5px] font-mono text-muted-foreground mt-1.5 leading-tight">
                             Blocks upload or publishing of yield records whose return-on-investment percentage evaluates lower than this established floor. Prevents erroneous or invalid transactions.
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="bg-[#FBF9F4]/70 rounded-2xl p-5 border border-gray-100 space-y-4">
-                      <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Simulation Controls</h4>
+                    <div className="bg-muted/40 rounded-2xl p-5 border border-border space-y-4">
+                      <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Testing tools</h4>
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-[10px] uppercase font-mono font-bold text-gray-500 mb-1">Simulated Latency Overhead (ms)</label>
+                          <label className="block text-[10px] uppercase font-mono font-bold text-muted-foreground mb-1">Artificial delay for testing (ms)</label>
                           <div className="flex items-center gap-4">
                             <input
                               type="range"
@@ -926,20 +926,20 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                               onTouchEnd={() => handleSaveSettings({ ...sysSettings, simulatedLatency: sysSettings.simulatedLatency })}
                               className="flex-1 accent-[#1B4332] cursor-pointer"
                             />
-                            <span className="text-xs font-mono font-extrabold text-[#1B4332] bg-white px-3 py-1.5 rounded-xl border border-gray-150 min-w-[70px] text-center shadow-inner">
+                            <span className="text-xs font-mono font-extrabold text-primary bg-card px-3 py-1.5 rounded-xl border border-border min-w-[70px] text-center shadow-inner">
                               {sysSettings.simulatedLatency || 0} ms
                             </span>
                           </div>
-                          <p className="text-[9.5px] font-mono text-gray-400 mt-1.5 leading-tight">
+                          <p className="text-[9.5px] font-mono text-muted-foreground mt-1.5 leading-tight">
                             Applies simulated server-side delay to secure API transactions. Use to review front-end loading states, skeleton overlays, and rendering performance under heavy server environments.
                           </p>
                         </div>
 
-                        <div className="divide-y divide-gray-150 bg-white rounded-xl border border-gray-150 overflow-hidden shadow-sm">
+                        <div className="divide-y divide-border bg-card rounded-xl border border-border overflow-hidden shadow-sm">
                           <div className="flex items-center justify-between p-3">
                             <div className="text-left">
-                              <span className="text-xs font-bold text-gray-700 block">Notifications Push Engine</span>
-                              <span className="text-[9px] font-mono text-gray-400">Push status broadcasts to front-end bells.</span>
+                              <span className="text-xs font-bold text-foreground block">In-portal notifications</span>
+                              <span className="text-[9px] font-mono text-muted-foreground">Show notifications in the bell menu.</span>
                             </div>
                             <button
                               id="btn-toggle-notifications"
@@ -950,15 +950,15 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                               {sysSettings.enableNotifications ? (
                                 <ToggleRight className="h-8 w-8 text-emerald-500" />
                               ) : (
-                                <ToggleLeft className="h-8 w-8 text-gray-400" />
+                                <ToggleLeft className="h-8 w-8 text-muted-foreground" />
                               )}
                             </button>
                           </div>
 
                           <div className="flex items-center justify-between p-3">
                             <div className="text-left">
-                              <span className="text-xs font-bold text-gray-700 block">Send real emails</span>
-                              <span className="text-[9px] font-mono text-gray-400">Record mock email communication outputs in detail.</span>
+                              <span className="text-xs font-bold text-foreground block">Send real emails</span>
+                              <span className="text-[9px] font-mono text-muted-foreground">Send emails through the configured email service instead of only logging them.</span>
                             </div>
                             <button
                               id="btn-toggle-emails"
@@ -969,7 +969,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                               {sysSettings.enableEmailSimulation ? (
                                 <ToggleRight className="h-8 w-8 text-emerald-500" />
                               ) : (
-                                <ToggleLeft className="h-8 w-8 text-gray-400" />
+                                <ToggleLeft className="h-8 w-8 text-muted-foreground" />
                               )}
                             </button>
                           </div>
@@ -979,31 +979,31 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                   </div>
 
                   {/* Right Column: Dynamic Validation Presets (Allowed Crops) */}
-                  <div className="bg-[#FBF9F4]/70 rounded-2xl p-5 border border-gray-100 space-y-4">
+                  <div className="bg-muted/40 rounded-2xl p-5 border border-border space-y-4">
                     <div className="flex justify-between items-center">
-                      <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Crops & Breed Whitelists</h4>
-                      <span className="text-[9.5px] font-mono font-bold bg-[#1B4332]/10 text-[#1B4332] px-2.5 py-1 rounded-full border border-[#1B4332]/10">
+                      <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Crops</h4>
+                      <span className="text-[9.5px] font-mono font-bold bg-[#1B4332]/10 text-primary px-2.5 py-1 rounded-full border border-[#1B4332]/10">
                         {sysSettings.allowedCrops?.length || 0} Cultivars
                       </span>
                     </div>
 
-                    <p className="text-[10px] text-gray-500 leading-normal">
+                    <p className="text-[10px] text-muted-foreground leading-normal">
                       Specify the precise breed names and strain taxonomy categories validated across agricultural land plot definitions, payout metrics, and agricultural assets tracking profiles.
                     </p>
 
-                    <div className="bg-white rounded-xl border border-gray-150 p-4 space-y-4 shadow-inner max-h-[220px] overflow-y-auto">
+                    <div className="bg-card rounded-xl border border-border p-4 space-y-4 shadow-inner max-h-[220px] overflow-y-auto">
                       {sysSettings.allowedCrops && sysSettings.allowedCrops.length > 0 ? (
                         <div className="grid grid-cols-1 gap-2">
                           {sysSettings.allowedCrops.map((crop) => (
-                            <div key={crop} className="flex justify-between items-center bg-gray-50 border border-gray-150 text-xs px-3 py-2 rounded-xl transition hover:border-[#1B4332]">
-                              <span className="font-semibold text-gray-700 font-sans">{crop}</span>
+                            <div key={crop} className="flex justify-between items-center bg-muted/50 border border-border text-xs px-3 py-2 rounded-xl transition hover:border-[#1B4332]">
+                              <span className="font-semibold text-foreground font-sans">{crop}</span>
                               <button
                                 type="button"
                                 onClick={() => {
                                   const list = sysSettings.allowedCrops.filter(c => c !== crop);
                                   handleSaveSettings({ ...sysSettings, allowedCrops: list });
                                 }}
-                                className="text-gray-400 hover:text-red-600 transition p-1.5 rounded-lg hover:bg-red-50 cursor-pointer min-w-[32px] min-h-[32px] flex items-center justify-center"
+                                className="text-muted-foreground hover:text-red-600 transition p-1.5 rounded-lg hover:bg-red-50 cursor-pointer min-w-[32px] min-h-[32px] flex items-center justify-center"
                                 title={`Remove ${crop}`}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -1012,7 +1012,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                           ))}
                         </div>
                       ) : (
-                        <div className="py-6 text-center italic text-xs text-gray-400">
+                        <div className="py-6 text-center italic text-xs text-muted-foreground">
                           No crop breeds configured. All operations fallback to text fields.
                         </div>
                       )}
@@ -1037,7 +1037,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                         type="text"
                         value={newCropTag}
                         onChange={(e) => setNewCropTag(e.target.value)}
-                        className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                        className="flex-1 bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                         placeholder="e.g. Cocoa (Criollo Hybrid)"
                       />
                       <button
@@ -1058,10 +1058,10 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         {/* --- 2. INFRASTRUCTURE & BACKUPS TAB --- */}
         {activeSubTab === 'backups' && (
           <div className="space-y-8 animate-fade-in">
-            <div className="border-b border-gray-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="border-b border-border pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h3 className="text-base font-extrabold text-gray-800 font-sans">System Infrastructure & Maintenance backups</h3>
-                <p className="text-[11.5px] text-gray-500 mt-1">Review diagnostic connection limits and compile offline archive snaps of JSON/Postgres data tables structures.</p>
+                <h3 className="text-base font-extrabold text-foreground font-sans">System Infrastructure & Maintenance backups</h3>
+                <p className="text-[11.5px] text-muted-foreground mt-1">Review diagnostic connection limits and compile offline archive snaps of JSON/Postgres data tables structures.</p>
               </div>
 
               <button
@@ -1096,16 +1096,16 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
             {/* Infra Diagnostics Stats Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               
-              <div className="bg-[#FBF9F4]/50 border border-gray-150 p-5 rounded-2xl space-y-2">
+              <div className="bg-muted/40 border border-border p-5 rounded-2xl space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-[9.5px] font-mono font-bold tracking-widest text-[#2D6A4F] uppercase">Data persistence</span>
                   <HardDrive className="h-4 w-4 text-[#2D6A4F]" />
                 </div>
                 <div className="text-left mt-2">
-                  <p className="text-2xl font-serif font-extrabold text-[#1B4332]">
+                  <p className="text-2xl font-serif font-extrabold text-primary">
                     {dbStatus?.connectionType === 'PostgreSQL' ? 'PostgreSQL' : 'JSON (Local)'}
                   </p>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 leading-tight">
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5 leading-tight">
                     {dbStatus?.connectionType === 'PostgreSQL' 
                       ? 'Executing schema queries on cloud database' 
                       : `Syncing state to server workspace DB files.`
@@ -1114,31 +1114,31 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                 </div>
               </div>
 
-              <div className="bg-[#FBF9F4]/50 border border-gray-150 p-5 rounded-2xl space-y-2">
+              <div className="bg-muted/40 border border-border p-5 rounded-2xl space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-[9.5px] font-mono font-bold tracking-widest text-[#2D6A4F] uppercase">DB File Payload size</span>
                   <Database className="h-4 w-4 text-[#2D6A4F]" />
                 </div>
                 <div className="text-left mt-2">
-                  <p className="text-2xl font-serif font-extrabold text-[#1B4332]">
+                  <p className="text-2xl font-serif font-extrabold text-primary">
                     {dbStatus?.fileSizeFormatted || '81.8 KB'}
                   </p>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 leading-tight">
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5 leading-tight">
                     Size on disk of cached database files block templates.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-[#FBF9F4]/50 border border-gray-150 p-5 rounded-2xl space-y-2 sm:col-span-2 lg:col-span-1">
+              <div className="bg-muted/40 border border-border p-5 rounded-2xl space-y-2 sm:col-span-2 lg:col-span-1">
                 <div className="flex justify-between items-center">
                   <span className="text-[9.5px] font-mono font-bold tracking-widest text-[#2D6A4F] uppercase">Snapshot Archive log</span>
                   <Clock className="h-4 w-4 text-[#2D6A4F]" />
                 </div>
                 <div className="text-left mt-2">
-                  <p className="text-2xl font-serif font-extrabold text-[#1B4332]">
+                  <p className="text-2xl font-serif font-extrabold text-primary">
                     {backups?.length || 0} Archived
                   </p>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 leading-tight">
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5 leading-tight">
                     Historical DB snapshots maintained on physical storage.
                   </p>
                 </div>
@@ -1148,20 +1148,20 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
             {/* Firebase Diagnostics and Cloud Synchronization Status Card */}
             {dbStatus?.firebase && (
-              <div className="bg-[#FBF9F4]/70 border border-gray-150 p-6 rounded-3xl space-y-4">
+              <div className="bg-muted/40 border border-border p-6 rounded-3xl space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2 text-left">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-amber-500/10 text-[#1B4332] rounded-xl">
+                    <div className="p-2 bg-amber-500/10 text-primary rounded-xl">
                       <Cloud className="h-5 w-5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-extrabold text-[#1B4332] font-sans">Firebase Firestore Diagnostics</h4>
-                      <p className="text-[11px] text-gray-500">Live active-probe diagnostic status of your cloud-backed Firestore layer.</p>
+                      <h4 className="text-sm font-extrabold text-primary font-sans">Firebase Firestore Diagnostics</h4>
+                      <p className="text-[11px] text-muted-foreground">Live active-probe diagnostic status of your cloud-backed Firestore layer.</p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono font-bold px-2 py-1 bg-gray-100 rounded-lg text-gray-500 uppercase">
+                    <span className="text-[10px] font-mono font-bold px-2 py-1 bg-muted rounded-lg text-muted-foreground uppercase">
                       Source: {dbStatus.firebase.configSource}
                     </span>
                     {dbStatus.firebase.initialized && dbStatus.firebase.diagnosticResult?.canConnect ? (
@@ -1180,25 +1180,25 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                   <div className="space-y-2 text-left">
-                    <h5 className="text-[10px] uppercase font-mono font-bold text-gray-400">Connection properties</h5>
-                    <div className="bg-white border border-gray-150 rounded-2xl p-4 space-y-2 text-xs font-mono">
-                      <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                        <span className="text-gray-400">Active Project:</span>
-                        <span className="font-bold text-gray-700">{dbStatus.firebase.projectId || 'N/A'}</span>
+                    <h5 className="text-[10px] uppercase font-mono font-bold text-muted-foreground">Connection properties</h5>
+                    <div className="bg-card border border-border rounded-2xl p-4 space-y-2 text-xs font-mono">
+                      <div className="flex justify-between border-b border-border pb-1.5">
+                        <span className="text-muted-foreground">Active Project:</span>
+                        <span className="font-bold text-foreground">{dbStatus.firebase.projectId || 'N/A'}</span>
                       </div>
-                      <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                        <span className="text-gray-400">Database ID:</span>
-                        <span className="font-bold text-gray-700">{dbStatus.firebase.databaseId || '(default)'}</span>
+                      <div className="flex justify-between border-b border-border pb-1.5">
+                        <span className="text-muted-foreground">Database ID:</span>
+                        <span className="font-bold text-foreground">{dbStatus.firebase.databaseId || '(default)'}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">SDK Mode:</span>
-                        <span className="font-bold text-gray-700">Firestore Lite Client</span>
+                        <span className="text-muted-foreground">SDK Mode:</span>
+                        <span className="font-bold text-foreground">Firestore Lite Client</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-2 text-left">
-                    <h5 className="text-[10px] uppercase font-mono font-bold text-gray-400">Diagnostic outcome</h5>
+                    <h5 className="text-[10px] uppercase font-mono font-bold text-muted-foreground">Diagnostic outcome</h5>
                     <div className={`rounded-2xl p-4 border flex flex-col justify-between h-full ${
                       dbStatus.firebase.diagnosticResult?.canConnect 
                         ? 'bg-emerald-50/40 border-emerald-100 text-emerald-800' 
@@ -1206,7 +1206,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                         ? 'bg-red-50/50 border-red-100 text-red-800'
                         : dbStatus.firebase.diagnosticResult?.errorType === 'network'
                         ? 'bg-amber-50/50 border-amber-100 text-amber-800'
-                        : 'bg-gray-50 border-gray-200 text-gray-600'
+                        : 'bg-muted/50 border-border text-foreground/80'
                     }`}>
                       <div>
                         <div className="flex items-center gap-1.5 font-bold uppercase text-[10px] font-mono mb-1">
@@ -1229,7 +1229,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                       </div>
                       
                       {!dbStatus.firebase.diagnosticResult?.canConnect && (
-                        <div className="mt-3 pt-2.5 border-t border-dashed border-gray-200 text-[10px] leading-tight font-sans">
+                        <div className="mt-3 pt-2.5 border-t border-dashed border-border text-[10px] leading-tight font-sans">
                           <span className="font-bold block uppercase font-mono text-[9px] mb-0.5">Troubleshooting Strategy:</span>
                           {dbStatus.firebase.diagnosticResult?.errorType === 'auth_permission' ? (
                             <span>Verify your API keys, Project ID, and ensure that your Firestore security rules (firestore.rules) allow unauthenticated or appropriate reads/writes.</span>
@@ -1247,25 +1247,25 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
             )}
 
             {/* Data Management Card */}
-            <div className="bg-[#143427]/5 border border-[#2D6A4F]/20 p-6 rounded-3xl space-y-4">
+            <div className="bg-[#143427]/5 border border-border p-6 rounded-3xl space-y-4">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-[#1B4332] rounded-xl text-white">
                   <Database className="h-5 w-5" />
                 </div>
                 <div className="text-left">
-                  <h4 className="text-sm font-extrabold text-[#1B4332] font-sans">Data Management</h4>
-                  <p className="text-[11px] text-gray-500 mt-0.5">Download a complete, portable JSON snapshot of your active Firestore collections and local database records, or restore from a previously exported file to recover your data instantly.</p>
+                  <h4 className="text-sm font-extrabold text-primary font-sans">Data Management</h4>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Download a complete, portable JSON snapshot of your active Firestore collections and local database records, or restore from a previously exported file to recover your data instantly.</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="bg-white border border-gray-150 p-4.5 rounded-2xl flex flex-col justify-between space-y-3 shadow-sm text-left">
+                <div className="bg-card border border-border p-4.5 rounded-2xl flex flex-col justify-between space-y-3 shadow-sm text-left">
                   <div>
-                    <h5 className="text-xs font-extrabold text-gray-800 flex items-center gap-1.5 font-mono uppercase tracking-wider">
-                      <Download className="h-4 w-4 text-[#1B4332]" />
+                    <h5 className="text-xs font-extrabold text-foreground flex items-center gap-1.5 font-mono uppercase tracking-wider">
+                      <Download className="h-4 w-4 text-primary" />
                       Download Firestore Snapshot
                     </h5>
-                    <p className="text-[11px] text-gray-500 mt-1 leading-normal">
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-normal">
                       Export all live Firestore database collections—including estates, plots, investor relations, financial records, alerts, and outbox logs—into a secure JSON file.
                     </p>
                   </div>
@@ -1284,13 +1284,13 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                   </button>
                 </div>
 
-                <div className="bg-white border border-gray-150 p-4.5 rounded-2xl flex flex-col justify-between space-y-3 shadow-sm text-left">
+                <div className="bg-card border border-border p-4.5 rounded-2xl flex flex-col justify-between space-y-3 shadow-sm text-left">
                   <div>
-                    <h5 className="text-xs font-extrabold text-gray-800 flex items-center gap-1.5 font-mono uppercase tracking-wider">
+                    <h5 className="text-xs font-extrabold text-foreground flex items-center gap-1.5 font-mono uppercase tracking-wider">
                       <Upload className="h-4 w-4 text-amber-600" />
                       Restore From Snapshot
                     </h5>
-                    <p className="text-[11px] text-gray-500 mt-1 leading-normal">
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-normal">
                       Upload a previously exported JSON backup file to restore your entire database state. This will synchronize the data across your active Firestore database and current environment.
                     </p>
                   </div>
@@ -1320,14 +1320,14 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
             </div>
 
             {/* Unified Setup CSV/JSON Wizard Templates */}
-            <div className="bg-[#52B788]/5 border border-[#2D6A4F]/20 p-6 rounded-3xl space-y-4 text-left">
+            <div className="bg-[#52B788]/5 border border-border p-6 rounded-3xl space-y-4 text-left">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-[#2D6A4F] rounded-xl text-white">
                   <Sparkles className="h-5 w-5 text-[#52B788]" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-extrabold text-[#1B4332] font-sans">Unified Provisioning Templates</h4>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
+                  <h4 className="text-sm font-extrabold text-primary font-sans">Import templates</h4>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
                     Download the official, standardized CSV and JSON system templates to bulk-onboard investors, establish new farm estates, and allocate agricultural land plot assignments atomically from a single file.
                   </p>
                 </div>
@@ -1336,27 +1336,27 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   onClick={handleDownloadWizardCsvTemplate}
-                  className="bg-white hover:bg-gray-50 border border-[#2D6A4F]/20 text-gray-700 hover:text-emerald-900 text-xs font-semibold p-4 rounded-2xl transition cursor-pointer flex items-center justify-between shadow-sm"
+                  className="bg-card hover:bg-muted/60 border border-border text-foreground hover:text-emerald-900 text-xs font-semibold p-4 rounded-2xl transition cursor-pointer flex items-center justify-between shadow-sm"
                 >
                   <div className="flex items-center gap-3 text-left">
                     <Download className="h-5 w-5 text-emerald-600 shrink-0" />
                     <div>
                       <p className="font-bold">Unified CSV Setup Template</p>
-                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">CSV spreadsheet format with prefilled headers</p>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">CSV spreadsheet format with prefilled headers</p>
                     </div>
                   </div>
-                  <span className="text-[10px] bg-emerald-50 text-[#1B4332] font-bold font-mono px-2 py-0.5 rounded-md border border-emerald-100">.CSV</span>
+                  <span className="text-[10px] bg-emerald-50 text-primary font-bold font-mono px-2 py-0.5 rounded-md border border-emerald-100">.CSV</span>
                 </button>
 
                 <button
                   onClick={handleDownloadWizardJsonTemplate}
-                  className="bg-white hover:bg-gray-50 border border-[#2D6A4F]/20 text-gray-700 hover:text-emerald-900 text-xs font-semibold p-4 rounded-2xl transition cursor-pointer flex items-center justify-between shadow-sm"
+                  className="bg-card hover:bg-muted/60 border border-border text-foreground hover:text-emerald-900 text-xs font-semibold p-4 rounded-2xl transition cursor-pointer flex items-center justify-between shadow-sm"
                 >
                   <div className="flex items-center gap-3 text-left">
                     <Download className="h-5 w-5 text-amber-600 shrink-0" />
                     <div>
                       <p className="font-bold">Unified JSON Setup Template</p>
-                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">Structured array of investor and plot properties</p>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Structured array of investor and plot properties</p>
                     </div>
                   </div>
                   <span className="text-[10px] bg-amber-50 text-amber-800 font-bold font-mono px-2 py-0.5 rounded-md border border-amber-100">.JSON</span>
@@ -1366,29 +1366,29 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
             {/* Backups Logs Table */}
             <div className="space-y-4">
-              <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Backup history</h4>
+              <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Backup history</h4>
               
-              <div className="bg-white rounded-2xl border border-gray-150 overflow-hidden shadow-sm">
+              <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
                 {loadingBackups ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-2">
-                    <RefreshCw className="animate-spin text-[#1B4332] h-6 w-6" />
-                    <span className="text-[10px] font-mono text-gray-400">Querying backup directory stream...</span>
+                    <RefreshCw className="animate-spin text-primary h-6 w-6" />
+                    <span className="text-[10px] font-mono text-muted-foreground">Querying backup directory stream...</span>
                   </div>
                 ) : backups && backups.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left col-span-1 border-collapse text-xs">
                       <thead>
-                        <tr className="bg-gray-50 border-b border-gray-150 text-[10px] uppercase font-mono font-bold text-[#2D6A4F]/80">
+                        <tr className="bg-muted/50 border-b border-border text-[10px] uppercase font-mono font-bold text-[#2D6A4F]/80">
                           <th className="px-5 py-3">Archive file reference</th>
                           <th className="px-5 py-3">Trigger action type</th>
                           <th className="px-5 py-3">Timestamp created</th>
                           <th className="px-5 py-3 text-right">Metrics checkup</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100 font-sans">
+                      <tbody className="divide-y divide-border font-sans">
                         {backups.map((bk, i) => (
-                          <tr key={bk.id || i} className="hover:bg-[#FBF9F4]/30 transition duration-150">
-                            <td className="px-5 py-3.5 font-mono font-bold text-[#1B4332] truncate max-w-[200px]">
+                          <tr key={bk.id || i} className="hover:bg-muted/50 transition duration-150">
+                            <td className="px-5 py-3.5 font-mono font-bold text-primary truncate max-w-[200px]">
                               {bk.fileName || `db-backup-${Date.now()}.json`}
                             </td>
                             <td className="px-5 py-3.5">
@@ -1400,7 +1400,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                                 {bk.backupType || 'manual'}
                               </span>
                             </td>
-                            <td className="px-5 py-3.5 text-gray-500 font-medium">
+                            <td className="px-5 py-3.5 text-muted-foreground font-medium">
                               {bk.createdAt ? new Date(bk.createdAt).toLocaleString() : new Date().toLocaleString()}
                             </td>
                             <td className="px-5 py-3.5 text-right font-mono text-[10px] text-emerald-800 font-bold">
@@ -1412,7 +1412,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     </table>
                   </div>
                 ) : (
-                  <div className="py-12 text-center text-xs text-gray-400 italic">
+                  <div className="py-12 text-center text-xs text-muted-foreground italic">
                     Infrastructure log is currently empty. Trigger a manual state snapshot above to generate records.
                   </div>
                 )}
@@ -1425,10 +1425,10 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         {/* --- 3. ROLE MANAGEMENT TAB --- */}
         {activeSubTab === 'roles' && (
           <div className="space-y-8 animate-fade-in">
-            <div className="border-b border-gray-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="border-b border-border pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h3 className="text-base font-extrabold text-gray-800 font-sans">Registered System Accounts & Roles</h3>
-                <p className="text-[11.5px] text-gray-500 mt-1">Audit privileges access levels, create corporate users, and configure operational portals authorization mapping.</p>
+                <h3 className="text-base font-extrabold text-foreground font-sans">Registered System Accounts & Roles</h3>
+                <p className="text-[11.5px] text-muted-foreground mt-1">Audit privileges access levels, create corporate users, and configure operational portals authorization mapping.</p>
               </div>
 
               <button
@@ -1463,68 +1463,68 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
             {/* Slide-out Create User Form */}
             {showAddUserForm && (
-              <div className="bg-[#FBF9F4]/50 border border-[#2D6A4F]/15 rounded-3xl p-6.5 space-y-6 animate-slide-down">
+              <div className="bg-muted/40 border border-border rounded-3xl p-6.5 space-y-6 animate-slide-down">
                 <div>
-                  <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Register System Account credential</h4>
-                  <p className="text-[10.5px] text-gray-400 mt-1">Configure profile and system routing policies for new administrators, farm manager supervisors, or investor accounts.</p>
+                  <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Register System Account credential</h4>
+                  <p className="text-[10.5px] text-muted-foreground mt-1">Configure profile and system routing policies for new administrators, farm manager supervisors, or investor accounts.</p>
                 </div>
 
                 <form onSubmit={handleRegisterUser} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Unique Username ID *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Unique Username ID *</label>
                       <input
                         type="text"
                         required
                         value={newUsername}
                         onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                         placeholder="e.g. ademola_estates"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Full Legal Name *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Full Legal Name *</label>
                       <input
                         type="text"
                         required
                         value={newFullName}
                         onChange={(e) => setNewFullName(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                         placeholder="e.g. Chief Ademola Johnson"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Electronic Mail Address *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Electronic Mail Address *</label>
                       <input
                         type="email"
                         required
                         value={newUserEmail}
                         onChange={(e) => setNewUserEmail(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                         placeholder="e.g. chief@ademolaestates.com"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Telephone Contact number</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Telephone Contact number</label>
                       <input
                         type="tel"
                         value={newUserPhone}
                         onChange={(e) => setNewUserPhone(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                         placeholder="e.g. +234 812 345 6789"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Role *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Role *</label>
                       <select
                         value={newUserRole}
                         onChange={(e) => setNewUserRole(e.target.value as UserRole)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans cursor-pointer"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans cursor-pointer"
                       >
                         <option value={UserRole.ADMIN}>Super Admin (Total Core Access)</option>
                         <option value={UserRole.FARM_MANAGER}>Farm Manager Supervisor (No Financial Records)</option>
@@ -1533,7 +1533,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Account Access Password *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Account Access Password *</label>
                       <div className="relative">
                         <input
                           type={showUserPassword ? 'text' : 'password'}
@@ -1541,12 +1541,12 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                           placeholder="e.g. FarmManager2026!"
                           value={newUserPassword}
                           onChange={(e) => setNewUserPassword(e.target.value)}
-                          className="w-full bg-white border border-gray-200 rounded-xl px-3.5 pr-10 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                          className="w-full bg-card border border-border rounded-xl px-3.5 pr-10 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                         />
                         <button
                           type="button"
                           onClick={() => setShowUserPassword(!showUserPassword)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
                           title={showUserPassword ? 'Hide password' : 'Show password'}
                         >
                           {showUserPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1561,7 +1561,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                       id="btn-cancel-add-user"
                       type="button"
                       onClick={() => setShowAddUserForm(false)}
-                      className="px-4.5 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-white/95 border border-gray-200 cursor-pointer text-center"
+                      className="px-4.5 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-white/95 border border-border cursor-pointer text-center"
                     >
                       Dismiss
                     </button>
@@ -1592,11 +1592,11 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                       <Pencil className="h-3.5 w-3.5 text-amber-700" />
                       <span>Edit User Profile & Credentials</span>
                     </h4>
-                    <p className="text-[10.5px] text-gray-400 mt-1">Configure authorization roles, modify legal profiles, or set a new password securely for <strong>{editingUser.name}</strong>.</p>
+                    <p className="text-[10.5px] text-muted-foreground mt-1">Configure authorization roles, modify legal profiles, or set a new password securely for <strong>{editingUser.name}</strong>.</p>
                   </div>
                   <button
                     onClick={() => setEditingUser(null)}
-                    className="text-gray-400 hover:text-gray-600 transition p-1 cursor-pointer font-bold"
+                    className="text-muted-foreground hover:text-gray-600 transition p-1 cursor-pointer font-bold"
                     title="Dismiss form"
                   >
                     ✕
@@ -1607,54 +1607,54 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Unique Username ID *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Unique Username ID *</label>
                       <input
                         type="text"
                         required
                         value={editUsername}
                         onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Full Legal Name *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Full Legal Name *</label>
                       <input
                         type="text"
                         required
                         value={editFullName}
                         onChange={(e) => setEditFullName(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Electronic Mail Address *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Electronic Mail Address *</label>
                       <input
                         type="email"
                         required
                         value={editUserEmail}
                         onChange={(e) => setEditUserEmail(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Telephone Contact number</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Telephone Contact number</label>
                       <input
                         type="tel"
                         value={editUserPhone}
                         onChange={(e) => setEditUserPhone(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Role *</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Role *</label>
                       <select
                         value={editUserRole}
                         onChange={(e) => setEditUserRole(e.target.value as UserRole)}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans cursor-pointer"
+                        className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans cursor-pointer"
                       >
                         <option value={UserRole.ADMIN}>Super Admin (Total Core Access)</option>
                         <option value={UserRole.FARM_MANAGER}>Farm Manager Supervisor (No Financial Records)</option>
@@ -1663,19 +1663,19 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Set New Password (optional)</label>
+                      <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Set New Password (optional)</label>
                       <div className="relative">
                         <input
                           type={showEditPassword ? 'text' : 'password'}
                           placeholder="Leave blank to keep current"
                           value={editUserPassword}
                           onChange={(e) => setEditUserPassword(e.target.value)}
-                          className="w-full bg-white border border-gray-200 rounded-xl px-3.5 pr-10 py-2 text-xs text-gray-700 outline-none focus:border-[#2D6A4F] shadow-sm font-sans"
+                          className="w-full bg-card border border-border rounded-xl px-3.5 pr-10 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                         />
                         <button
                           type="button"
                           onClick={() => setShowEditPassword(!showEditPassword)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
                           title={showEditPassword ? 'Hide password' : 'Show password'}
                         >
                           {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1689,7 +1689,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     <button
                       type="button"
                       onClick={() => setEditingUser(null)}
-                      className="px-4.5 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-white border border-gray-200 cursor-pointer text-center"
+                      className="px-4.5 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-white border border-border cursor-pointer text-center"
                     >
                       Dismiss
                     </button>
@@ -1712,19 +1712,19 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
             {/* Users Accounts List */}
             <div className="space-y-4">
-              <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Registered credentials index</h4>
+              <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Registered credentials index</h4>
               
-              <div className="bg-white rounded-2xl border border-gray-150 overflow-hidden shadow-sm">
+              <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
                 {loadingUsers ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-2">
-                    <RefreshCw className="animate-spin text-[#1B4332] h-6 w-6" />
-                    <span className="text-[10px] font-mono text-gray-400">Loading users…</span>
+                    <RefreshCw className="animate-spin text-primary h-6 w-6" />
+                    <span className="text-[10px] font-mono text-muted-foreground">Loading users…</span>
                   </div>
                 ) : usersList && usersList.length > 0 ? (
                   <div className="overflow-x-auto animate-fade-in">
                     <table className="w-full text-left col-span-1 border-collapse text-xs">
                       <thead>
-                        <tr className="bg-gray-50 border-b border-gray-150 text-[10px] uppercase font-mono font-bold text-[#2D6A4F]/80">
+                        <tr className="bg-muted/50 border-b border-border text-[10px] uppercase font-mono font-bold text-[#2D6A4F]/80">
                           <th className="px-5 py-3">Account identity</th>
                           <th className="px-5 py-3">System username</th>
                           <th className="px-5 py-3">Privileges group</th>
@@ -1732,21 +1732,21 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                           <th className="px-5 py-3 text-right">Administrative controls</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100 font-sans">
+                      <tbody className="divide-y divide-border font-sans">
                         {usersList.map((usr) => (
-                          <tr key={usr.id} className="hover:bg-[#FBF9F4]/30 transition duration-150">
+                          <tr key={usr.id} className="hover:bg-muted/50 transition duration-150">
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-3">
-                                <div className="h-8.5 w-8.5 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-[#1B4332]">
+                                <div className="h-8.5 w-8.5 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-primary">
                                   {usr.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
                                 </div>
                                 <div>
-                                  <span className="font-extrabold text-gray-800 block text-xs">{usr.name}</span>
-                                  <span className="text-[10px] text-gray-400 block font-mono">{usr.id}</span>
+                                  <span className="font-extrabold text-foreground block text-xs">{usr.name}</span>
+                                  <span className="text-[10px] text-muted-foreground block font-mono">{usr.id}</span>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-5 py-4 font-mono font-semibold text-[#1B4332]">
+                            <td className="px-5 py-4 font-mono font-semibold text-primary">
                               @{usr.username}
                             </td>
                             <td className="px-5 py-4">
@@ -1760,9 +1760,9 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                                 {usr.role.split('_').join(' ')}
                               </span>
                             </td>
-                            <td className="px-5 py-4 font-medium text-gray-600">
+                            <td className="px-5 py-4 font-medium text-foreground/80">
                               <span className="block text-xs">{usr.email}</span>
-                              {usr.phone && <span className="block text-[10px] text-gray-400 font-mono mt-0.5">{usr.phone}</span>}
+                              {usr.phone && <span className="block text-[10px] text-muted-foreground font-mono mt-0.5">{usr.phone}</span>}
                             </td>
                             <td className="px-5 py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
@@ -1783,7 +1783,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                                   className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold font-mono rounded-lg border cursor-pointer transition ${
                                     usr.isActive !== false
                                       ? 'text-emerald-800 bg-emerald-50 border-emerald-200 hover:bg-emerald-100/70'
-                                      : 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100/70'
+                                      : 'text-muted-foreground bg-muted/50 border-border hover:bg-gray-100/70'
                                   } ${usr.id === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   title={usr.isActive !== false ? 'Deactivate user' : 'Activate user'}
                                 >
@@ -1794,8 +1794,8 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                                     </>
                                   ) : (
                                     <>
-                                      <ToggleLeft className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                                      <span className="text-gray-400">INACTIVE</span>
+                                      <ToggleLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      <span className="text-muted-foreground">INACTIVE</span>
                                     </>
                                   )}
                                 </button>
@@ -1804,7 +1804,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                                 <button
                                   onClick={() => handleDeleteUser(usr)}
                                   disabled={usr.id === user.id}
-                                  className={`p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer ${
+                                  className={`p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer ${
                                     usr.id === user.id ? 'opacity-30 cursor-not-allowed' : ''
                                   }`}
                                   title={usr.id === user.id ? 'Cannot delete your own admin account' : 'Permanently delete user'}
@@ -1819,7 +1819,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                     </table>
                   </div>
                 ) : (
-                  <div className="py-12 text-center text-xs text-gray-400 italic">
+                  <div className="py-12 text-center text-xs text-muted-foreground italic">
                     Internal role index failed to yield elements.
                   </div>
                 )}
@@ -1832,15 +1832,15 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         {/* --- 4. UI BRANDING SETTINGS TAB --- */}
         {activeSubTab === 'branding' && (
           <div className="space-y-8 animate-fade-in">
-            <div className="border-b border-gray-100 pb-4">
-              <h3 className="text-base font-extrabold text-gray-800 font-sans">Visual Theming & Branding Modules</h3>
-              <p className="text-[11.5px] text-gray-500 mt-1">Configure client-facing headers, icon branding keys, and dynamic alert broadcast ribbons.</p>
+            <div className="border-b border-border pb-4">
+              <h3 className="text-base font-extrabold text-foreground font-sans">Visual Theming & Branding Modules</h3>
+              <p className="text-[11.5px] text-muted-foreground mt-1">Configure client-facing headers, icon branding keys, and dynamic alert broadcast ribbons.</p>
             </div>
 
             {loadingSysSettings || !sysSettings ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <RefreshCw className="animate-spin text-[#1B4332] h-7 w-7" />
-                <span className="text-xs font-mono text-gray-400">Loading appearance attributes...</span>
+                <RefreshCw className="animate-spin text-primary h-7 w-7" />
+                <span className="text-xs font-mono text-muted-foreground">Loading appearance attributes...</span>
               </div>
             ) : (
               <div className="space-y-8">
@@ -1862,40 +1862,40 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                   
                   {/* Left Column: Visual parameters */}
                   <div className="space-y-6 lg:col-span-2">
-                    <div className="bg-[#FBF9F4]/40 p-5 border border-gray-150 rounded-2xl space-y-5">
-                      <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Global Appearance branding</h4>
+                    <div className="bg-muted/40 p-5 border border-border rounded-2xl space-y-5">
+                      <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Global Appearance branding</h4>
                       
                       <div className="grid grid-col-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Corporate Portal Name</label>
+                          <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Corporate Portal Name</label>
                           <input
                             type="text"
                             value={sysSettings.portalName || ''}
                             onChange={(e) => setSysSettings({ ...sysSettings, portalName: e.target.value })}
                             onBlur={() => handleSaveSettings({ ...sysSettings, portalName: sysSettings.portalName })}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                            className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                             placeholder="Adubiaro Estates Portal"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Sidebar Header logo brand *</label>
+                          <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Sidebar Header logo brand *</label>
                           <input
                             type="text"
                             value={sysSettings.logoText || ''}
                             onChange={(e) => setSysSettings({ ...sysSettings, logoText: e.target.value })}
                             onBlur={() => handleSaveSettings({ ...sysSettings, logoText: sysSettings.logoText })}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans font-bold"
+                            className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans font-bold"
                             placeholder="ADUBIARO"
                           />
                         </div>
 
                         <div className="sm:col-span-2">
-                          <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Visual Accent layout color</label>
+                          <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Visual Accent layout color</label>
                           <select
                             value={sysSettings.accentColor}
                             onChange={(e) => handleSaveSettings({ ...sysSettings, accentColor: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm cursor-pointer"
+                            className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground outline-none focus:border-ring shadow-sm cursor-pointer"
                           >
                             <option value="emerald">Emerald Meadow green (Classic standard)</option>
                             <option value="forest">High-Contrast Deep Forest (Botanical corporate)</option>
@@ -1906,28 +1906,28 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                       </div>
                     </div>
 
-                    <div className="bg-[#FBF9F4]/40 p-5 border border-gray-150 rounded-2xl space-y-4">
-                      <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Portal Alert Broadcast Ribbons</h4>
+                    <div className="bg-muted/40 p-5 border border-border rounded-2xl space-y-4">
+                      <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Portal Alert Broadcast Ribbons</h4>
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Alert announcement message text</label>
+                          <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Alert announcement message text</label>
                           <input
                             type="text"
                             value={sysSettings.announcementBanner || ''}
                             onChange={(e) => setSysSettings({ ...sysSettings, announcementBanner: e.target.value })}
                             onBlur={() => handleSaveSettings({ ...sysSettings, announcementBanner: sysSettings.announcementBanner })}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-sans"
+                            className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-sans"
                             placeholder="Type news text to broadcast at the very top of client pages..."
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">ribbon notification layout alert category</label>
+                          <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">ribbon notification layout alert category</label>
                           <select
                             value={sysSettings.bannerType}
                             onChange={(e) => handleSaveSettings({ ...sysSettings, bannerType: e.target.value as any })}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm cursor-pointer"
+                            className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground outline-none focus:border-ring shadow-sm cursor-pointer"
                           >
                             <option value="none">Banner Disabled (Hidden layout frame)</option>
                             <option value="info">Sky Blue (General information & news updates)</option>
@@ -1940,19 +1940,19 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                   </div>
 
                   {/* Right Column: preview card */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-3xl p-5 space-y-4 flex flex-col justify-between">
+                  <div className="bg-muted/50 border border-border rounded-3xl p-5 space-y-4 flex flex-col justify-between">
                     <div className="space-y-4">
-                      <div className="flex items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider text-gray-400 uppercase leading-none">
-                        <Sparkles className="h-3.5 w-3.5 text-gray-400" />
+                      <div className="flex items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider text-muted-foreground uppercase leading-none">
+                        <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
                         <span>Live theme preview framework</span>
                       </div>
 
-                      <p className="text-[10px] text-gray-400 leading-normal">
+                      <p className="text-[10px] text-muted-foreground leading-normal">
                         Simulating active branding components rendered across dashboards, side bars headers and desktop frames templates.
                       </p>
 
                       {/* Mock Sidebar Header box */}
-                      <div className="p-4 bg-gradient-to-b from-[#0F291E] via-[#143427] to-[#0E251B] text-white rounded-2xl shadow border border-[#2D6A4F]/20 select-none">
+                      <div className="p-4 bg-gradient-to-b from-[#0F291E] via-[#143427] to-[#0E251B] text-white rounded-2xl shadow border border-border select-none">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-[#52B788]/20 rounded-xl">
                             <span className="block h-4 w-4 bg-[#52B788] rounded-full animate-pulse" />
@@ -1981,15 +1981,15 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                           <span className="truncate"><b>BROADCAST:</b> {sysSettings.announcementBanner}</span>
                         </div>
                       ) : (
-                        <div className="py-4 border border-dashed border-gray-205 rounded-xl text-center text-[10px] text-gray-400 italic">
+                        <div className="py-4 border border-dashed border-gray-205 rounded-xl text-center text-[10px] text-muted-foreground italic">
                           Alert Banner is set to hidden.
                         </div>
                       )}
                     </div>
 
-                    <div className="pt-4 border-t border-gray-200 text-center">
-                      <span className="text-[9px] font-mono font-medium text-gray-400">
-                        Accent Theme Tag: <b className="uppercase text-[#1B4332]">{sysSettings.accentColor || 'emerald'}</b>
+                    <div className="pt-4 border-t border-border text-center">
+                      <span className="text-[9px] font-mono font-medium text-muted-foreground">
+                        Accent Theme Tag: <b className="uppercase text-primary">{sysSettings.accentColor || 'emerald'}</b>
                       </span>
                     </div>
 
@@ -2004,17 +2004,17 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
         {/* --- 5. EMAIL CONFIGURATION TAB --- */}
         {activeSubTab === 'emails' && (
           <div className="space-y-8 animate-fade-in">
-            <div className="border-b border-gray-100 pb-4">
-              <h3 className="text-base font-extrabold text-gray-800 font-sans">Email Service Configurations</h3>
-              <p className="text-[11.5px] text-gray-500 mt-1">
+            <div className="border-b border-border pb-4">
+              <h3 className="text-base font-extrabold text-foreground font-sans">Email Service Configurations</h3>
+              <p className="text-[11.5px] text-muted-foreground mt-1">
                 Configure your outbound notification system. Dispatched welcoming credentials, portal alerts, and financial reports will route through your chosen channel.
               </p>
             </div>
 
             {loadingSysSettings || !sysSettings ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <RefreshCw className="animate-spin text-[#1B4332] h-7 w-7" />
-                <span className="text-xs font-mono text-gray-400">Loading email attributes...</span>
+                <RefreshCw className="animate-spin text-primary h-7 w-7" />
+                <span className="text-xs font-mono text-muted-foreground">Loading email attributes...</span>
               </div>
             ) : (
               <div className="space-y-8">
@@ -2035,26 +2035,26 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Left Form Column */}
                   <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-[#FBF9F4]/40 p-5 border border-gray-150 rounded-2xl space-y-5">
-                      <h4 className="text-xs font-bold font-mono uppercase text-[#1B4332] tracking-wider leading-none">Service Settings</h4>
+                    <div className="bg-muted/40 p-5 border border-border rounded-2xl space-y-5">
+                      <h4 className="text-xs font-bold font-mono uppercase text-primary tracking-wider leading-none">Service Settings</h4>
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Integration Channel Method</label>
+                          <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Integration Channel Method</label>
                           <select
                             value={emailServiceType}
                             onChange={(e) => setEmailServiceType(e.target.value as any)}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm cursor-pointer"
+                            className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground outline-none focus:border-ring shadow-sm cursor-pointer"
                           >
-                            <option value="simulation">Simulated Outbox Logging (Development & Demo mode)</option>
+                            <option value="simulation">Log emails only (no real sending)</option>
                             <option value="smtp">Your own SMTP email server</option>
                             <option value="brevo">Brevo SMTP Third-Party API (Recommended)</option>
                           </select>
                         </div>
 
                         {emailServiceType === 'simulation' && (
-                          <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-500 leading-relaxed font-sans">
-                            💡 <strong>Simulated Logging Mode is currently selected.</strong> No real emails will be dispatched to recipients. 
+                          <div className="p-4 bg-muted/50 border border-border rounded-xl text-xs text-muted-foreground leading-relaxed font-sans">
+                            💡 <strong>Emails are only logged, not sent.</strong> No real emails will be dispatched to recipients. 
                             Instead, all outbox items are instantly saved inside the local outbox logs database. You can review them anytime under 
                             the simulated emails outbox or Settings dashboards. Perfect for zero-risk sandboxed testing!
                           </div>
@@ -2063,61 +2063,61 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                         {emailServiceType === 'smtp' && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                             <div>
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">SMTP Server Hostname *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">SMTP Server Hostname *</label>
                               <input
                                 type="text"
                                 required
                                 value={smtpHost}
                                 onChange={(e) => setSmtpHost(e.target.value)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm"
                                 placeholder="e.g. smtp.mailgun.org"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">SMTP Server Port *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">SMTP Server Port *</label>
                               <input
                                 type="number"
                                 required
                                 value={smtpPort}
                                 onChange={(e) => setSmtpPort(parseInt(e.target.value) || 587)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-mono"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm font-mono"
                                 placeholder="587"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">SMTP Username *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">SMTP Username *</label>
                               <input
                                 type="text"
                                 required
                                 value={smtpUser}
                                 onChange={(e) => setSmtpUser(e.target.value)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm"
                                 placeholder="e.g. postmaster@yourdomain.com"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">SMTP Password *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">SMTP Password *</label>
                               <input
                                 type="password"
                                 required
                                 value={smtpPass}
                                 onChange={(e) => setSmtpPass(e.target.value)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm"
                                 placeholder="••••••••••••••••••••"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Default From Sender Address *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Default From Sender Address *</label>
                               <input
                                 type="text"
                                 required
                                 value={smtpFrom}
                                 onChange={(e) => setSmtpFrom(e.target.value)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm"
                                 placeholder="Adubiaro Farms <noreply@adubiaro.com>"
                               />
                             </div>
@@ -2128,9 +2128,9 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                                 id="smtpSecureCheckbox"
                                 checked={smtpSecure}
                                 onChange={(e) => setSmtpSecure(e.target.checked)}
-                                className="h-4.5 w-4.5 rounded border-gray-300 text-[#1B4332] focus:ring-[#1B4332] cursor-pointer"
+                                className="h-4.5 w-4.5 rounded border-border text-primary focus:ring-ring cursor-pointer"
                               />
-                              <label htmlFor="smtpSecureCheckbox" className="text-[10.5px] font-bold font-mono uppercase text-gray-600 select-none cursor-pointer">
+                              <label htmlFor="smtpSecureCheckbox" className="text-[10.5px] font-bold font-mono uppercase text-foreground/80 select-none cursor-pointer">
                                 Enforce SSL/TLS Secure transport
                               </label>
                             </div>
@@ -2140,37 +2140,37 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                         {emailServiceType === 'brevo' && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                             <div className="sm:col-span-2">
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Brevo API Key (v3) *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Brevo API Key (v3) *</label>
                               <input
                                 type="password"
                                 required
                                 value={brevoApiKey}
                                 onChange={(e) => setBrevoApiKey(e.target.value)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm font-mono"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground outline-none focus:border-ring shadow-sm font-mono"
                                 placeholder="xkeysib-..."
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Brevo Sender Email *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Brevo Sender Email *</label>
                               <input
                                 type="email"
                                 required
                                 value={brevoSenderEmail}
                                 onChange={(e) => setBrevoSenderEmail(e.target.value)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm"
                                 placeholder="noreply@yourdomain.com"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-1">Brevo Sender Name *</label>
+                              <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Brevo Sender Name *</label>
                               <input
                                 type="text"
                                 required
                                 value={brevoSenderName}
                                 onChange={(e) => setBrevoSenderName(e.target.value)}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm"
+                                className="w-full bg-card border border-border rounded-xl px-3.5 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm"
                                 placeholder="e.g. Adubiaro Farms"
                               />
                             </div>
@@ -2194,7 +2194,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                         ) : (
                           <>
                             <Check className="h-4 w-4" />
-                            <span>Save Email Configuration</span>
+                            <span>Save Email</span>
                           </>
                         )}
                       </button>
@@ -2203,25 +2203,25 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
 
                   {/* Right Playground Column */}
                   <div className="space-y-6">
-                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4 font-sans">
-                      <div className="flex items-center gap-2 text-xs font-bold font-mono uppercase text-gray-600">
-                        <Sparkles className="h-4 w-4 text-[#1B4332]" />
+                    <div className="bg-muted/50 border border-border rounded-2xl p-5 space-y-4 font-sans">
+                      <div className="flex items-center gap-2 text-xs font-bold font-mono uppercase text-foreground/80">
+                        <Sparkles className="h-4 w-4 text-primary" />
                         <span>Outbound Test Playground</span>
                       </div>
                       
-                      <p className="text-[10.5px] text-gray-500 leading-normal">
+                      <p className="text-[10.5px] text-muted-foreground leading-normal">
                         Verify your integration instantly before rolling it out systemwide. Dispatches a beautifully formatted system diagnostic report email.
                       </p>
 
-                      <div className="border-t border-gray-200 pt-4 space-y-3">
+                      <div className="border-t border-border pt-4 space-y-3">
                         <div>
-                          <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-500 mb-1">Recipient Destination Email</label>
+                          <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Recipient Destination Email</label>
                           <input
                             type="email"
                             value={testRecipientEmail}
                             onChange={(e) => setTestRecipientEmail(e.target.value)}
                             placeholder="e.g. administrator@example.com"
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] shadow-sm"
+                            className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-ring shadow-sm"
                           />
                         </div>
 

@@ -118,7 +118,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Search farms, land plots, records, or docs..."
-          className="w-full bg-[#FBF9F4] dark:bg-stone-800 border border-[#2D6A4F]/10 dark:border-stone-800 text-xs text-[#1B4332] dark:text-stone-200 placeholder-gray-400 dark:placeholder-stone-500 rounded-xl pl-9.5 pr-8.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] transition-all"
+          className="w-full bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-800 text-xs text-primary dark:text-stone-200 placeholder:text-muted-foreground dark:placeholder-stone-500 rounded-xl pl-9.5 pr-8.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring transition-all"
         />
         {loading ? (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#2D6A4F] animate-spin" />
@@ -128,7 +128,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
               setQuery('');
               setResults(null);
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-150 dark:hover:bg-stone-800 rounded text-gray-400 dark:text-stone-500 hover:text-gray-600 transition"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-150 dark:hover:bg-stone-800 rounded text-muted-foreground dark:text-stone-500 hover:text-gray-600 transition"
           >
             <X className="h-3 w-3" />
           </button>
@@ -137,18 +137,18 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
 
       {/* Search Overlay Dropdown */}
       {isOpen && query.trim() && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-stone-900 border border-gray-150 dark:border-stone-800 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[480px] flex flex-col">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-card dark:bg-stone-900 border border-border dark:border-stone-800 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[480px] flex flex-col">
           {loading && !results ? (
-            <div className="p-8 text-center text-xs text-gray-400 dark:text-stone-500 font-mono flex items-center justify-center gap-2">
+            <div className="p-8 text-center text-xs text-muted-foreground dark:text-stone-500 font-mono flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-[#2D6A4F]" />
               <span>Searching…</span>
             </div>
           ) : !hasResults ? (
-            <div className="p-8 text-center text-xs text-gray-400 dark:text-stone-500 font-mono">
+            <div className="p-8 text-center text-xs text-muted-foreground dark:text-stone-500 font-mono">
               No matching records found for "{query}"
             </div>
           ) : (
-            <div className="overflow-y-auto divide-y divide-gray-100 dark:divide-stone-800">
+            <div className="overflow-y-auto divide-y divide-border dark:divide-stone-800">
               {/* Farms Category */}
               {results.farms && results.farms.length > 0 && (
                 <div className="p-3">
@@ -160,15 +160,15 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
                       <button
                         key={farm.id}
                         onClick={() => handleResultClick('farm', farm)}
-                        className="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
+                        className="w-full text-left p-2 hover:bg-muted/60 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="p-2 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg text-emerald-700 shrink-0">
                             <Sprout className="h-3.5 w-3.5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-gray-800 dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">{farm.name}</div>
-                            <div className="text-[10px] text-gray-400 dark:text-stone-500 truncate">{farm.location}, {farm.state}</div>
+                            <div className="text-xs font-bold text-foreground dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">{farm.name}</div>
+                            <div className="text-[10px] text-muted-foreground dark:text-stone-500 truncate">{farm.location}, {farm.state}</div>
                           </div>
                         </div>
                         <ChevronRight className="h-3.5 w-3.5 text-gray-300 dark:text-stone-600 group-hover:text-[#2D6A4F] transition shrink-0" />
@@ -189,17 +189,17 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
                       <button
                         key={plot.id}
                         onClick={() => handleResultClick('plot', plot)}
-                        className="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
+                        className="w-full text-left p-2 hover:bg-muted/60 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="p-2 bg-[#52B788]/10 rounded-lg text-[#1B4332] dark:text-[#52B788] shrink-0">
+                          <div className="p-2 bg-[#52B788]/10 rounded-lg text-primary dark:text-[#52B788] shrink-0">
                             <Layers className="h-3.5 w-3.5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-gray-800 dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">
+                            <div className="text-xs font-bold text-foreground dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">
                               Plot {plot.plotNumber}
                             </div>
-                            <div className="text-[10px] text-gray-400 dark:text-stone-500 truncate">
+                            <div className="text-[10px] text-muted-foreground dark:text-stone-500 truncate">
                               {plot.cropType} • {plot.sizeHectares} {plot.sizeUnit || 'acre'} ({plot.status})
                             </div>
                           </div>
@@ -222,17 +222,17 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
                       <button
                         key={ip.id}
                         onClick={() => handleResultClick('investorPlot', ip)}
-                        className="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
+                        className="w-full text-left p-2 hover:bg-muted/60 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg text-amber-700 shrink-0">
                             <Landmark className="h-3.5 w-3.5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-gray-800 dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">
+                            <div className="text-xs font-bold text-foreground dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">
                               Ref: {ip.contractRef}
                             </div>
-                            <div className="text-[10px] text-gray-400 dark:text-stone-500 truncate">
+                            <div className="text-[10px] text-muted-foreground dark:text-stone-500 truncate">
                               Holdings: ₦{ip.investmentAmount?.toLocaleString()} • {ip.ownershipPercentage}% Ownership
                             </div>
                           </div>
@@ -244,7 +244,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
                 </div>
               )}
 
-              {/* Financial Summary Records */}
+              {/* Record payout Records */}
               {results.financials && results.financials.length > 0 && (
                 <div className="p-3">
                   <span className="text-[9px] font-mono font-bold text-[#2D6A4F]/60 dark:text-[#52B788]/60 uppercase tracking-widest block px-2 mb-1.5">
@@ -255,17 +255,17 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
                       <button
                         key={fin.id}
                         onClick={() => handleResultClick('financial', fin)}
-                        className="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
+                        className="w-full text-left p-2 hover:bg-muted/60 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="p-2 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg text-emerald-700 shrink-0">
                             <TrendingUp className="h-3.5 w-3.5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-gray-800 dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">
+                            <div className="text-xs font-bold text-foreground dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">
                               Payout {fin.period} {fin.year}
                             </div>
-                            <div className="text-[10px] text-gray-400 dark:text-stone-500 truncate">
+                            <div className="text-[10px] text-muted-foreground dark:text-stone-500 truncate">
                               ROI: {fin.roiPercentage}% • ₦{fin.payoutAmount?.toLocaleString()} ({fin.status})
                             </div>
                           </div>
@@ -288,15 +288,15 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
                       <button
                         key={doc.id}
                         onClick={() => handleResultClick('document', doc)}
-                        className="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
+                        className="w-full text-left p-2 hover:bg-muted/60 dark:hover:bg-stone-800/40 rounded-xl flex items-center justify-between gap-3 transition group cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg text-blue-700 shrink-0">
                             <FileText className="h-3.5 w-3.5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-gray-800 dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">{doc.title}</div>
-                            <div className="text-[10px] text-gray-400 dark:text-stone-500 truncate">{doc.fileName} • {doc.category}</div>
+                            <div className="text-xs font-bold text-foreground dark:text-stone-200 group-hover:text-[#2D6A4F] truncate">{doc.title}</div>
+                            <div className="text-[10px] text-muted-foreground dark:text-stone-500 truncate">{doc.fileName} • {doc.category}</div>
                           </div>
                         </div>
                         <ChevronRight className="h-3.5 w-3.5 text-gray-300 dark:text-stone-600 group-hover:text-[#2D6A4F] transition shrink-0" />

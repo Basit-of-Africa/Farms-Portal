@@ -341,12 +341,12 @@ export default function OnboardingTour({ user, isOpen, onClose }: OnboardingTour
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="bg-white dark:bg-stone-900 border border-[#2D6A4F]/20 dark:border-stone-800 w-full rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col justify-between select-text relative"
+            className="bg-card dark:bg-stone-900 border border-border dark:border-stone-800 w-full rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col justify-between select-text relative"
           >
           {/* Close button */}
           <button 
             onClick={handleComplete}
-            className="absolute top-4 right-4 p-1.5 text-gray-400 dark:text-stone-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition cursor-pointer"
+            className="absolute top-4 right-4 p-1.5 text-muted-foreground dark:text-stone-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition cursor-pointer"
             title="Skip tour"
           >
             <X className="h-4 w-4" />
@@ -361,17 +361,17 @@ export default function OnboardingTour({ user, isOpen, onClose }: OnboardingTour
               </div>
             </div>
             
-            <h3 className="font-serif font-extrabold text-[#1B4332] dark:text-stone-100 text-lg tracking-wide leading-tight">
+            <h3 className="font-serif font-extrabold text-primary dark:text-stone-100 text-lg tracking-wide leading-tight">
               {step.title}
             </h3>
             
-            <p className="text-xs text-gray-500 dark:text-stone-400 font-sans leading-relaxed">
+            <p className="text-xs text-muted-foreground dark:text-stone-400 font-sans leading-relaxed">
               {step.description}
             </p>
           </div>
 
           {/* Footer Controls */}
-          <div className="mt-6 pt-4 border-t border-gray-150 dark:border-stone-800/80 flex items-center justify-between">
+          <div className="mt-6 pt-4 border-t border-border dark:border-stone-800/80 flex items-center justify-between">
             {/* Step Indicators */}
             <div className="flex gap-1.5">
               {steps.map((_, idx) => (
@@ -391,7 +391,7 @@ export default function OnboardingTour({ user, isOpen, onClose }: OnboardingTour
               {currentStep > 0 && (
                 <button
                   onClick={handlePrev}
-                  className="p-1.5 border border-gray-200 dark:border-stone-800 text-gray-600 dark:text-stone-400 hover:bg-neutral-50 dark:hover:bg-stone-800 rounded-xl text-xs font-bold transition cursor-pointer"
+                  className="p-1.5 border border-border dark:border-stone-800 text-foreground/80 dark:text-stone-400 hover:bg-neutral-50 dark:hover:bg-stone-800 rounded-xl text-xs font-bold transition cursor-pointer"
                   title="Previous step"
                 >
                   <ChevronLeft className="h-4 w-4" />

@@ -78,3 +78,20 @@ export type PrivacySettingsInput = z.infer<typeof privacySettingsSchema>;
 export function firstIssue(result: { success: boolean; error?: z.ZodError }): string {
   return result.error?.issues[0]?.message || 'Invalid input.';
 }
+
+export const updateTypes = ['general', 'planting', 'growth', 'harvest', 'maintenance', 'weather', 'pest', 'milestone'] as const;
+export const farmUpdateSchema = z.object({
+  title: z.string().trim().min(1, 'Give the update a title.').max(200, 'Keep the title under 200 characters.'),
+  updateType: z.enum(updateTypes),
+  body: z.string().trim().min(1, 'Describe what happened.').max(5000, 'Keep the update under 5000 characters.'),
+  caption: z.string().trim().max(200, 'Keep the caption under 200 characters.').optional().default('')
+});
+export type FarmUpdateInput = z.infer<typeof farmUpdateSchema>;
+
+export const documentCategories = ['report', 'certificate', 'contract', 'legal', 'financial', 'other'] as const;
+export const farmDocumentSchema = z.object({
+  title: z.string().trim().min(1, 'Give the document a title.').max(200),
+  category: z.enum(documentCategories),
+  description: z.string().trim().max(1000).optional().default('')
+});
+export type FarmDocumentInput = z.infer<typeof farmDocumentSchema>;

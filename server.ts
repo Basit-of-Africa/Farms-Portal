@@ -101,7 +101,8 @@ app.set('json replacer', secretStrippingReplacer);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+  // Camera is allowed for this site only (farm managers can photograph field updates)
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), interest-cohort=()');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
@@ -1599,6 +1600,11 @@ function saveDb() {
       console.error('❌ Failed to synchronize database changes with PostgreSQL:', err);
     });
   }
+}
+
+/** Escapes text before it is placed in email HTML. */
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 }
 
 // Simulated real-time triggers for notification emails
@@ -3306,31 +3312,8 @@ app.post('/api/users/create', requireAuth, (req, res) => {
   recordAudit(db, user, 'user.created', { req });
   saveDb();
 
-  // EMAIL TRIGGER 4: New user / investor account created → welcome email
-  dispatchEmail(
-    createdUser.email,
-    'Welcome to Adubiaro Farm Estates Portal',
-    `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
-    `<h3>Welcome to Adubiaro Estates Private Portal</h3>
-     <p>Dear ${createdUser.name},</p>
-     <p>An administrative account has been securely setup for you on our private client portal.</p>
-     <p>Your roles permissions: <b>${createdUser.role.toUpperCase()}</b></p>
-     <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
-       <tr><td><b>Authorized Username:</b></td><td>${createdUser.username}</td></tr>
-       <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
-       <tr><td><b>Sign-Up Email:</b></td><td>${createdUser.email}</td></tr>
-     </table>
-     <p>You are required to log in and change your temporary password immediately upon landing.</p>
-     <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Access Login Dashboard</a></p>`,
-    'Welcome Registration',
-    {
-      senderId: user.id,
-      recipientId: createdUser.id,
-      relatedType: 'welcome',
-      relatedId: createdUser.id,
-      containsCredentials: true
-    }
-  );
+  // Welcome email with login details (same template as bulk imports)
+  sendWelcomeEmail(createdUser, tempPassword, user).catch(err => console.error('Welcome email failed:', err));
 
   // The temporary password is shown once to the admin (it is also emailed)
   res.status(201).json({ ...publicUser(createdUser), temporaryPassword: tempPassword });
@@ -4196,7 +4179,7 @@ app.post('/api/admin/users/:id/message', requireAuth, upload.single('attachment'
       textBody,
       `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 12px;">
         <h3 style="color: #1B4332; margin-top: 0;">Message from ${currentUser.name} (${currentUser.role === UserRole.ADMIN ? 'Administrator' : 'Farm Manager'})</h3>
-        <p>${body.replace(/\n/g, '<br/>')}</p>
+        <p>${escapeHtml(String(body)).replace(/\n/g, '<br/>')}</p>
         ${mediaHtml}
         <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
         <p style="font-size: 11px; color: #888;">This email is dispatched from Adubiaro Farm Estates Private Portal.</p>
@@ -4292,7 +4275,7 @@ app.post('/api/admin/broadcast', requireAuth, upload.single('attachment'), async
   const textBody = fileUrl ? `${body}\n\n[Attachment: ${fileName} - ${fileUrl}]` : body;
   const htmlBody = `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 12px;">
     <h3 style="color: #1B4332; margin-top: 0;">Broadcast Message from ${currentUser.name} (${currentUser.role === UserRole.ADMIN ? 'Administrator' : 'Farm Manager'})</h3>
-    <p>${body.replace(/\n/g, '<br/>')}</p>
+    <p>${escapeHtml(String(body)).replace(/\n/g, '<br/>')}</p>
     ${mediaHtml}
     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
     <p style="font-size: 11px; color: #888;">This email is dispatched from Adubiaro Farm Estates Private Portal.${isMarketing ? ' You receive promotional messages because you opted in. You can withdraw consent at any time under Privacy &amp; Data in the portal.' : ''}</p>

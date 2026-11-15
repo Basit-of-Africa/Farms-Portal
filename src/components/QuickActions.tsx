@@ -23,6 +23,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { User, UserRole, Farm, FarmPlot } from '../types';
+import { toast } from './ui/sonner';
 
 interface QuickActionsProps {
   user: User;
@@ -361,12 +362,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
   const handleManualRefresh = () => {
     onRefresh();
     setIsOpen(false);
-    // Flash a temporary notification in the portal
-    const notification = document.createElement('div');
-    notification.className = "fixed bottom-24 right-8 bg-[#1B4332] text-white px-5 py-3 rounded-2xl shadow-premium text-xs font-semibold z-50 flex items-center gap-2 border border-[#52B788]/20 animate-bounce";
-    notification.innerHTML = `<svg class="animate-spin h-3.5 w-3.5 text-[#52B788]" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Re-aligning farm nodes...`;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 2000);
+    toast.success('Data refreshed.');
   };
 
   const toggleInvestorCheckbox = (invId: string) => {
@@ -387,11 +383,11 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
               initial={{ opacity: 0, y: 15, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 15, scale: 0.9 }}
-              className="absolute bottom-16 right-0 w-[calc(100vw-3rem)] max-w-[288px] bg-white rounded-3xl border border-[#2D6A4F]/10 shadow-premium overflow-hidden p-3 space-y-1 mb-2"
+              className="absolute bottom-16 right-0 w-[calc(100vw-3rem)] max-w-[288px] bg-card rounded-3xl border border-border shadow-premium overflow-hidden p-3 space-y-1 mb-2"
             >
-              <div className="px-3 py-2 border-b border-gray-50 flex items-center justify-between">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 font-bold">Quick Actions</span>
-                <span className="bg-[#52B788]/15 text-[#1B4332] text-[9.5px] px-2 py-0.5 rounded-full font-bold uppercase">
+              <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground font-bold">Quick Actions</span>
+                <span className="bg-[#52B788]/15 text-primary text-[9.5px] px-2 py-0.5 rounded-full font-bold uppercase">
                   {user.role.replace('_', ' ')}
                 </span>
               </div>
@@ -402,15 +398,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                   <>
                     <button
                       onClick={() => { setActiveModal('payout'); setIsOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 bg-emerald-50 rounded-lg text-emerald-700 group-hover:bg-emerald-100 transition">
                           <TrendingUp className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Log Payout</p>
-                          <p className="text-[10px] text-gray-400 font-normal">File structured financial record</p>
+                          <p className="font-bold text-foreground">Log Payout</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Record a payout for an investor</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -418,15 +414,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <button
                       onClick={() => { setActiveModal('user'); setIsOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 bg-blue-50 rounded-lg text-blue-700 group-hover:bg-blue-100 transition">
                           <UserPlus className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Add Investor</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Provision profile key auth</p>
+                          <p className="font-bold text-foreground">Add Investor</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Create an account and send login details</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -434,15 +430,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <button
                       onClick={() => { setActiveModal('document'); setIsOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 bg-amber-50 rounded-lg text-amber-700 group-hover:bg-amber-100 transition">
                           <FileUp className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Upload Deed/File</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Upload a contract or document</p>
+                          <p className="font-bold text-foreground">Upload document</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Upload a contract or document</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -450,15 +446,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <button
                       onClick={() => { setActiveModal('update'); setIsOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group border-t border-gray-50 pt-3"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group border-t border-border pt-3"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-[#52B788]/10 rounded-lg text-[#1B4332] group-hover:bg-[#52B788]/25 transition">
+                        <div className="p-2 bg-[#52B788]/10 rounded-lg text-primary group-hover:bg-[#52B788]/25 transition">
                           <Sprout className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Post Update</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Post an update to a farm</p>
+                          <p className="font-bold text-foreground">Post Update</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Post an update to a farm</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -471,15 +467,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                   <>
                     <button
                       onClick={() => { setActiveModal('update'); setIsOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 bg-emerald-50 rounded-lg text-emerald-700 group-hover:bg-emerald-100 transition">
                           <Sprout className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Post update</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Broadcast soil development updates</p>
+                          <p className="font-bold text-foreground">Post update</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Broadcast soil development updates</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -487,15 +483,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <button
                       onClick={() => { setActiveModal('document'); setIsOpen(false); }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 bg-amber-50 rounded-lg text-amber-700 group-hover:bg-amber-100 transition">
                           <FileUp className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Upload Report</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Push operational documents</p>
+                          <p className="font-bold text-foreground">Upload Report</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Push operational documents</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -508,15 +504,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                   <>
                     <button
                       onClick={() => handleTabShortcut('financials')}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 bg-emerald-50 rounded-lg text-emerald-700 group-hover:bg-emerald-100 transition">
                           <CreditCard className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">View payouts</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Audit total capitalization and ROI</p>
+                          <p className="font-bold text-foreground">View payouts</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Audit total capitalization and ROI</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -524,15 +520,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <button
                       onClick={() => handleTabShortcut('settings')}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group"
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-stone-50 rounded-lg text-stone-700 group-hover:bg-stone-100 transition">
+                        <div className="p-2 bg-muted/50 rounded-lg text-foreground/80 group-hover:bg-stone-100 transition">
                           <Settings className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">Verify Profile Security</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Audit phone, authentication key</p>
+                          <p className="font-bold text-foreground">Verify Profile Security</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Audit phone, authentication key</p>
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -543,15 +539,15 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                 {/* --- SHARED SYSTEM SHORTCUTS --- */}
                 <button
                   onClick={handleManualRefresh}
-                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-gray-700 cursor-pointer transition group border-t border-gray-150 pt-3 mt-1.5"
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-50 flex items-center justify-between text-xs text-foreground cursor-pointer transition group border-t border-border pt-3 mt-1.5"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-[#FBF9F4] rounded-lg text-[#1B4332] group-hover:bg-stone-100 transition">
+                    <div className="p-2 bg-muted/40 rounded-lg text-primary group-hover:bg-stone-100 transition">
                       <RefreshCw className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="font-bold text-gray-800">Re-Align Farm Nodes</p>
-                      <p className="text-[10px] text-gray-400 font-normal">Refresh data</p>
+                      <p className="font-bold text-foreground">Refresh data</p>
+                      <p className="text-[10px] text-muted-foreground font-normal">Refresh data</p>
                     </div>
                   </div>
                 </button>
@@ -603,25 +599,25 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl border border-gray-150 shadow-premium w-full max-w-xl overflow-hidden my-8"
+              className="bg-card rounded-3xl border border-border shadow-premium w-full max-w-xl overflow-hidden my-8"
             >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-[#FBF9F4]/70">
+              <div className="px-6 py-5 border-b border-border flex items-center justify-between bg-muted/40">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 bg-[#1B4332]/10 rounded-2xl flex items-center justify-center text-[#1B4332]">
+                  <div className="h-10 w-10 bg-[#1B4332]/10 rounded-2xl flex items-center justify-center text-primary">
                     {activeModal === 'payout' && <TrendingUp className="h-5 w-5" />}
                     {activeModal === 'user' && <UserPlus className="h-5 w-5" />}
                     {activeModal === 'document' && <FileUp className="h-5 w-5" />}
                     {activeModal === 'update' && <Sprout className="h-5 w-5" />}
                   </div>
                   <div>
-                    <h3 className="font-serif font-bold text-gray-800 text-base leading-tight">
+                    <h3 className="font-serif font-bold text-foreground text-base leading-tight">
                       {activeModal === 'payout' && 'Log Structured Payout'}
                       {activeModal === 'user' && 'Provision Investor profile'}
                       {activeModal === 'document' && 'Dispatch Deed/Contract'}
                       {activeModal === 'update' && 'Publish Field Chronicle'}
                     </h3>
-                    <p className="text-[10.5px] text-gray-400 font-mono font-medium mt-0.5">
+                    <p className="text-[10.5px] text-muted-foreground font-mono font-medium mt-0.5">
                       {activeModal === 'payout' && 'FILE REVENUE RECOGNITION AUDIT'}
                       {activeModal === 'user' && 'SYSTEM KEY-CREDENTIAL AUTHORIZATION'}
                       {activeModal === 'document' && 'CONTRACTUAL LEGAL AGREEMENTS DISPATCH'}
@@ -631,7 +627,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                 </div>
                 <button
                   onClick={() => { setActiveModal(null); setErrorText(null); setSuccessText(null); }}
-                  className="p-1.5 rounded-xl hover:bg-stone-100 text-gray-400 hover:text-gray-600 transition cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
+                  className="p-1.5 rounded-xl hover:bg-stone-100 text-muted-foreground hover:text-gray-600 transition cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -660,11 +656,11 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                   <form onSubmit={handlePayoutSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Target Estate</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Target Estate</label>
                         <select
                           value={selectedFarmId}
                           onChange={(e) => setSelectedFarmId(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                           required
                         >
                           <option value="">-- Choose Farm Estate --</option>
@@ -675,11 +671,11 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Specific Land Plot</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Specific Land Plot</label>
                         <select
                           value={selectedPlotId}
                           onChange={(e) => setSelectedPlotId(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold font-mono"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold font-mono"
                           required
                           disabled={plotsLoading || !selectedFarmId}
                         >
@@ -693,11 +689,11 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Financial period</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Financial period</label>
                         <select
                           value={payoutPeriod}
                           onChange={(e) => setPayoutPeriod(e.target.value as any)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                           required
                         >
                           <option value="Q1">Q1 Quarter</option>
@@ -709,23 +705,23 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Calendar Year</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Calendar Year</label>
                         <input
                           type="number"
                           value={payoutYear}
                           onChange={(e) => setPayoutYear(Number(e.target.value))}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold font-mono"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold font-mono"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">payout Date</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">payout Date</label>
                         <input
                           type="date"
                           value={payoutDate}
                           onChange={(e) => setPayoutDate(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold font-mono"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold font-mono"
                           required
                         />
                       </div>
@@ -733,36 +729,36 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Return ROI Percentage (%)</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Return ROI Percentage (%)</label>
                         <input
                           type="number"
                           step="0.01"
                           placeholder="e.g., 14.5"
                           value={payoutRoi}
                           onChange={(e) => setPayoutRoi(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold font-mono"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold font-mono"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Payout Volume Amount ($)</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Payout Volume Amount ($)</label>
                         <input
                           type="number"
                           placeholder="e.g., 2500"
                           value={payoutAmount}
                           onChange={(e) => setPayoutAmount(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold font-mono"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold font-mono"
                           required
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Payout status</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Payout status</label>
                       <div className="flex gap-4">
                         {['paid', 'pending', 'partial', 'overdue'].map(status => (
-                          <label key={status} className="flex items-center gap-2 text-xs font-mono font-bold text-gray-600 capitalize cursor-pointer">
+                          <label key={status} className="flex items-center gap-2 text-xs font-mono font-bold text-foreground/80 capitalize cursor-pointer">
                             <input
                               type="radio"
                               name="payout_status"
@@ -777,13 +773,13 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Notes / details</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Notes / details</label>
                       <textarea
                         rows={3}
                         placeholder="Provide details about yield quality, rainfall parameters, or administrative records."
                         value={payoutNotes}
                         onChange={(e) => setPayoutNotes(e.target.value)}
-                        className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-sans"
+                        className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-sans"
                       />
                     </div>
 
@@ -803,25 +799,25 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                   <form onSubmit={handleUserSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Unique Username ID *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Unique Username ID *</label>
                         <input
                           type="text"
                           placeholder="e.g., adeyemi20"
                           value={newUsername}
                           onChange={(e) => setNewUsername(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold font-mono"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold font-mono"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Full Legal Name *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Full Legal Name *</label>
                         <input
                           type="text"
                           placeholder="e.g., Prince Adeyemi"
                           value={newName}
                           onChange={(e) => setNewName(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                           required
                         />
                       </div>
@@ -829,35 +825,35 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Electronic Mail Address *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Electronic Mail Address *</label>
                         <input
                           type="email"
                           placeholder="e.g., adeyemi@example.com"
                           value={newEmail}
                           onChange={(e) => setNewEmail(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-semibold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-semibold"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Telephone Contact number</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Telephone Contact number</label>
                         <input
                           type="tel"
                           placeholder="+234..."
                           value={newPhone}
                           onChange={(e) => setNewPhone(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-semibold font-mono"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-semibold font-mono"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Role *</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Role *</label>
                       <select
                         value={newRole}
                         onChange={(e) => setNewRole(e.target.value as any)}
-                        className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                        className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                         required
                       >
                         <option value="investor">Investor</option>
@@ -866,7 +862,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                       </select>
                     </div>
 
-                    <div className="p-3 bg-[#FBF9F4] rounded-2xl border text-[11px] leading-relaxed text-gray-500 font-sans">
+                    <div className="p-3 bg-muted/40 rounded-2xl border text-[11px] leading-relaxed text-muted-foreground font-sans">
                       💡 A random temporary password is generated and emailed to the user. They must choose their own password at first sign-in.</div>
 
                     <button
@@ -884,11 +880,11 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                 {activeModal === 'document' && (
                   <form onSubmit={handleDocumentSubmit} className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Select Target Estate *</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Select Target Estate *</label>
                       <select
                         value={docFarmId}
                         onChange={(e) => setDocFarmId(e.target.value)}
-                        className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                        className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                         required
                       >
                         <option value="">-- Choose Farm Estate --</option>
@@ -900,23 +896,23 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Contract / Document Title *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Contract / Document Title *</label>
                         <input
                           type="text"
                           placeholder="e.g., Deeded Certificate of Occupancy"
                           value={docTitle}
                           onChange={(e) => setDocTitle(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Document Category *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Document Category *</label>
                         <select
                           value={docCategory}
                           onChange={(e) => setDocCategory(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                           required
                         >
                           <option value="contract">Legal Agreement / Contract</option>
@@ -930,30 +926,30 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Description / Metadata</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Description / Metadata</label>
                       <textarea
                         rows={2}
                         placeholder="Provide details about the document contents or legal verification keys."
                         value={docDesc}
                         onChange={(e) => setDocDesc(e.target.value)}
-                        className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-sans"
+                        className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-sans"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Attach File Document *</label>
-                      <div className="border-2 border-dashed border-gray-200 rounded-2xl p-5 bg-[#FBF9F4] hover:bg-stone-50 transition text-center relative">
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Attach File Document *</label>
+                      <div className="border-2 border-dashed border-border rounded-2xl p-5 bg-muted/40 hover:bg-stone-50 transition text-center relative">
                         <input
                           type="file"
                           onChange={(e) => setDocFile(e.target.files ? e.target.files[0] : null)}
                           className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                           required
                         />
-                        <Upload className="h-6 w-6 text-[#1B4332] mx-auto mb-2 opacity-60" />
-                        <p className="text-xs font-bold text-gray-700">
+                        <Upload className="h-6 w-6 text-primary mx-auto mb-2 opacity-60" />
+                        <p className="text-xs font-bold text-foreground">
                           {docFile ? docFile.name : 'Click or Drag document file to attach'}
                         </p>
-                        <p className="text-[10px] text-gray-400 font-mono mt-1">PDF, PNG, JPG or DOCX up to 10MB</p>
+                        <p className="text-[10px] text-muted-foreground font-mono mt-1">PDF, PNG, JPG or DOCX up to 10MB</p>
                       </div>
                     </div>
 
@@ -972,11 +968,11 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                 {activeModal === 'update' && (
                   <form onSubmit={handleUpdateSubmit} className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Target Farm Estate *</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Target Farm Estate *</label>
                       <select
                         value={updateFarmId}
                         onChange={(e) => setUpdateFarmId(e.target.value)}
-                        className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                        className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                         required
                       >
                         <option value="">-- Choose Farm Estate --</option>
@@ -988,23 +984,23 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Update title *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Update title *</label>
                         <input
                           type="text"
                           placeholder="e.g., Wet season planting completed"
                           value={updateTitle}
                           onChange={(e) => setUpdateTitle(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Update classification *</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Update classification *</label>
                         <select
                           value={updateType}
                           onChange={(e) => setUpdateType(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-bold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-bold"
                           required
                         >
                           <option value="general">General announcement</option>
@@ -1019,52 +1015,52 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Update description / body *</label>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Update description / body *</label>
                       <textarea
                         rows={3}
                         placeholder="Document observations regarding weather patterns, canopy indexes, water levels, or harvest weights."
                         value={updateBody}
                         onChange={(e) => setUpdateBody(e.target.value)}
-                        className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-sans"
+                        className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-sans"
                         required
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Add Canopy Photo (Optional)</label>
-                        <div className="border border-dashed border-gray-200 rounded-xl p-3 bg-[#FBF9F4] text-center relative select-none">
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Add Canopy Photo (Optional)</label>
+                        <div className="border border-dashed border-border rounded-xl p-3 bg-muted/40 text-center relative select-none">
                           <input
                             type="file"
                             onChange={(e) => setUpdateFile(e.target.files ? e.target.files[0] : null)}
                             className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                           />
-                          <Upload className="h-4.5 w-4.5 text-[#1B4332] mx-auto mb-1 opacity-60" />
-                          <p className="text-[11px] font-bold text-gray-600">
+                          <Upload className="h-4.5 w-4.5 text-primary mx-auto mb-1 opacity-60" />
+                          <p className="text-[11px] font-bold text-foreground/80">
                             {updateFile ? updateFile.name : 'Select JPG or PNG'}
                           </p>
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-mono font-bold uppercase text-gray-400 mb-1">Photo caption</label>
+                        <label className="block text-[10px] font-mono font-bold uppercase text-muted-foreground mb-1">Photo caption</label>
                         <input
                           type="text"
                           placeholder="e.g., Healthy crop canopy growth"
                           value={updateCaption}
                           onChange={(e) => setUpdateCaption(e.target.value)}
-                          className="w-full bg-[#FBF9F4] p-3 text-xs rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-[#1B4332]/20 font-semibold"
+                          className="w-full bg-muted/40 p-3 text-xs rounded-xl border border-border outline-none focus:ring-2 focus:ring-ring/20 font-semibold"
                           disabled={!updateFile}
                         />
                       </div>
                     </div>
 
                     {/* Target Personalization Toggle */}
-                    <div className="p-3.5 bg-[#FBF9F4] rounded-2xl border border-gray-150 space-y-2.5">
+                    <div className="p-3.5 bg-muted/40 rounded-2xl border border-border space-y-2.5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-bold text-gray-800">Target Specific Investors</p>
-                          <p className="text-[10px] text-gray-400 font-normal">Only visible to chosen crop holders</p>
+                          <p className="text-xs font-bold text-foreground">Target Specific Investors</p>
+                          <p className="text-[10px] text-muted-foreground font-normal">Only visible to chosen crop holders</p>
                         </div>
                         <input
                           type="checkbox"
@@ -1075,16 +1071,16 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                       </div>
 
                       {isPersonalized && (
-                        <div className="border-t border-gray-200 pt-2.5 space-y-1.5">
-                          <label className="block text-[9.5px] font-mono font-bold uppercase text-gray-400 mb-1">Select target active investors</label>
+                        <div className="border-t border-border pt-2.5 space-y-1.5">
+                          <label className="block text-[9.5px] font-mono font-bold uppercase text-muted-foreground mb-1">Select target active investors</label>
                           <div className="max-h-[100px] overflow-y-auto space-y-1 pl-1">
                             {investorsLoading ? (
-                              <p className="text-[10px] text-gray-400 font-mono">Fetching profiles...</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">Fetching profiles...</p>
                             ) : farmInvestors.length === 0 ? (
-                              <p className="text-[10px] text-gray-400 font-sans">No registered investors assigned to this farm.</p>
+                              <p className="text-[10px] text-muted-foreground font-sans">No registered investors assigned to this farm.</p>
                             ) : (
                               farmInvestors.map(inv => (
-                                <label key={inv.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer select-none">
+                                <label key={inv.id} className="flex items-center gap-2 text-xs font-semibold text-foreground/80 cursor-pointer select-none">
                                   <input
                                     type="checkbox"
                                     checked={selectedInvestorIds.includes(inv.id)}

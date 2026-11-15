@@ -643,7 +643,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
     showSuccess('Investors directory exported successfully!');
   };
 
-  // Download Import Template
+  // Download template
   const handleDownloadSampleCsv = () => {
     const csvContent = 
       INVESTOR_IMPORT_CSV_TEMPLATE;
@@ -847,11 +847,11 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {/* Control Header & Actions bar */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-card border border-border p-5 rounded-3xl shadow-sm">
         <div className="flex items-center gap-3 w-full xl:w-auto">
-          <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-[#1B4332] dark:text-[#52B788]">
+          <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-primary dark:text-[#52B788]">
             <Briefcase className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="font-serif font-extrabold text-base text-[#1B4332] dark:text-[#52B788]">
+            <h2 className="font-serif font-extrabold text-base text-primary dark:text-[#52B788]">
               {roleFilter === 'ALL'
                 ? 'All accounts'
                 : roleFilter === 'INVESTOR'
@@ -860,7 +860,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 ? 'Farm Managers'
                 : 'Administrators'}
             </h2>
-            <p className="text-[10px] font-mono text-gray-400">
+            <p className="text-[10px] font-mono text-muted-foreground">
               {roleFilter === 'ALL'
                 ? 'Investors, farm managers and administrators'
                 : roleFilter === 'INVESTOR'
@@ -876,13 +876,13 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
         <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full xl:w-auto">
           <div className="flex items-center gap-2 flex-1 sm:w-auto">
             <div className="relative flex-1 sm:w-60">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <input
                 type="text"
                 placeholder="Search accounts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 text-xs bg-[#FBF9F4] dark:bg-stone-800 border border-gray-150 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] transition text-gray-800 dark:text-stone-100"
+                className="w-full pl-9 pr-4 py-2.5 text-xs bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring transition text-foreground dark:text-stone-100"
               />
             </div>
 
@@ -892,7 +892,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 setRoleFilter(e.target.value);
                 setSelectedUserIds([]); // Clear selection on filter change
               }}
-              className="px-3.5 py-2.5 text-xs bg-[#FBF9F4] dark:bg-stone-800 border border-gray-150 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-bold cursor-pointer shrink-0 outline-none shadow-sm"
+              className="px-3.5 py-2.5 text-xs bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100 font-bold cursor-pointer shrink-0 outline-none shadow-sm"
             >
               <option value="ALL">All Roles</option>
               <option value="INVESTOR">Investors</option>
@@ -904,7 +904,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
           <div className="flex items-center gap-2">
             <button
               onClick={handleExportCsv}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-gray-700 dark:text-stone-300 rounded-xl text-xs font-bold cursor-pointer transition shrink-0"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 border border-border dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-foreground dark:text-stone-300 rounded-xl text-xs font-bold cursor-pointer transition shrink-0"
               title="Export all investors as CSV"
             >
               <Download className="h-4 w-4" />
@@ -918,7 +918,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 setBulkResults(null);
                 setIsImportModalOpen(true);
               }}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-gray-700 dark:text-stone-300 rounded-xl text-xs font-bold cursor-pointer transition shrink-0"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 border border-border dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-foreground dark:text-stone-300 rounded-xl text-xs font-bold cursor-pointer transition shrink-0"
               title="Bulk import investors via CSV"
             >
               <Upload className="h-4 w-4" />
@@ -938,16 +938,16 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
       {/* Select All Bar & View Mode Switcher */}
       {!loading && filteredInvestors.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-stone-50 dark:bg-stone-900/70 border border-stone-200/50 dark:border-stone-800 px-4.5 py-3 rounded-2xl text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/50 dark:bg-stone-900/70 border border-stone-200/50 dark:border-stone-800 px-4.5 py-3 rounded-2xl text-xs">
           <div className="flex items-center gap-2.5">
             <button
               onClick={toggleSelectAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl hover:bg-stone-100 dark:hover:bg-stone-750 font-semibold text-gray-700 dark:text-stone-300 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-card dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl hover:bg-stone-100 dark:hover:bg-stone-750 font-semibold text-foreground dark:text-stone-300 transition cursor-pointer"
             >
               {filteredInvestors.length > 0 && filteredInvestors.every(inv => selectedUserIds.includes(inv.id)) ? (
                 <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <Square className="h-4 w-4 text-gray-400 dark:text-stone-500" />
+                <Square className="h-4 w-4 text-muted-foreground dark:text-stone-500" />
               )}
               <span>
                 {filteredInvestors.length > 0 && filteredInvestors.every(inv => selectedUserIds.includes(inv.id))
@@ -956,7 +956,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               </span>
             </button>
             <span className="text-gray-300 dark:text-stone-700 font-mono">|</span>
-            <span className="text-gray-500 dark:text-stone-400">
+            <span className="text-muted-foreground dark:text-stone-400">
               Showing <strong>{filteredInvestors.length}</strong> investors
             </span>
           </div>
@@ -971,7 +971,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
             {/* Grid / Table View Toggle */}
             <div
-              className="inline-flex items-center bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl p-1 shadow-xs"
+              className="inline-flex items-center bg-card dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl p-1 shadow-xs"
               role="group"
               aria-label="Investors display layout"
             >
@@ -981,7 +981,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
                   viewMode === 'grid'
                     ? 'bg-[#1B4332] text-white shadow-xs dark:bg-[#52B788] dark:text-stone-950'
-                    : 'text-gray-500 dark:text-stone-400 hover:text-gray-800 dark:hover:text-stone-200'
+                    : 'text-muted-foreground dark:text-stone-400 hover:text-foreground dark:hover:text-stone-200'
                 }`}
                 title="Grid view"
                 aria-pressed={viewMode === 'grid'}
@@ -995,7 +995,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
                   viewMode === 'table'
                     ? 'bg-[#1B4332] text-white shadow-xs dark:bg-[#52B788] dark:text-stone-950'
-                    : 'text-gray-500 dark:text-stone-400 hover:text-gray-800 dark:hover:text-stone-200'
+                    : 'text-muted-foreground dark:text-stone-400 hover:text-foreground dark:hover:text-stone-200'
                 }`}
                 title="Table view"
                 aria-pressed={viewMode === 'table'}
@@ -1012,13 +1012,13 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 text-[#52B788] animate-spin" />
-          <p className="text-xs font-mono text-gray-400">Saving…</p>
+          <p className="text-xs font-mono text-muted-foreground">Saving…</p>
         </div>
       ) : filteredInvestors.length === 0 ? (
-        <div className="py-20 bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800 text-center flex flex-col items-center justify-center p-6">
+        <div className="py-20 bg-card dark:bg-stone-900 rounded-3xl border border-border dark:border-stone-800 text-center flex flex-col items-center justify-center p-6">
           <User className="h-10 w-10 text-gray-300 dark:text-stone-700 mb-2" />
-          <h3 className="font-sans font-bold text-gray-700 dark:text-stone-300 text-sm">No Investors Found</h3>
-          <p className="text-xs text-gray-400 max-w-sm mt-1">
+          <h3 className="font-sans font-bold text-foreground dark:text-stone-300 text-sm">No Investors Found</h3>
+          <p className="text-xs text-muted-foreground max-w-sm mt-1">
             We couldn't find any investor profiles matching your criteria or currently registered.
           </p>
         </div>
@@ -1040,10 +1040,10 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
             return (
               <div 
                 key={inv.id}
-                className={`bg-white dark:bg-stone-900 border rounded-3xl p-5 hover:shadow-premium transition-all duration-300 flex flex-col justify-between group relative min-w-0 overflow-hidden ${
+                className={`bg-card dark:bg-stone-900 border rounded-3xl p-5 hover:shadow-premium transition-all duration-300 flex flex-col justify-between group relative min-w-0 overflow-hidden ${
                   isSelected
                     ? 'border-[#52B788] bg-emerald-50/30 dark:bg-emerald-950/10 ring-2 ring-[#52B788]/30 shadow-md scale-[1.015]'
-                    : 'border-gray-150 dark:border-stone-800'
+                    : 'border-border dark:border-stone-800'
                 }`}
               >
                 <div className="min-w-0">
@@ -1056,7 +1056,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                         e.stopPropagation();
                         toggleSelectUser(inv.id);
                       }}
-                      className="p-1 text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] transition cursor-pointer shrink-0"
+                      className="p-1 text-[#2D6A4F] hover:text-primary dark:text-[#52B788] transition cursor-pointer shrink-0"
                       title={isSelected ? "Deselect user" : "Select user for batch operations"}
                     >
                       {isSelected ? (
@@ -1073,26 +1073,26 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                         className="flex items-center gap-2.5 min-w-0 flex-1 text-left group/profile cursor-pointer"
                         title={`View ${inv.name}'s portfolio & returns`}
                       >
-                        <div className="w-10 h-10 rounded-full bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] text-[#1B4332] dark:text-[#52B788] group-hover/profile:text-white flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] text-primary dark:text-[#52B788] group-hover/profile:text-white flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
                           {inv.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover/profile:text-[#2D6A4F] dark:group-hover/profile:text-[#52B788] group-hover/profile:underline transition-colors truncate">
+                          <h4 className="font-sans font-bold text-sm text-foreground dark:text-stone-100 group-hover/profile:text-[#2D6A4F] dark:group-hover/profile:text-[#52B788] group-hover/profile:underline transition-colors truncate">
                             {inv.name}
                           </h4>
-                          <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground truncate">@{inv.username}</p>
                         </div>
                       </button>
                     ) : (
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] flex items-center justify-center font-bold text-xs shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-[#52B788]/10 text-primary dark:text-[#52B788] flex items-center justify-center font-bold text-xs shrink-0">
                           {inv.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h4 className="font-sans font-bold text-sm text-gray-800 dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors truncate">
+                          <h4 className="font-sans font-bold text-sm text-foreground dark:text-stone-100 group-hover:text-[#2D6A4F] dark:group-hover:text-[#52B788] transition-colors truncate">
                             {inv.name}
                           </h4>
-                          <p className="text-[10px] font-mono text-gray-400 truncate">@{inv.username}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground truncate">@{inv.username}</p>
                         </div>
                       </div>
                     )}
@@ -1112,44 +1112,44 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                     <span className={`text-[8px] font-mono font-extrabold px-2 py-0.5 rounded-full border whitespace-nowrap ${
                       inv.isActive !== false
                         ? 'bg-emerald-50/60 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/20'
-                        : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-700'
+                        : 'bg-muted dark:bg-stone-800 text-muted-foreground dark:text-stone-400 border-border dark:border-stone-700'
                     }`}>
                       {inv.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
                     </span>
                   </div>
 
                 {/* Body details */}
-                <div className="mt-4 space-y-2.5 text-xs text-gray-500 dark:text-stone-400 border-t border-dashed border-gray-100 dark:border-stone-800 pt-4">
+                <div className="mt-4 space-y-2.5 text-xs text-muted-foreground dark:text-stone-400 border-t border-dashed border-border dark:border-stone-800 pt-4">
                   <div className="flex items-center gap-2.5">
-                    <Mail className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                    <span className="truncate text-gray-700 dark:text-stone-300">{inv.email}</span>
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate text-foreground dark:text-stone-300">{inv.email}</span>
                   </div>
                   {inv.phone && (
                     <div className="flex items-center gap-2.5">
-                      <Phone className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                      <span className="text-gray-700 dark:text-stone-300">{inv.phone}</span>
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-foreground dark:text-stone-300">{inv.phone}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2.5">
-                    <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                    <span className="text-[10px] font-mono text-gray-400">ID: {inv.id}</span>
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-[10px] font-mono text-muted-foreground">ID: {inv.id}</span>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-6 pt-4 border-t border-gray-50 dark:border-stone-800 flex items-center justify-between">
+              <div className="mt-6 pt-4 border-t border-border dark:border-stone-800 flex items-center justify-between">
                 
                 {/* Active Toggle Switch */}
                 <button
                   onClick={() => handleToggleActive(inv)}
                   title={inv.isActive !== false ? "Deactivate Profile" : "Activate Profile"}
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-[#52B788] transition text-[10px] font-mono"
+                  className="flex items-center gap-1.5 text-muted-foreground hover:text-[#52B788] transition text-[10px] font-mono"
                 >
                   {inv.isActive !== false ? (
                     <ToggleRight className="h-6 w-6 text-emerald-500 cursor-pointer" />
                   ) : (
-                    <ToggleLeft className="h-6 w-6 text-gray-400 cursor-pointer" />
+                    <ToggleLeft className="h-6 w-6 text-muted-foreground cursor-pointer" />
                   )}
                   <span>Status</span>
                 </button>
@@ -1166,7 +1166,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
                   <button
                     onClick={() => openEditModal(inv)}
-                    className="p-2 bg-[#52B788]/10 text-[#1B4332] dark:text-[#52B788] hover:bg-[#52B788]/20 rounded-xl transition cursor-pointer"
+                    className="p-2 bg-[#52B788]/10 text-primary dark:text-[#52B788] hover:bg-[#52B788]/20 rounded-xl transition cursor-pointer"
                     title="Modify Details"
                   >
                     <Edit2 className="h-4 w-4" />
@@ -1189,15 +1189,15 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {/* 1. Create Investor Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/20 dark:border-stone-800 max-w-md w-full shadow-premium p-6 overflow-hidden animate-fade-in">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-stone-800">
+          <div className="bg-card dark:bg-stone-900 rounded-3xl border border-border dark:border-stone-800 max-w-md w-full shadow-premium p-6 overflow-hidden animate-fade-in">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-stone-800">
               <div className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-[#2D6A4F] dark:text-[#52B788]" />
-                <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Add System Account & Role</h3>
+                <h3 className="font-serif font-extrabold text-sm text-primary dark:text-[#52B788]">Add System Account & Role</h3>
               </div>
               <button 
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg cursor-pointer"
+                className="p-1 text-muted-foreground hover:text-gray-600 rounded-lg cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1205,7 +1205,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
             <form onSubmit={handleCreateInvestor} className="mt-4 space-y-4">
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Full Name *
                 </label>
                 <input
@@ -1214,13 +1214,13 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   placeholder="e.g. Alaba Michael"
                   value={createForm.name}
                   onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                     Username *
                   </label>
                   <input
@@ -1229,11 +1229,11 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                     placeholder="e.g. alaba_m"
                     value={createForm.username}
                     onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
-                    className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                    className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                     Temporary Password
                   </label>
                   <input
@@ -1241,13 +1241,13 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                     placeholder="Auto generated if blank"
                     value={createForm.password}
                     onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                    className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                    className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Email Address *
                 </label>
                 <input
@@ -1256,12 +1256,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   placeholder="e.g. alaba@example.com"
                   value={createForm.email}
                   onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Phone Number
                 </label>
                 <input
@@ -1269,18 +1269,18 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   placeholder="e.g. +234 801 234 5678"
                   value={createForm.phone}
                   onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   System Role / Permission Tier
                 </label>
                 <select
                   value={createForm.role}
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-bold outline-none"
+                  className="w-full text-xs px-3.5 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100 font-bold outline-none"
                 >
                   <option value={UserRole.INVESTOR}>Investor (Default)</option>
                   <option value={UserRole.FARM_MANAGER}>Farm Manager</option>
@@ -1288,11 +1288,11 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 </select>
               </div>
 
-              <div className="pt-4 border-t border-gray-100 dark:border-stone-800 flex justify-end gap-3">
+              <div className="pt-4 border-t border-border dark:border-stone-800 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-stone-300 hover:bg-gray-50 cursor-pointer"
+                  className="px-4 py-2 border border-border dark:border-stone-700 rounded-xl text-xs font-semibold text-foreground/80 dark:text-stone-300 hover:bg-muted/60 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1313,15 +1313,15 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {/* 2. Edit/Modify Investor Modal */}
       {isEditModalOpen && selectedInvestor && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/20 dark:border-stone-800 max-w-md w-full shadow-premium p-6 overflow-hidden animate-fade-in">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-stone-800">
+          <div className="bg-card dark:bg-stone-900 rounded-3xl border border-border dark:border-stone-800 max-w-md w-full shadow-premium p-6 overflow-hidden animate-fade-in">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-stone-800">
               <div className="flex items-center gap-2">
                 <Edit2 className="h-5 w-5 text-[#2D6A4F] dark:text-[#52B788]" />
-                <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Modify Details</h3>
+                <h3 className="font-serif font-extrabold text-sm text-primary dark:text-[#52B788]">Modify Details</h3>
               </div>
               <button 
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg cursor-pointer"
+                className="p-1 text-muted-foreground hover:text-gray-600 rounded-lg cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1329,7 +1329,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
             <form onSubmit={handleEditInvestor} className="mt-4 space-y-4">
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Full Name
                 </label>
                 <input
@@ -1337,12 +1337,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   required
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Username
                 </label>
                 <input
@@ -1350,12 +1350,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   required
                   value={editForm.username}
                   onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Email Address
                 </label>
                 <input
@@ -1363,30 +1363,30 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   required
                   value={editForm.email}
                   onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Phone Number
                 </label>
                 <input
                   type="text"
                   value={editForm.phone}
                   onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   System Role
                 </label>
                 <select
                   value={editForm.role}
                   onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-bold outline-none"
+                  className="w-full text-xs px-3.5 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100 font-bold outline-none"
                 >
                   <option value={UserRole.INVESTOR}>Investor</option>
                   <option value={UserRole.FARM_MANAGER}>Farm Manager</option>
@@ -1395,7 +1395,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Set New Password
                 </label>
                 <input
@@ -1403,33 +1403,33 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   placeholder="Leave blank to keep current"
                   value={editForm.password || ''}
                   onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
-              <div className="flex items-center justify-between bg-stone-50 dark:bg-stone-800/60 p-3 rounded-xl">
+              <div className="flex items-center justify-between bg-muted/50 dark:bg-stone-800/60 p-3 rounded-xl">
                 <div>
-                  <h4 className="text-xs font-bold text-[#1B4332] dark:text-stone-200">Account Authorization Status</h4>
-                  <p className="text-[9px] text-gray-400">Controls whether investor is permitted to log in</p>
+                  <h4 className="text-xs font-bold text-primary dark:text-stone-200">Account Authorization Status</h4>
+                  <p className="text-[9px] text-muted-foreground">Controls whether investor is permitted to log in</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditForm({ ...editForm, isActive: !editForm.isActive })}
-                  className="text-gray-400 hover:text-[#52B788]"
+                  className="text-muted-foreground hover:text-[#52B788]"
                 >
                   {editForm.isActive ? (
                     <ToggleRight className="h-7 w-7 text-emerald-500 cursor-pointer" />
                   ) : (
-                    <ToggleLeft className="h-7 w-7 text-gray-400 cursor-pointer" />
+                    <ToggleLeft className="h-7 w-7 text-muted-foreground cursor-pointer" />
                   )}
                 </button>
               </div>
 
-              <div className="pt-4 border-t border-gray-100 dark:border-stone-800 flex justify-end gap-3">
+              <div className="pt-4 border-t border-border dark:border-stone-800 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-stone-300 hover:bg-gray-50 cursor-pointer"
+                  className="px-4 py-2 border border-border dark:border-stone-700 rounded-xl text-xs font-semibold text-foreground/80 dark:text-stone-300 hover:bg-muted/60 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1450,13 +1450,13 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {/* 3. Delete Confirmation Modal */}
       {isDeleteModalOpen && selectedInvestor && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-red-100 dark:border-stone-800 max-w-sm w-full shadow-premium p-6 overflow-hidden animate-fade-in">
+          <div className="bg-card dark:bg-stone-900 rounded-3xl border border-red-100 dark:border-stone-800 max-w-sm w-full shadow-premium p-6 overflow-hidden animate-fade-in">
             <div className="text-center">
               <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-50 text-red-600 mb-4">
                 <ShieldAlert className="h-6 w-6" />
               </div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-stone-100">Permanently Remove Profile?</h3>
-              <p className="text-xs text-gray-500 mt-2">
+              <h3 className="text-sm font-bold text-foreground dark:text-stone-100">Permanently Remove Profile?</h3>
+              <p className="text-xs text-muted-foreground mt-2">
                 Are you absolutely sure you want to remove <strong>{selectedInvestor.name}</strong> from your estates investor registry? This action is non-reversible.
               </p>
             </div>
@@ -1465,7 +1465,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               <button
                 type="button"
                 onClick={() => setIsDeleteModalOpen(false)}
-                className="flex-1 py-2.5 border border-gray-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-stone-300 hover:bg-gray-50 cursor-pointer"
+                className="flex-1 py-2.5 border border-border dark:border-stone-700 rounded-xl text-xs font-semibold text-foreground/80 dark:text-stone-300 hover:bg-muted/60 cursor-pointer"
               >
                 No, Keep Profile
               </button>
@@ -1486,28 +1486,28 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {/* 4. Message / Direct Mail Modal */}
       {isMessageModalOpen && selectedInvestor && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/20 dark:border-stone-800 max-w-lg w-full shadow-premium p-6 overflow-hidden animate-fade-in">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-stone-800">
+          <div className="bg-card dark:bg-stone-900 rounded-3xl border border-border dark:border-stone-800 max-w-lg w-full shadow-premium p-6 overflow-hidden animate-fade-in">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-stone-800">
               <div className="flex items-center gap-2">
                 <Mail className="h-5 w-5 text-[#2D6A4F] dark:text-[#52B788]" />
-                <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Send Private Message</h3>
+                <h3 className="font-serif font-extrabold text-sm text-primary dark:text-[#52B788]">Send Private Message</h3>
               </div>
               <button 
                 onClick={() => setIsMessageModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg cursor-pointer"
+                className="p-1 text-muted-foreground hover:text-gray-600 rounded-lg cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-4 p-3 bg-stone-50 dark:bg-stone-800 border border-gray-100 dark:border-stone-800 rounded-2xl flex items-center justify-between text-[11px] text-gray-500">
+            <div className="mt-4 p-3 bg-muted/50 dark:bg-stone-800 border border-border dark:border-stone-800 rounded-2xl flex items-center justify-between text-[11px] text-muted-foreground">
               <span>Sending communication to:</span>
-              <span className="font-bold text-[#1B4332] dark:text-[#52B788]">{selectedInvestor.name} ({selectedInvestor.email})</span>
+              <span className="font-bold text-primary dark:text-[#52B788]">{selectedInvestor.name} ({selectedInvestor.email})</span>
             </div>
 
             <form onSubmit={handleSendMessage} className="mt-4 space-y-4">
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Mailing Subject
                 </label>
                 <input
@@ -1516,12 +1516,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   placeholder="e.g. Adubiaro Farm Update Q3"
                   value={messageForm.subject}
                   onChange={(e) => setMessageForm({ ...messageForm, subject: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Message Body
                 </label>
                 <textarea
@@ -1529,30 +1529,30 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   rows={6}
                   value={messageForm.body}
                   onChange={(e) => setMessageForm({ ...messageForm, body: e.target.value })}
-                  className="w-full text-xs px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-sans leading-relaxed"
+                  className="w-full text-xs px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100 font-sans leading-relaxed"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-extrabold text-[#1B4332] dark:text-stone-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-extrabold text-primary dark:text-stone-300 uppercase tracking-wider mb-1">
                   Attachment (Image or Video)
                 </label>
                 {messageAttachmentPreview ? (
-                  <div className="relative border border-stone-200 dark:border-stone-800 rounded-2xl p-2 bg-[#FBF9F4] dark:bg-stone-800 flex items-center gap-3">
+                  <div className="relative border border-border dark:border-stone-800 rounded-2xl p-2 bg-muted/40 dark:bg-stone-800 flex items-center gap-3">
                     {messageAttachment?.type.startsWith('video/') ? (
-                      <div className="h-14 w-14 bg-stone-100 dark:bg-stone-700 rounded-xl flex items-center justify-center text-[#2D6A4F] shrink-0">
+                      <div className="h-14 w-14 bg-muted dark:bg-stone-700 rounded-xl flex items-center justify-center text-[#2D6A4F] shrink-0">
                         <FileVideo className="h-6 w-6" />
                       </div>
                     ) : (
                       <img
                         src={messageAttachmentPreview}
                         alt="Attachment preview"
-                        className="h-14 w-14 object-cover rounded-xl border border-stone-200 dark:border-stone-700 shrink-0"
+                        className="h-14 w-14 object-cover rounded-xl border border-border dark:border-stone-700 shrink-0"
                       />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-stone-800 dark:text-stone-200 truncate">{messageAttachment?.name}</p>
-                      <p className="text-[10px] text-stone-500 font-mono">
+                      <p className="text-[10px] text-muted-foreground font-mono">
                         {(messageAttachment ? (messageAttachment.size / (1024 * 1024)).toFixed(2) : '0')} MB
                       </p>
                     </div>
@@ -1573,7 +1573,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                     className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-colors ${
                       isDragging
                         ? 'border-[#2D6A4F] bg-[#2D6A4F]/5 dark:border-[#52B788] dark:bg-[#52B788]/5'
-                        : 'border-stone-200 hover:border-[#2D6A4F] bg-[#FBF9F4] hover:bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800 dark:hover:border-[#52B788]'
+                        : 'border-border hover:border-[#2D6A4F] bg-muted/40 hover:bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800 dark:hover:border-[#52B788]'
                     }`}
                   >
                     <input
@@ -1587,22 +1587,22 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                         }
                       }}
                     />
-                    <Paperclip className="h-5 w-5 mx-auto text-stone-400 mb-1" />
-                    <p className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                    <Paperclip className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+                    <p className="text-xs font-semibold text-foreground/80 dark:text-stone-300">
                       Drag & drop an image or video, or browse
                     </p>
-                    <p className="text-[9px] text-stone-400 mt-0.5">
+                    <p className="text-[9px] text-muted-foreground mt-0.5">
                       Supports PNG, JPG, WEBP, MP4, MOV up to 50MB
                     </p>
                   </div>
                 )}
               </div>
 
-              <div className="pt-4 border-t border-gray-100 dark:border-stone-800 flex justify-end gap-3">
+              <div className="pt-4 border-t border-border dark:border-stone-800 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsMessageModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-stone-300 hover:bg-gray-50 cursor-pointer"
+                  className="px-4 py-2 border border-border dark:border-stone-700 rounded-xl text-xs font-semibold text-foreground/80 dark:text-stone-300 hover:bg-muted/60 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1623,15 +1623,15 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {/* 5. Bulk Import Modal */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/20 dark:border-stone-800 max-w-lg w-full shadow-premium p-6 overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-stone-800 shrink-0">
+          <div className="bg-card dark:bg-stone-900 rounded-3xl border border-border dark:border-stone-800 max-w-lg w-full shadow-premium p-6 overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-stone-800 shrink-0">
               <div className="flex items-center gap-2">
                 <Upload className="h-5 w-5 text-[#2D6A4F] dark:text-[#52B788]" />
-                <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Bulk Import Investors</h3>
+                <h3 className="font-serif font-extrabold text-sm text-primary dark:text-[#52B788]">Bulk Import Investors</h3>
               </div>
               <button 
                 onClick={() => setIsImportModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 rounded-lg cursor-pointer"
+                className="p-1 text-muted-foreground hover:text-gray-600 dark:hover:text-stone-300 rounded-lg cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1639,24 +1639,24 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
             <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
               {/* Instructions and Template Download */}
-              <div className="p-4 bg-stone-50 dark:bg-stone-800 border border-gray-150 dark:border-stone-800 rounded-2xl text-xs space-y-2.5">
-                <p className="font-semibold text-gray-700 dark:text-stone-300">How the CSV upload works:</p>
-                <p className="text-gray-500 dark:text-stone-400 leading-relaxed">
+              <div className="p-4 bg-muted/50 dark:bg-stone-800 border border-border dark:border-stone-800 rounded-2xl text-xs space-y-2.5">
+                <p className="font-semibold text-foreground dark:text-stone-300">How the CSV upload works:</p>
+                <p className="text-muted-foreground dark:text-stone-400 leading-relaxed">
                   Import multiple investors at once by uploading a standard comma-separated values (CSV) file. 
                   The CSV header must strictly contain <code className="bg-stone-200 dark:bg-stone-800 px-1 py-0.5 rounded text-red-700 dark:text-red-400 font-mono">username</code>, 
                   <code className="bg-stone-200 dark:bg-stone-800 px-1 py-0.5 rounded text-red-700 dark:text-red-400 font-mono">name</code>, and 
                   <code className="bg-stone-200 dark:bg-stone-800 px-1 py-0.5 rounded text-red-700 dark:text-red-400 font-mono">email</code> columns.
                 </p>
-                <p className="text-gray-500 dark:text-stone-400 leading-relaxed text-[11px] bg-white dark:bg-stone-900 p-2.5 rounded-xl border border-stone-200/40">
+                <p className="text-muted-foreground dark:text-stone-400 leading-relaxed text-[11px] bg-card dark:bg-stone-900 p-2.5 rounded-xl border border-stone-200/40">
                   ⚡ <b>Register User & Link Plot</b>:<br />
                   Optionally supply <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">farmEstate</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">plotNumber</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">sizeHectares</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">sizeUnit</code>, <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">cropType</code>, and <code className="font-mono text-[10px] text-emerald-700 dark:text-[#52B788]">investmentAmount</code> columns to automatically create and allocate a deeded plot inside the designated farm.
                 </p>
                 <div className="flex justify-between items-center pt-2">
-                  <span className="text-[10px] text-gray-400 font-mono">Optional: phone, password, plot fields</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">Optional: phone, password, plot fields</span>
                   <button
                     type="button"
                     onClick={handleDownloadSampleCsv}
-                    className="text-[10px] font-mono text-[#2D6A4F] hover:text-[#1B4332] dark:text-[#52B788] dark:hover:text-[#40916C] flex items-center gap-1.5 bg-[#52B788]/10 hover:bg-[#52B788]/20 px-3 py-1.5 rounded-lg transition duration-200 cursor-pointer"
+                    className="text-[10px] font-mono text-[#2D6A4F] hover:text-primary dark:text-[#52B788] dark:hover:text-[#40916C] flex items-center gap-1.5 bg-[#52B788]/10 hover:bg-[#52B788]/20 px-3 py-1.5 rounded-lg transition duration-200 cursor-pointer"
                   >
                     <FileText className="h-3.5 w-3.5" />
                     Download CSV Template
@@ -1685,7 +1685,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 ${
                   isDraggingCsv
                     ? 'border-[#2D6A4F] bg-emerald-50/20 dark:border-[#52B788] dark:bg-stone-800/40'
-                    : 'border-stone-200 hover:border-[#2D6A4F] bg-[#FBF9F4] hover:bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800 dark:hover:border-[#52B788]'
+                    : 'border-border hover:border-[#2D6A4F] bg-muted/40 hover:bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800 dark:hover:border-[#52B788]'
                 }`}
               >
                 <input
@@ -1698,18 +1698,18 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                     if (file) handleCsvSelect(file);
                   }}
                 />
-                <Upload className={`h-8 w-8 mx-auto mb-2 transition-transform duration-300 ${isDraggingCsv ? 'scale-110 text-[#2D6A4F]' : 'text-stone-400'}`} />
-                <p className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                <Upload className={`h-8 w-8 mx-auto mb-2 transition-transform duration-300 ${isDraggingCsv ? 'scale-110 text-[#2D6A4F]' : 'text-muted-foreground'}`} />
+                <p className="text-xs font-semibold text-foreground/80 dark:text-stone-300">
                   {csvFile ? `Selected: ${csvFile.name}` : 'Drag & drop your investor CSV file here, or browse'}
                 </p>
-                <p className="text-[10px] text-stone-400 mt-1 font-mono">
+                <p className="text-[10px] text-muted-foreground mt-1 font-mono">
                   {csvFile ? `${(csvFile.size / 1024).toFixed(1)} KB` : 'Supports standard .csv file format'}
                 </p>
               </div>
 
               {/* Parse preview table */}
               {parsedInvestors.length > 0 && (
-                <div className="border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden shadow-inner bg-stone-50/40 dark:bg-stone-800 p-3 space-y-2">
+                <div className="border border-border dark:border-stone-800 rounded-2xl overflow-hidden shadow-inner bg-stone-50/40 dark:bg-stone-800 p-3 space-y-2">
                   <div className="flex justify-between items-center border-b border-stone-250 dark:border-stone-800 pb-2">
                     <h4 className="font-sans font-bold text-xs text-stone-800 dark:text-stone-200">
                       File Preview ({parsedInvestors.length} records parsed)
@@ -1728,16 +1728,16 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   </div>
                   <div className="max-h-40 overflow-y-auto text-[11px] divide-y divide-stone-100 dark:divide-stone-800 font-mono">
                     {parsedInvestors.slice(0, 5).map((p, i) => (
-                      <div key={i} className="py-2 flex items-center justify-between text-stone-600 dark:text-stone-400">
+                      <div key={i} className="py-2 flex items-center justify-between text-foreground/80 dark:text-stone-400">
                         <div className="truncate pr-3">
                           <span className="font-bold text-stone-800 dark:text-stone-200 font-sans">{p.name}</span>
-                          <span className="text-[9px] font-mono text-stone-400 ml-1.5">@{p.username}</span>
+                          <span className="text-[9px] font-mono text-muted-foreground ml-1.5">@{p.username}</span>
                         </div>
-                        <span className="font-mono text-stone-500 shrink-0">{p.email}</span>
+                        <span className="font-mono text-muted-foreground shrink-0">{p.email}</span>
                       </div>
                     ))}
                     {parsedInvestors.length > 5 && (
-                      <div className="text-center py-1 text-[10px] font-mono text-stone-400">
+                      <div className="text-center py-1 text-[10px] font-mono text-muted-foreground">
                         And {parsedInvestors.length - 5} more records...
                       </div>
                     )}
@@ -1780,11 +1780,11 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               )}
             </div>
 
-            <div className="pt-4 border-t border-gray-100 dark:border-stone-800 flex justify-end gap-3 shrink-0">
+            <div className="pt-4 border-t border-border dark:border-stone-800 flex justify-end gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsImportModalOpen(false)}
-                className="px-4 py-2 border border-gray-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-stone-300 hover:bg-gray-50 cursor-pointer"
+                className="px-4 py-2 border border-border dark:border-stone-700 rounded-xl text-xs font-semibold text-foreground/80 dark:text-stone-300 hover:bg-muted/60 cursor-pointer"
               >
                 Close
               </button>
@@ -1826,7 +1826,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   });
                   setIsBulkMessageModalOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3 py-2 bg-[#52B788] hover:bg-[#40916C] text-[#1B4332] hover:text-white rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#52B788] hover:bg-[#40916C] text-primary hover:text-white rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
                 title="Broadcast notification to selected investors"
               >
                 <Mail className="h-3.5 w-3.5" />
@@ -1841,7 +1841,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                       handleBulkAction('send-login-details');
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-[#1B4332] rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-primary rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
                   title="Email new temporary passwords to the selected users"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
@@ -1859,7 +1859,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white rounded-xl text-xs font-bold transition duration-200 cursor-pointer border border-stone-700"
                 title="Disable selected investor accounts"
               >
-                <ToggleLeft className="h-4 w-4 text-stone-400" />
+                <ToggleLeft className="h-4 w-4 text-muted-foreground" />
                 <span>Disable</span>
               </button>
 
@@ -1914,18 +1914,18 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       {/* Bulk Notification Modal */}
       {isBulkMessageModalOpen && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-[#2D6A4F]/20 dark:border-stone-800 max-w-lg w-full shadow-premium p-6 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-stone-800 shrink-0">
+          <div className="bg-card dark:bg-stone-900 rounded-3xl border border-border dark:border-stone-800 max-w-lg w-full shadow-premium p-6 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-stone-800 shrink-0">
               <div className="flex items-center gap-2">
                 <Mail className="h-5 w-5 text-[#2D6A4F] dark:text-[#52B788]" />
                 <div>
-                  <h3 className="font-serif font-extrabold text-sm text-[#1B4332] dark:text-[#52B788]">Send Bulk Notification</h3>
-                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">Recipient Group: {selectedUserIds.length} investors</p>
+                  <h3 className="font-serif font-extrabold text-sm text-primary dark:text-[#52B788]">Send Bulk Notification</h3>
+                  <p className="text-[10px] text-muted-foreground font-mono mt-0.5">Recipient Group: {selectedUserIds.length} investors</p>
                 </div>
               </div>
               <button 
                 onClick={() => setIsBulkMessageModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 rounded-lg cursor-pointer"
+                className="p-1 text-muted-foreground hover:text-gray-600 dark:hover:text-stone-300 rounded-lg cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1933,7 +1933,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
             <form onSubmit={handleSendBulkNotification} className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
               <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1.5">
+                <label className="block text-xs font-bold text-foreground dark:text-stone-300 mb-1.5">
                   Notification Subject
                 </label>
                 <input
@@ -1942,12 +1942,12 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   value={bulkMessageForm.subject}
                   onChange={(e) => setBulkMessageForm(prev => ({ ...prev, subject: e.target.value }))}
                   placeholder="e.g. Q3 Farm Estate Yield Distribution Update"
-                  className="w-full px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100"
+                  className="w-full px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1.5">
+                <label className="block text-xs font-bold text-foreground dark:text-stone-300 mb-1.5">
                   Message Body (Markdown/Text)
                 </label>
                 <textarea
@@ -1956,18 +1956,18 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   value={bulkMessageForm.body}
                   onChange={(e) => setBulkMessageForm(prev => ({ ...prev, body: e.target.value }))}
                   placeholder="Write the broadcast message content here..."
-                  className="w-full px-3 py-2.5 bg-[#FBF9F4] dark:bg-stone-800 border border-gray-200 dark:border-stone-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#52B788] text-gray-800 dark:text-stone-100 font-sans"
+                  className="w-full px-3 py-2.5 bg-muted/40 dark:bg-stone-800 border border-border dark:border-stone-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-ring text-foreground dark:text-stone-100 font-sans"
                 />
               </div>
 
-              <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-stone-300 cursor-pointer">
+              <label className="flex items-start gap-2 text-xs text-foreground/80 dark:text-stone-300 cursor-pointer">
                 <input type="checkbox" className="mt-0.5" checked={isMarketingBulk} onChange={(e) => setIsMarketingBulk(e.target.checked)} />
                 <span>Promotional / marketing message (only sent to people who opted in to marketing)</span>
               </label>
 
               {/* Drag & Drop Attachment */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1.5">
+                <label className="block text-xs font-bold text-foreground dark:text-stone-300 mb-1.5">
                   Optional Document or Media Attachment
                 </label>
                 <div
@@ -1978,7 +1978,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                   className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all duration-300 ${
                     isBulkDragging
                       ? 'border-[#2D6A4F] bg-emerald-50/20 dark:border-[#52B788] dark:bg-stone-800/40'
-                      : 'border-stone-200 hover:border-[#2D6A4F] bg-[#FBF9F4] hover:bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800 dark:hover:border-[#52B788]'
+                      : 'border-border hover:border-[#2D6A4F] bg-muted/40 hover:bg-stone-50/50 dark:border-stone-700 dark:bg-stone-800 dark:hover:border-[#52B788]'
                   }`}
                 >
                   <input
@@ -1990,20 +1990,20 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                       if (file) handleBulkFileChange(file);
                     }}
                   />
-                  <Paperclip className={`h-6 w-6 mx-auto mb-1.5 transition-transform duration-300 ${isBulkDragging ? 'scale-110 text-[#2D6A4F]' : 'text-stone-400'}`} />
-                  <p className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                  <Paperclip className={`h-6 w-6 mx-auto mb-1.5 transition-transform duration-300 ${isBulkDragging ? 'scale-110 text-[#2D6A4F]' : 'text-muted-foreground'}`} />
+                  <p className="text-[11px] font-semibold text-foreground/80 dark:text-stone-300">
                     {bulkMessageAttachment ? `Selected: ${bulkMessageAttachment.name}` : 'Drag & drop any PDF, image or spreadsheet here, or click to browse'}
                   </p>
-                  <p className="text-[9px] text-stone-400 mt-0.5 font-mono">
+                  <p className="text-[9px] text-muted-foreground mt-0.5 font-mono">
                     {bulkMessageAttachment ? `${(bulkMessageAttachment.size / 1024).toFixed(1)} KB` : 'Supports images, documents and media up to 50MB'}
                   </p>
                 </div>
 
                 {bulkMessageAttachmentPreview && (
-                  <div className="mt-3 p-3 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-200/50 dark:border-stone-800 flex items-center justify-between">
+                  <div className="mt-3 p-3 bg-muted/50 dark:bg-stone-800 rounded-xl border border-stone-200/50 dark:border-stone-800 flex items-center justify-between">
                     <div className="flex items-center gap-2 overflow-hidden">
                       <FileText className="h-4 w-4 text-[#2D6A4F] shrink-0" />
-                      <span className="text-[11px] font-mono text-gray-600 dark:text-stone-300 truncate">{bulkMessageAttachment?.name}</span>
+                      <span className="text-[11px] font-mono text-foreground/80 dark:text-stone-300 truncate">{bulkMessageAttachment?.name}</span>
                     </div>
                     <button
                       type="button"
@@ -2019,11 +2019,11 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 )}
               </div>
 
-              <div className="pt-4 border-t border-gray-100 dark:border-stone-800 flex justify-end gap-3 shrink-0">
+              <div className="pt-4 border-t border-border dark:border-stone-800 flex justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsBulkMessageModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-stone-300 hover:bg-gray-50 cursor-pointer"
+                  className="px-4 py-2 border border-border dark:border-stone-700 rounded-xl text-xs font-semibold text-foreground/80 dark:text-stone-300 hover:bg-muted/60 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -2043,7 +2043,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
       {/* Recent Action Undo Toast */}
       {recentActionToast && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-white dark:bg-stone-900 border border-emerald-200 dark:border-stone-800 rounded-3xl shadow-2xl p-5 animate-slide-up transition-all duration-300">
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-card dark:bg-stone-900 border border-emerald-200 dark:border-stone-800 rounded-3xl shadow-2xl p-5 animate-slide-up transition-all duration-300">
           <div className="flex items-start gap-3.5">
             <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 rounded-2xl shrink-0">
               <RotateCcw className="h-4 w-4 animate-pulse" />
@@ -2055,18 +2055,18 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 </span>
                 <button
                   onClick={() => setRecentActionToast(null)}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-lg transition cursor-pointer"
+                  className="p-1 text-muted-foreground hover:text-gray-600 dark:hover:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-lg transition cursor-pointer"
                   title="Dismiss toast"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <p className="text-xs font-bold text-gray-800 dark:text-stone-100 mt-2 leading-relaxed">
+              <p className="text-xs font-bold text-foreground dark:text-stone-100 mt-2 leading-relaxed">
                 {recentActionToast.message}
               </p>
               
-              <div className="mt-4 flex items-center justify-between gap-3 pt-3 border-t border-dashed border-gray-100 dark:border-stone-800">
-                <span className="text-[10px] text-gray-400 dark:text-stone-500 font-medium">
+              <div className="mt-4 flex items-center justify-between gap-3 pt-3 border-t border-dashed border-border dark:border-stone-800">
+                <span className="text-[10px] text-muted-foreground dark:text-stone-500 font-medium">
                   revert bulk changes
                 </span>
                 <button
