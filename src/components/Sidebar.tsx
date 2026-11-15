@@ -207,7 +207,7 @@ export default function Sidebar({
               }`}
             >
               <Landmark className="h-4.5 w-4.5" />
-              <span>Farm ownership</span>
+              <span>Estates &amp; owners</span>
             </button>
           )}
 

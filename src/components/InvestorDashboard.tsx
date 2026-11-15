@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { DataTable } from './ui/data-table';
 import { FormError } from './ui/form';
-import { formatNaira } from '../lib/utils';
+import { formatNaira, plotLabel } from '../lib/utils';
 
 interface InvestorDashboardProps {
   user: UserType;
@@ -92,12 +92,12 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
 
   const columns = useMemo<ColumnDef<Holding>[]>(
     () => [
-      { accessorKey: 'farmName', header: 'Farm', cell: ({ getValue }) => <span className="font-semibold">{(getValue() as string) || '—'}</span> },
-      { accessorKey: 'plotNumber', header: 'Plot', cell: ({ getValue }) => <span className="font-mono text-xs whitespace-nowrap">{(getValue() as string) || '—'}</span> },
+      { accessorKey: 'farmName', header: 'Estate', cell: ({ getValue }) => <span className="font-semibold">{(getValue() as string) || '—'}</span> },
+      { accessorKey: 'plotNumber', header: 'Farm no.', cell: ({ getValue }) => <span className="font-mono text-xs whitespace-nowrap">{plotLabel(getValue() as string)}</span> },
       { accessorKey: 'cropType', header: 'Crop' },
       {
         id: 'size',
-        header: 'Size',
+        header: 'Size of farm',
         accessorFn: h => Number(h.sizeHectares) || 0,
         cell: ({ row }) => <span className="whitespace-nowrap">{unitLabel(Number(row.original.sizeHectares) || 0, row.original.sizeUnit || 'acre')}</span>
       },
@@ -147,7 +147,7 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
 
       <section id="investor-stats-grid" aria-label="Portfolio summary" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Stat icon={Wallet} label="Total invested" value={formatNaira(totalInvested)} />
-        <Stat icon={Sprout} label="Your plots" value={holdings.length} note={`on ${farms.length} ${farms.length === 1 ? 'farm' : 'farms'}`} tone="gold" />
+        <Stat icon={Sprout} label="Your farms" value={holdings.length} note={`in ${farms.length} ${farms.length === 1 ? 'estate' : 'estates'}`} tone="gold" />
         <Stat icon={Ruler} label="Land held" value={landSummary(holdings)} />
         <Stat
           icon={TrendingUp}
@@ -160,9 +160,9 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <section id="investor-farms-list" className="xl:col-span-5 flex flex-col gap-4" aria-labelledby="farms-heading">
-          <h2 id="farms-heading" className="font-bold text-lg text-foreground">Your farms</h2>
+          <h2 id="farms-heading" className="font-bold text-lg text-foreground">Your estates</h2>
           {farms.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-muted-foreground">You don't hold any plots yet. Your plots will appear here once they are allocated to you.</Card>
+            <Card className="p-8 text-center text-sm text-muted-foreground">You don't own a farm in any estate yet. Your farms will appear here once they are allocated to you.</Card>
           ) : (
             farms.map(farm => (
               <button
@@ -179,10 +179,10 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
                     <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /> {farm.location}, {farm.state}
                   </p>
                   <p className="text-sm mt-3">
-                    {farm.myPlotsCount ?? 1} {(farm.myPlotsCount ?? 1) === 1 ? 'plot' : 'plots'} · {formatNaira(farm.myTotalInvested ?? 0)} invested
+                    {farm.myPlotsCount ?? 1} {(farm.myPlotsCount ?? 1) === 1 ? 'farm' : 'farms'} · {formatNaira(farm.myTotalInvested ?? 0)} invested
                   </p>
                   <span className="mt-4 flex items-center justify-between border-t border-border pt-3 text-sm font-semibold text-primary">
-                    See farm updates and documents
+                    See estate updates and documents
                     <ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" aria-hidden="true" />
                   </span>
                 </div>
@@ -192,8 +192,8 @@ export default function InvestorDashboard({ user, token, onSelectFarm, refreshSi
         </section>
 
         <section id="investor-plots-table" className="xl:col-span-7 flex flex-col gap-4" aria-labelledby="plots-heading">
-          <h2 id="plots-heading" className="font-bold text-lg text-foreground">Your plots</h2>
-          <DataTable columns={columns} data={holdings} hideSearch={holdings.length < 8} searchPlaceholder="Search your plots…" emptyMessage="No plots yet." />
+          <h2 id="plots-heading" className="font-bold text-lg text-foreground">Your farms</h2>
+          <DataTable columns={columns} data={holdings} hideSearch={holdings.length < 8} searchPlaceholder="Search your farms…" emptyMessage="No farms yet." />
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm"><FileText className="h-4 w-4" /> Your documents</CardTitle>

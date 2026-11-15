@@ -18,7 +18,7 @@ import { Badge } from './ui/badge';
 import { Input, Textarea } from './ui/input';
 import { Label } from './ui/label';
 import { DataTable } from './ui/data-table';
-import { formatNaira } from '../lib/utils';
+import { formatNaira, plotLabel } from '../lib/utils';
 import { HoldingDialog } from './HoldingDialogs';
 
 interface FarmDetailProps {
@@ -85,7 +85,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
       setError(null);
       const res = await fetch(`/api/farms/${farmId}`, { headers: { Authorization: `Bearer ${token}` } });
       const val = await res.json();
-      if (!res.ok) throw new Error(val.error || 'We could not load this farm.');
+      if (!res.ok) throw new Error(val.error || 'We could not load this estate.');
       setData(val);
     } catch (err: any) {
       setError(err.message);
@@ -131,8 +131,8 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
   const plotColumns = useMemo<ColumnDef<FarmPlot>[]>(() => {
     const holdings = data?.investorHoldings || [];
     const cols: ColumnDef<FarmPlot>[] = [
-      { accessorKey: 'plotNumber', header: 'Plot', cell: ({ getValue }) => <span className="font-mono text-xs whitespace-nowrap">{getValue() as string}</span> },
-      { id: 'size', header: 'Size', accessorFn: p => Number(p.sizeHectares) || 0, cell: ({ row }) => <span className="whitespace-nowrap">{sizeText(row.original.sizeHectares, row.original.sizeUnit)}</span> },
+      { accessorKey: 'plotNumber', header: 'Farm no.', cell: ({ getValue }) => <span className="font-mono text-xs whitespace-nowrap">{plotLabel(getValue() as string)}</span> },
+      { id: 'size', header: 'Size of farm', accessorFn: p => Number(p.sizeHectares) || 0, cell: ({ row }) => <span className="whitespace-nowrap">{sizeText(row.original.sizeHectares, row.original.sizeUnit)}</span> },
       { accessorKey: 'cropType', header: 'Crop' },
       {
         accessorKey: 'status',
@@ -144,13 +144,13 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
       },
       {
         id: 'owner',
-        header: 'Owner',
+        header: 'Farm owner',
         enableSorting: false,
         cell: ({ row }) => {
           const p = row.original;
           const ph = holdings.filter((h: any) => h.plotId === p.id);
           if (ph.length === 0) return <span className="text-muted-foreground">{p.status === PlotStatus.AVAILABLE ? 'Available' : '—'}</span>;
-          if (user.role === UserRole.INVESTOR) return <span className="font-semibold text-success">Your plot</span>;
+          if (user.role === UserRole.INVESTOR) return <span className="font-semibold text-success">Your farm</span>;
           return (
             <div className="flex flex-wrap gap-x-2">
               {ph.map((h: any, i: number) =>
@@ -210,7 +210,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
       },
       {
         accessorKey: 'plotsCount',
-        header: 'Plots',
+        header: 'Farms',
         cell: ({ row }) => (
           <div className="flex flex-wrap gap-1">
             {(row.original.plotNumbers || []).map((pn: string) => (
@@ -229,7 +229,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12 min-h-[400px]" role="status" aria-label="Loading farm">
+      <div className="flex items-center justify-center p-12 min-h-[400px]" role="status" aria-label="Loading estate">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent" />
       </div>
     );
@@ -238,7 +238,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
   if (error || !data) {
     return (
       <Card className="p-6 border-destructive/40 flex flex-col gap-3">
-        <h3 className="font-bold text-destructive">We could not open this farm</h3>
+        <h3 className="font-bold text-destructive">We could not open this estate</h3>
         <p className="text-sm text-muted-foreground">{error || 'You may not have access to it.'}</p>
         <div>
           <Button onClick={onBack}><ArrowLeft /> Back to dashboard</Button>
@@ -290,7 +290,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
           {farm.description && <p className="text-sm text-muted-foreground max-w-4xl">{farm.description}</p>}
           <dl className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-border pt-4 text-sm">
             <div>
-              <dt className="text-muted-foreground">Plots</dt>
+              <dt className="text-muted-foreground">Farms</dt>
               <dd className="font-bold text-base">{plots.length}</dd>
             </div>
             <div>
@@ -299,7 +299,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
             </div>
             {isStaff && (
               <div>
-                <dt className="text-muted-foreground">Investors</dt>
+                <dt className="text-muted-foreground">Farm owners</dt>
                 <dd className="font-bold text-base">{farmInvestors.length}</dd>
               </div>
             )}
@@ -317,8 +317,8 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
         <TabsList className="w-full justify-start overflow-x-auto flex-nowrap sm:flex-wrap">
           <TabsTrigger value="updates"><Clock /> Updates ({updates.length})</TabsTrigger>
           <TabsTrigger value="documents"><FileText /> Documents ({documents.length})</TabsTrigger>
-          <TabsTrigger value="plots"><Layers /> Plots ({plots.length})</TabsTrigger>
-          {isStaff && <TabsTrigger value="owners"><Users /> Investors ({farmInvestors.length})</TabsTrigger>}
+          <TabsTrigger value="plots"><Layers /> Farms ({plots.length})</TabsTrigger>
+          {isStaff && <TabsTrigger value="owners"><Users /> Farm owners ({farmInvestors.length})</TabsTrigger>}
           <TabsTrigger value="map"><MapIcon /> Map notes ({mapNotes.length})</TabsTrigger>
         </TabsList>
 
@@ -346,7 +346,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
           )}
 
           {updates.length === 0 ? (
-            <Card className="p-10 text-center text-sm text-muted-foreground border-dashed">No updates have been posted for this farm yet.</Card>
+            <Card className="p-10 text-center text-sm text-muted-foreground border-dashed">No updates have been posted for this estate yet.</Card>
           ) : filteredUpdates.length === 0 ? (
             <Card className="p-10 text-center flex flex-col items-center gap-3 border-dashed">
               <p className="text-sm text-muted-foreground">No updates in the selected dates.</p>
@@ -361,9 +361,9 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
                       <Badge variant="success" className="capitalize">{String(up.updateType).replace(/_/g, ' ')}</Badge>
                       {isStaff &&
                         (up.targetInvestorIds && up.targetInvestorIds.length > 0 ? (
-                          <Badge variant="muted"><Lock className="h-3 w-3" /> {up.targetInvestorIds.length} selected investor(s)</Badge>
+                          <Badge variant="muted"><Lock className="h-3 w-3" /> {up.targetInvestorIds.length} selected farm owner(s)</Badge>
                         ) : (
-                          <Badge variant="muted"><Globe className="h-3 w-3" /> All investors on this farm</Badge>
+                          <Badge variant="muted"><Globe className="h-3 w-3" /> All farm owners in this estate</Badge>
                         ))}
                     </div>
                     <h3 className="font-bold text-base">{up.title}</h3>
@@ -400,7 +400,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
         {/* DOCUMENTS */}
         <TabsContent value="documents">
           {documents.length === 0 ? (
-            <Card className="p-10 text-center text-sm text-muted-foreground border-dashed">No documents have been shared for this farm yet.</Card>
+            <Card className="p-10 text-center text-sm text-muted-foreground border-dashed">No documents have been shared for this estate yet.</Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {documents.map(doc => (
@@ -420,7 +420,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
                   {doc.description && <p className="text-sm text-muted-foreground">{doc.description}</p>}
                   <div className="flex items-center justify-between gap-2 border-t border-border pt-3 mt-auto">
                     <span className="text-xs text-muted-foreground">
-                      {doc.visibility === 'plot' ? 'Shared with the plot owner' : 'Shared with all investors on this farm'} · {new Date(doc.uploadedAt).toLocaleDateString()}
+                      {doc.visibility === 'plot' ? 'Shared with the owner of that farm' : 'Shared with all farm owners in this estate'} · {new Date(doc.uploadedAt).toLocaleDateString()}
                     </span>
                     <Button size="sm" variant="secondary" onClick={() => handleDownload(doc)} disabled={downloadingId === doc.id}>
                       {downloadingId === doc.id ? <Loader2 className="animate-spin" /> : <Download />} Download
@@ -434,7 +434,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
 
         {/* PLOTS */}
         <TabsContent value="plots">
-          <DataTable columns={plotColumns} data={plots} hideSearch={plots.length < 10} searchPlaceholder="Search plots…" emptyMessage="No plots on this farm yet." />
+          <DataTable columns={plotColumns} data={plots} hideSearch={plots.length < 10} searchPlaceholder="Search farms…" emptyMessage="No farms in this estate yet." />
         </TabsContent>
 
         {/* INVESTORS (staff) */}
@@ -443,9 +443,9 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
             {isAdmin && (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
-                  {onSelectInvestor ? "Select a name to open that investor's profile, where holdings and payouts can be edited." : 'Investors with holdings on this farm.'}
+                  {onSelectInvestor ? "Select a name to open that farm owner's profile, where their farms, amounts and payouts can be edited." : 'Farm owners in this estate.'}
                 </p>
-                <Button size="sm" onClick={() => setAddHoldingOpen(true)}><Users /> Add investor to this farm</Button>
+                <Button size="sm" onClick={() => setAddHoldingOpen(true)}><Users /> Add farm owner</Button>
               </div>
             )}
             {isAdmin && (
@@ -457,7 +457,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
                 onSaved={() => fetchFarmDetails(false)}
               />
             )}
-            <DataTable columns={ownerColumns} data={farmInvestors} searchPlaceholder="Search investors…" emptyMessage="No investors hold plots on this farm yet." />
+            <DataTable columns={ownerColumns} data={farmInvestors} searchPlaceholder="Search farm owners…" emptyMessage="No farm owners in this estate yet." />
           </TabsContent>
         )}
 
@@ -544,17 +544,17 @@ function FarmMapNotes({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2">
         <CardHeader>
-          <CardTitle>Plot layout</CardTitle>
+          <CardTitle>Estate layout</CardTitle>
           <CardDescription>
             A schematic view of this farm's plots (not to scale).{' '}
-            {canPin ? 'Click anywhere to pin a note for the team and investors.' : 'Select a pin to read the note.'}
+            {canPin ? 'Click anywhere to pin a note for the team and farm owners.' : 'Select a pin to read the note.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div
             id="farm-estate-map-canvas"
             role={canPin ? 'button' : undefined}
-            aria-label={canPin ? 'Plot layout. Click to place a note.' : 'Plot layout'}
+            aria-label={canPin ? 'Estate layout. Click to place a note.' : 'Estate layout'}
             onClick={e => {
               if (!canPin) return;
               const target = e.target as HTMLElement;

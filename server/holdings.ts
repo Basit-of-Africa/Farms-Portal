@@ -263,3 +263,80 @@ export function registerHoldingRoutes(app: express.Express, ctx: HoldingsContext
     res.json({ success: true });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Merge estates: move everything from one estate into another (e.g. a
+// misspelt duplicate created by an import), then remove the empty estate.
+// ---------------------------------------------------------------------------
+
+export function mergeEstates(db: any, sourceId: string, targetId: string, apply: boolean) {
+  const source = db.farms.find((f: any) => f.id === sourceId);
+  const target = db.farms.find((f: any) => f.id === targetId);
+  if (!source || !target) throw new Error('Estate not found.');
+  if (source.id === target.id) throw new Error('Choose two different estates.');
+
+  const plots = db.plots.filter((p: FarmPlot) => p.farmId === source.id);
+  const plotIds = new Set(plots.map((p: FarmPlot) => p.id));
+  const usedNumbers = new Set(db.plots.filter((p: FarmPlot) => p.farmId === target.id).map((p: FarmPlot) => p.plotNumber.toLowerCase()));
+  const renumbered: Array<{ plot: FarmPlot; plotNumber: string }> = [];
+  for (const p of plots) {
+    let num = p.plotNumber;
+    for (let n = 2; usedNumbers.has(num.toLowerCase()); n++) num = `${p.plotNumber}-${n}`;
+    usedNumbers.add(num.toLowerCase());
+    if (num !== p.plotNumber) renumbered.push({ plot: p, plotNumber: num });
+  }
+  const holdings = db.investorPlots.filter((h: InvestorPlot) => plotIds.has(h.plotId));
+  const owners = new Set(holdings.map((h: InvestorPlot) => h.investorId));
+  const updates = (db.updates || []).filter((u: any) => u.farmId === source.id);
+  const documents = (db.documents || []).filter((d: any) => d.farmId === source.id);
+  const mapNotes = (db.mapNotes || []).filter((n: any) => n.farmId === source.id);
+  const assignments = (db.assignments || []).filter((a: any) => a.farmId === source.id);
+
+  const summary = {
+    source: { id: source.id, name: source.name },
+    target: { id: target.id, name: target.name },
+    farms: plots.length,
+    farmOwners: owners.size,
+    invested: holdings.reduce((s: number, h: InvestorPlot) => s + (Number(h.investmentAmount) || 0), 0),
+    updates: updates.length,
+    documents: documents.length,
+    mapNotes: mapNotes.length,
+    managers: assignments.length,
+    renumbered: renumbered.length
+  };
+  if (!apply) return summary;
+
+  renumbered.forEach(r => (r.plot.plotNumber = r.plotNumber));
+  plots.forEach((p: FarmPlot) => (p.farmId = target.id));
+  updates.forEach((u: any) => (u.farmId = target.id));
+  documents.forEach((d: any) => (d.farmId = target.id));
+  mapNotes.forEach((n: any) => (n.farmId = target.id));
+  for (const a of assignments) {
+    const already = db.assignments.some((x: any) => x !== a && x.farmId === target.id && x.managerId === a.managerId);
+    if (already) db.assignments = db.assignments.filter((x: any) => x !== a);
+    else a.farmId = target.id;
+  }
+  (db.simulatedEmails || []).forEach((e: any) => e.farmId === source.id && (e.farmId = target.id));
+  db.farms = db.farms.filter((f: any) => f.id !== source.id);
+  recomputeFarmTotals(db, target.id);
+  return summary;
+}
+
+export function registerEstateMergeRoute(app: express.Express, ctx: HoldingsContext) {
+  app.post('/api/admin/farms/merge', ctx.requireAuth, (req, res) => {
+    const admin = adminOnly(req, res);
+    if (!admin) return;
+    const db = ctx.getDb();
+    const { sourceId, targetId, dryRun } = req.body || {};
+    try {
+      const summary = mergeEstates(db, String(sourceId || ''), String(targetId || ''), dryRun !== true);
+      if (dryRun !== true) {
+        recordAudit(db, admin, 'farm.merged', { targetType: 'farm', targetId: String(targetId), details: `from=${sourceId}; farms=${summary.farms}; owners=${summary.farmOwners}`, req });
+        ctx.saveDb();
+      }
+      res.json({ dryRun: dryRun === true, ...summary });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+}

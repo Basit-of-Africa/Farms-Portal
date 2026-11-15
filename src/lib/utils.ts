@@ -33,3 +33,6 @@ export const chartTheme = (dark: boolean) => ({
   axis: dark ? '#a8a29e' : '#5b6b62',
   surface: dark ? '#1c1917' : '#ffffff'
 });
+
+/** Auto-generated farm numbers (e.g. "P-AB12-3") mean nothing to people, so hide them. */
+export const plotLabel = (n: string | null | undefined) => (!n || /^P-[A-Z0-9]{1,6}-\d+(-\d+)?$/i.test(n) ? '—' : n);

@@ -40,7 +40,7 @@ import {
 } from './server/privacy';
 import { normalizeImportRows, farmKeyOf, NormalizedImportRow } from './server/importNormalize';
 import { buildHealthReport, buildOwnershipOverview, landText } from './server/dataHealth';
-import { registerHoldingRoutes } from './server/holdings';
+import { registerHoldingRoutes, registerEstateMergeRoute } from './server/holdings';
 import {
   User,
   UserRole,
@@ -5325,6 +5325,7 @@ app.get('/api/admin/ownership-overview', requireAuth, (req, res) => {
 
 // Admin: add, edit and delete holdings and payouts
 registerHoldingRoutes(app, { getDb: () => db, saveDb, getSettings, requireAuth });
+registerEstateMergeRoute(app, { getDb: () => db, saveDb, getSettings, requireAuth });
 
 // Admin: read-only integrity report (broken links, duplicates, hidden records)
 app.get('/api/admin/data-health', requireAuth, (req, res) => {

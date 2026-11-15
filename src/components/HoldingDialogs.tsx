@@ -103,7 +103,7 @@ export function HoldingDialog({ token, open, onClose, onSaved, holding, investor
     try {
       if (editing) await api(token, `/api/admin/holdings/${holding!.id}`, 'PUT', values);
       else await api(token, '/api/admin/holdings', 'POST', values);
-      toast.success(editing ? 'Holding updated.' : 'Holding added. It now shows on the investor and the farm.');
+      toast.success(editing ? 'Farm updated.' : 'Farm added. It now shows on the farm owner and in the estate.');
       onSaved();
       onClose();
     } catch (err: any) {
@@ -116,7 +116,7 @@ export function HoldingDialog({ token, open, onClose, onSaved, holding, investor
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Edit holding' : 'Add holding'}</DialogTitle>
+          <DialogTitle>{editing ? 'Edit farm' : 'Add farm'}</DialogTitle>
           <DialogDescription>
             {investorName ? `${investorName}'s ` : ''}ownership of a plot on a farm. Changes show straight away on the investor's dashboard and on the farm.
           </DialogDescription>
@@ -124,26 +124,26 @@ export function HoldingDialog({ token, open, onClose, onSaved, holding, investor
         <form onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4 overflow-y-auto min-h-0 -mx-1 px-1" noValidate>
           <FormError message={serverError} />
           {!investorId && (
-            <FormField id="h-investor" label="Investor" error={e.investorId}>
+            <FormField id="h-investor" label="Farm owner" error={e.investorId}>
               <NativeSelect {...form.register('investorId')}>
-                <option value="">Choose an investor…</option>
+                <option value="">Choose a farm owner…</option>
                 {investors.map(i => <option key={i.id} value={i.id}>{i.name} ({i.email})</option>)}
               </NativeSelect>
             </FormField>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField id="h-farm" label="Farm" error={e.farmId}>
+            <FormField id="h-farm" label="Estate" error={e.farmId}>
               <NativeSelect {...form.register('farmId')}>
-                <option value="">Choose a farm…</option>
+                <option value="">Choose an estate…</option>
                 {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
               </NativeSelect>
             </FormField>
-            <FormField id="h-plot" label="Plot number (optional)" error={e.plotNumber} hint={editing ? undefined : 'Leave blank to create one automatically.'}>
+            <FormField id="h-plot" label="Farm number (optional)" error={e.plotNumber} hint={editing ? undefined : 'Leave blank to create one automatically.'}>
               <Input {...form.register('plotNumber')} />
             </FormField>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <FormField id="h-size" label="Size" error={e.size}>
+            <FormField id="h-size" label="Size of farm" error={e.size}>
               <Input type="number" step="any" min="0" inputMode="decimal" {...form.register('size')} />
             </FormField>
             <FormField id="h-unit" label="Unit">
@@ -161,7 +161,7 @@ export function HoldingDialog({ token, open, onClose, onSaved, holding, investor
             <FormField id="h-amount" label="Amount invested (₦)" error={e.investmentAmount}>
               <Input type="number" step="any" min="0" inputMode="decimal" {...form.register('investmentAmount')} />
             </FormField>
-            <FormField id="h-own" label="Ownership of the plot (%)" error={e.ownershipPercentage}>
+            <FormField id="h-own" label="Share of this farm owned (%)" error={e.ownershipPercentage}>
               <Input type="number" step="any" min="0" max="100" inputMode="decimal" {...form.register('ownershipPercentage')} />
             </FormField>
             <FormField id="h-start" label="Start date" error={e.startDate}>
@@ -176,13 +176,13 @@ export function HoldingDialog({ token, open, onClose, onSaved, holding, investor
               <Checkbox id="h-active" checked={form.watch('isActive')} onCheckedChange={v => form.setValue('isActive', !!v)} className="mt-0.5" />
               <Label htmlFor="h-active" className="leading-snug cursor-pointer">
                 Active
-                <span className="block font-normal text-muted-foreground">Untick when the investment has ended. It stays in the records but is hidden from the investor and the farm.</span>
+                <span className="block font-normal text-muted-foreground">Untick when the investment has ended. It stays in the records but is hidden from the farm owner and the estate.</span>
               </Label>
             </div>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting && <Loader2 className="animate-spin" />} {editing ? 'Save changes' : 'Add holding'}</Button>
+            <Button type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting && <Loader2 className="animate-spin" />} {editing ? 'Save changes' : 'Add farm'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -256,11 +256,11 @@ export function PayoutDialog({ token, open, onClose, onSaved, payout, plots }: P
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit payout' : 'Record a payout'}</DialogTitle>
-          <DialogDescription>A return paid (or due) to the plot's owner for a period.</DialogDescription>
+          <DialogDescription>A return paid (or due) to the farm owner for a period.</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4 overflow-y-auto min-h-0 -mx-1 px-1" noValidate>
           <FormError message={serverError} />
-          <FormField id="p-plot" label="Plot" error={e.plotId}>
+          <FormField id="p-plot" label="Farm" error={e.plotId}>
             <NativeSelect {...form.register('plotId')}>
               {plots.map(p => <option key={p.plotId} value={p.plotId}>{p.label}</option>)}
             </NativeSelect>
