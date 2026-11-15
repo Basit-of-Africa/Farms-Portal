@@ -168,7 +168,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       const statsRes = await fetch('/api/admin/system-stats', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!statsRes.ok) throw new Error('Unassigned or unauthorized access to stats');
+      if (!statsRes.ok) {
+        const body = await statsRes.json().catch(() => ({}));
+        if (statsRes.status === 401) throw new Error('Your session has expired. Please sign in again.');
+        throw new Error(`${body.error || 'The server could not load the dashboard'} (error ${statsRes.status}). Refresh the page to try again.`);
+      }
       const statsData = await statsRes.json();
       setStats(statsData);
 
@@ -896,9 +900,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   if (error) {
     return (
-      <div className="p-6 bg-red-50 border-l-4 border-red-500 rounded-xl">
-        <h3 className="text-sm font-bold text-red-800">Connection Error</h3>
-        <p className="text-xs text-red-700 mt-1">{error}</p>
+      <div role="alert" className="p-6 bg-red-50 dark:bg-red-950/30 border-l-4 border-red-500 rounded-xl flex flex-col gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-red-800 dark:text-red-300">The dashboard could not load</h3>
+          <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
+        </div>
+        <div>
+          <button onClick={fetchStatsAndLists} className="px-4 py-2 rounded-xl bg-[#1B4332] text-white text-sm font-semibold cursor-pointer hover:bg-[#2D6A4F]">Try again</button>
+        </div>
       </div>
     );
   }

@@ -19,6 +19,7 @@ import GlobalSearch from './components/GlobalSearch';
 import OnboardingTour from './components/OnboardingTour';
 import InvestorsView from './components/InvestorsView';
 import InvestorProfileView from './components/InvestorProfileView';
+import { toast } from './components/ui/sonner';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import PrivacyNoticePage, { usePrivacyNotice } from './components/PrivacyNotice';
 import PrivacyAcknowledgeModal from './components/PrivacyAcknowledgeModal';
@@ -178,13 +179,29 @@ export default function App() {
 
   // End the session whenever the server rejects our token (expired or revoked)
   const logoutRef = useRef<() => void>(() => {});
+  const refreshUserRef = useRef<() => void>(() => {});
   useEffect(() => {
     const originalFetch = window.fetch;
+    let sessionExpiredShown = false;
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const response = await originalFetch(input, init);
       const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-      if (response.status === 401 && headers.get('Authorization')?.startsWith('Bearer ')) {
+      const authed = headers.get('Authorization')?.startsWith('Bearer ');
+      if (response.status === 401 && authed) {
+        // Token expired or revoked (e.g. after a deploy that changed AUTH_SECRET)
+        if (!sessionExpiredShown) {
+          sessionExpiredShown = true;
+          toast.info('Your session has expired. Please sign in again.');
+          setTimeout(() => (sessionExpiredShown = false), 5000);
+        }
         logoutRef.current();
+      } else if (response.status === 403 && authed) {
+        // The server requires a password change our cached user does not know about yet
+        response
+          .clone()
+          .json()
+          .then(body => body?.code === 'PASSWORD_CHANGE_REQUIRED' && refreshUserRef.current())
+          .catch(() => {});
       }
       return response;
     };
@@ -214,6 +231,19 @@ export default function App() {
     setSelectedFarmId(null);
   };
   logoutRef.current = handleLogout;
+  refreshUserRef.current = () => {
+    const token = localStorage.getItem('adubiaro_token');
+    if (!token) return;
+    fetch('/api/user/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.user) {
+          localStorage.setItem('adubiaro_user', JSON.stringify(data.user));
+          setCurrentUser(data.user);
+        }
+      })
+      .catch(() => {});
+  };
 
   const handlePasswordChanged = (token: string, user: User) => {
     localStorage.setItem('adubiaro_token', token);
