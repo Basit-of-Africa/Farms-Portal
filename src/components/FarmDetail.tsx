@@ -219,7 +219,7 @@ export default function FarmDetail({ user, token, farmId, onBack, onSelectInvest
           </div>
         )
       },
-      { id: 'area', header: 'Area', accessorFn: inv => Number(inv.totalSize) || 0, cell: ({ row }) => <span className="whitespace-nowrap">{sizeText(row.original.totalSize, row.original.sizeUnit)}</span> }
+      { id: 'area', header: 'Land', accessorFn: inv => Number(inv.totalSize) || 0, cell: ({ row }) => <span className="whitespace-nowrap">{row.original.landText || sizeText(row.original.totalSize, row.original.sizeUnit)}</span> }
     ];
     if (isAdmin) {
       cols.push({ accessorKey: 'totalInvested', header: 'Invested', cell: ({ getValue }) => <span className="font-semibold whitespace-nowrap">{formatNaira(getValue() as number)}</span> });

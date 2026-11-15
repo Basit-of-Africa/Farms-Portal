@@ -1061,8 +1061,8 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
           <div className="space-y-8 animate-fade-in">
             <div className="border-b border-border pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h3 className="text-base font-extrabold text-foreground font-sans">System Infrastructure & Maintenance backups</h3>
-                <p className="text-[11.5px] text-muted-foreground mt-1">Review diagnostic connection limits and compile offline archive snaps of JSON/Postgres data tables structures.</p>
+                <h3 className="text-base font-extrabold text-foreground font-sans">Backups & database</h3>
+                <p className="text-[11.5px] text-muted-foreground mt-1">To keep a real backup, use <b>Download Full JSON Snapshot</b> below and store the file somewhere safe. "Save copy on server" keeps a copy on the hosting server only, which free hosting (e.g. Render) wipes on every restart.</p>
               </div>
 
               <button
@@ -1076,7 +1076,7 @@ export default function SettingsView({ user, token, triggerRefreshSignal, refres
                 ) : (
                   <Play className="h-3.5 w-3.5 fill-current" />
                 )}
-                <span>Snapshot DB state</span>
+                <span>Save copy on server (temporary)</span>
               </button>
             </div>
 

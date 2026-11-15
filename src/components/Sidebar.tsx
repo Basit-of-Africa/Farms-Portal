@@ -18,7 +18,8 @@ import {
   X,
   Smartphone,
   KeyRound,
-  ShieldCheck
+  ShieldCheck,
+  Landmark
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -188,6 +189,25 @@ export default function Sidebar({
             >
               <Users className="h-4.5 w-4.5" />
               <span>Investors</span>
+            </button>
+          )}
+
+          {/* Farm ownership overview (admin) */}
+          {user.role === UserRole.ADMIN && (
+            <button
+              id="nav-ownership"
+              onClick={() => {
+                setActiveTab('ownership');
+                if (onClose) onClose();
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${
+                activeTab === 'ownership'
+                  ? 'bg-gradient-to-r from-[#52B788] to-[#3B946A] text-[#0A2619] shadow-lg shadow-[#1B4332]/40 font-bold'
+                  : 'text-gray-300 hover:bg-white/[0.04] hover:text-white'
+              }`}
+            >
+              <Landmark className="h-4.5 w-4.5" />
+              <span>Farm ownership</span>
             </button>
           )}
 

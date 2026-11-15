@@ -24,6 +24,7 @@ import ChangePasswordModal from './components/ChangePasswordModal';
 import PrivacyNoticePage, { usePrivacyNotice } from './components/PrivacyNotice';
 import PrivacyAcknowledgeModal from './components/PrivacyAcknowledgeModal';
 import PrivacyCenter from './components/PrivacyCenter';
+import OwnershipOverview from './components/OwnershipOverview';
 import { User, UserRole } from './types';
 import { 
   Sprout, 
@@ -558,6 +559,14 @@ export default function App() {
         )}
 
         {/* PRIVACY & DATA PROTECTION CENTRE (all roles) */}
+        {activeTab === 'ownership' && currentUser.role === UserRole.ADMIN && (
+          <OwnershipOverview
+            token={authToken}
+            onSelectFarm={handleSelectFarm}
+            onSelectInvestor={investorId => handleSelectInvestor(investorId, 'ownership')}
+          />
+        )}
+
         {activeTab === 'privacy' && (
           <PrivacyCenter
             user={currentUser}

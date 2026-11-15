@@ -39,7 +39,7 @@ import {
   Processor
 } from './server/privacy';
 import { normalizeImportRows, farmKeyOf, NormalizedImportRow } from './server/importNormalize';
-import { buildHealthReport } from './server/dataHealth';
+import { buildHealthReport, buildOwnershipOverview, landText } from './server/dataHealth';
 import { registerHoldingRoutes } from './server/holdings';
 import {
   User,
@@ -2667,6 +2667,7 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
           plotNumbers: [] as string[],
           totalSize: 0,
           sizeUnits: new Set<string>(),
+          land: {} as Record<string, number>,
           totalInvested: 0
         });
       }
@@ -2675,16 +2676,19 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
       if (p?.plotNumber) entry.plotNumbers.push(p.plotNumber);
       entry.totalSize += Number(p?.sizeHectares) || 0;
       entry.sizeUnits.add(p?.sizeUnit || 'acre');
+      const unit = (p?.sizeUnit || 'acre').toLowerCase();
+      entry.land[unit] = (entry.land[unit] || 0) + (Number(p?.sizeHectares) || 0);
       entry.totalInvested += Number(h.investmentAmount) || 0;
     });
 
     farmInvestors = Array.from(investorMap.values()).map(inv => {
-      const { totalInvested, sizeUnits, ...rest } = inv;
+      const { totalInvested, sizeUnits, land, ...rest } = inv;
       const unitsArr = Array.from(sizeUnits);
       return {
         ...rest,
         totalSize: Number(inv.totalSize.toFixed(2)),
-        sizeUnit: unitsArr.length === 1 ? unitsArr[0] : 'acres/plots',
+        sizeUnit: unitsArr.length === 1 ? unitsArr[0] : 'mixed',
+        landText: landText(land),
         ...(user.role === UserRole.ADMIN ? { totalInvested } : {})
       };
     });
@@ -5307,6 +5311,16 @@ app.post('/api/admin/database/import', requireAuth, async (req, res) => {
     console.error('❌ Database state import error:', err);
     res.status(500).json({ error: `Failed to restore database state: ${err.message || 'Unknown error'}` });
   }
+});
+
+// Admin: every farm with its investors, land per unit and amounts invested
+app.get('/api/admin/ownership-overview', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  if (user.role !== UserRole.ADMIN) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  recordAudit(db, user, 'system.ownership_overview', { req });
+  res.json(buildOwnershipOverview(db));
 });
 
 // Admin: add, edit and delete holdings and payouts

@@ -136,6 +136,21 @@ export function registerHoldingRoutes(app: express.Express, ctx: HoldingsContext
       plot.sizeUnit = v.sizeUnit;
       plot.cropType = v.cropType;
     }
+    // Holding whose plot was lost: give it a new plot on the chosen farm so it is linked again
+    if (!plot) {
+      const count = db.plots.filter((p: FarmPlot) => p.farmId === farm.id).length;
+      const newPlot: FarmPlot = {
+        id: newId('plot'),
+        farmId: farm.id,
+        plotNumber: v.plotNumber || `P-${farm.id.replace('farm-', '').slice(-4).toUpperCase()}-${count + 1}`,
+        sizeHectares: v.size,
+        sizeUnit: v.sizeUnit,
+        cropType: v.cropType,
+        status: PlotStatus.ACTIVE
+      };
+      db.plots.push(newPlot);
+      holding.plotId = newPlot.id;
+    }
     holding.investorId = investor.id;
     holding.investmentAmount = v.investmentAmount;
     holding.ownershipPercentage = v.ownershipPercentage;
@@ -147,7 +162,7 @@ export function registerHoldingRoutes(app: express.Express, ctx: HoldingsContext
     if (oldFarmId && oldFarmId !== farm.id) recomputeFarmTotals(db, oldFarmId);
     recordAudit(db, admin, 'holding.updated', { targetType: 'user', targetId: investor.id, details: `holding=${holding.id}`, req });
     ctx.saveDb();
-    res.json({ holding, plot });
+    res.json({ holding, plot: db.plots.find((p: FarmPlot) => p.id === holding.plotId) });
   });
 
   // Delete a holding. The plot is removed too when nobody else owns it and it has no payouts.

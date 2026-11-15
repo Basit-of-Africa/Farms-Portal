@@ -141,3 +141,110 @@ export function buildHealthReport(db: any): HealthReport {
     issues
   };
 }
+
+// ---------------------------------------------------------------------------
+// Farm ownership overview: every farm with its investors, land and amounts,
+// plus holdings that are not linked to any farm.
+// ---------------------------------------------------------------------------
+
+type Land = Record<string, number>;
+const addLand = (land: Land, unit: string, size: number) => {
+  const u = (unit || 'acre').toLowerCase();
+  land[u] = Math.round(((land[u] || 0) + (Number(size) || 0)) * 10000) / 10000;
+};
+export const landText = (land: Land) =>
+  Object.entries(land)
+    .filter(([, n]) => n > 0)
+    .map(([u, n]) => `${n} ${u}${n === 1 ? '' : 's'}`)
+    .join(' · ') || '—';
+
+export function buildOwnershipOverview(db: any) {
+  const users: any[] = db.users || [];
+  const farms: any[] = db.farms || [];
+  const plots: any[] = db.plots || [];
+  const holdings: any[] = (db.investorPlots || []).filter((h: any) => h.isActive !== false);
+  const userById = new Map(users.map(u => [u.id, u]));
+  const farmById = new Map(farms.map(f => [f.id, f]));
+  const plotById = new Map(plots.map(p => [p.id, p]));
+
+  const keyCounts = new Map<string, number>();
+  farms.forEach(f => keyCounts.set(farmKeyOf(f.name || ''), (keyCounts.get(farmKeyOf(f.name || '')) || 0) + 1));
+
+  const farmRows = farms
+    .map(f => {
+      const farmPlots = plots.filter(p => p.farmId === f.id);
+      const plotIds = new Set(farmPlots.map(p => p.id));
+      const land: Land = {};
+      farmPlots.forEach(p => addLand(land, p.sizeUnit, p.sizeHectares));
+      const byInvestor = new Map<string, any>();
+      let invested = 0;
+      let farmHoldings = 0;
+      holdings
+        .filter(h => plotIds.has(h.plotId))
+        .forEach(h => {
+          const p = plotById.get(h.plotId);
+          const u = userById.get(h.investorId);
+          const key = u ? u.id : `missing:${h.investorId}`;
+          const row = byInvestor.get(key) || { id: u?.id || null, name: u ? u.name : '(account missing)', email: u?.email || '', land: {} as Land, invested: 0, holdings: 0 };
+          addLand(row.land, p?.sizeUnit, p?.sizeHectares);
+          row.invested += Number(h.investmentAmount) || 0;
+          row.holdings += 1;
+          byInvestor.set(key, row);
+          invested += Number(h.investmentAmount) || 0;
+          farmHoldings += 1;
+        });
+      const investors = [...byInvestor.values()]
+        .map(r => ({ ...r, landText: landText(r.land) }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return {
+        id: f.id,
+        name: f.name,
+        location: [f.location, f.state].filter(Boolean).join(', '),
+        duplicateName: (keyCounts.get(farmKeyOf(f.name || '')) || 0) > 1,
+        plots: farmPlots.length,
+        land,
+        landText: landText(land),
+        holdings: farmHoldings,
+        investors,
+        invested
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Holdings that cannot be placed under any farm
+  const unlinked = holdings
+    .filter(h => {
+      const p = plotById.get(h.plotId);
+      return !p || !farmById.has(p.farmId);
+    })
+    .map(h => {
+      const p = plotById.get(h.plotId);
+      const u = userById.get(h.investorId);
+      return {
+        holdingId: h.id,
+        investorId: u?.id || null,
+        investorName: u ? u.name : '(account missing)',
+        email: u?.email || '',
+        reason: !p ? 'Plot no longer exists' : `Farm no longer exists (${p.farmId})`,
+        land: p ? landText({ [(p.sizeUnit || 'acre').toLowerCase()]: Number(p.sizeHectares) || 0 }) : '—',
+        invested: Number(h.investmentAmount) || 0
+      };
+    });
+
+  const totalLand: Land = {};
+  plots.forEach(p => addLand(totalLand, p.sizeUnit, p.sizeHectares));
+  return {
+    generatedAt: new Date().toISOString(),
+    farms: farmRows,
+    unlinked,
+    totals: {
+      farms: farms.length,
+      plots: plots.length,
+      activeHoldings: holdings.length,
+      investorsWithHoldings: new Set(holdings.map(h => h.investorId)).size,
+      invested: holdings.reduce((s, h) => s + (Number(h.investmentAmount) || 0), 0),
+      holdingsWithAmount: holdings.filter(h => Number(h.investmentAmount) > 0).length,
+      landText: landText(totalLand)
+    }
+  };
+}
