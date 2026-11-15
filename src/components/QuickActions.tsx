@@ -219,7 +219,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to file payout ledger');
       
-      setSuccessText(`Ledger payment of $${Number(payoutAmount).toLocaleString()} registered! Notification dispatched.`);
+      setSuccessText(`Payout of ₦${Number(payoutAmount).toLocaleString()} recorded and the investor has been notified.`);
       setPayoutRoi('');
       setPayoutAmount('');
       setPayoutNotes('');
@@ -515,7 +515,7 @@ export default function QuickActions({ user, token, onTabChange, onRefresh }: Qu
                           <CreditCard className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800">View Live Ledger</p>
+                          <p className="font-bold text-gray-800">View payouts</p>
                           <p className="text-[10px] text-gray-400 font-normal">Audit total capitalization and ROI</p>
                         </div>
                       </div>

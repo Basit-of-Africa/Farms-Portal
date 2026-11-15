@@ -16,16 +16,13 @@ import {
   Download,
   FileDown
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend 
-} from 'recharts';
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ColumnDef } from '@tanstack/react-table';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { DataTable } from './ui/data-table';
+import { formatNaira, useIsDark, chartTheme } from '../lib/utils';
 import { User, FinancialStatus } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -38,27 +35,28 @@ const periodOrder: Record<string, number> = {
   'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white dark:bg-stone-900 border border-[#2D6A4F]/20 p-4 rounded-xl shadow-xl font-sans text-xs space-y-1.5">
-        <p className="font-bold text-[#1B4332] dark:text-emerald-400 font-mono mb-1">{label}</p>
-        {payload.map((pld: any, index: number) => {
-          const isNaira = pld.name.toLowerCase().includes('payout') || pld.name.toLowerCase().includes('returns') || pld.name.toLowerCase().includes('cumulative');
-          const valueStr = isNaira 
-            ? `₦${Number(pld.value).toLocaleString()}` 
-            : `${pld.value}%`;
-          return (
-            <div key={index} className="flex items-center justify-between gap-4">
-              <span className="text-gray-500 dark:text-gray-400 font-medium">{pld.name}:</span>
-              <span className="font-extrabold font-mono" style={{ color: pld.color }}>{valueStr}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-  return null;
+/** Hover tooltip: text uses text colours, the swatch carries the series colour. */
+const ChartTooltip = ({ active, payload, label, format }: any) => {
+  if (!active || !payload?.length) return null;
+  const p = payload[0];
+  return (
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-sm shadow-lg">
+      <p className="font-semibold text-foreground">{label}</p>
+      <p className="mt-0.5 flex items-center gap-2 text-muted-foreground">
+        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: p.color || p.stroke || p.fill }} />
+        {p.name}: <span className="font-semibold text-foreground">{format(p.value)}</span>
+      </p>
+    </div>
+  );
+};
+
+const compactNaira = (v: number) => `₦${v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(0) + 'k' : v}`;
+
+const STATUS: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' | 'default' | 'muted' }> = {
+  paid: { label: 'Paid', variant: 'success' },
+  pending: { label: 'Pending', variant: 'warning' },
+  overdue: { label: 'Overdue', variant: 'destructive' },
+  partial: { label: 'Part paid', variant: 'default' }
 };
 
 interface FinancialsViewProps {
@@ -68,6 +66,8 @@ interface FinancialsViewProps {
 }
 
 export default function FinancialsView({ user, token, refreshSignal }: FinancialsViewProps) {
+  const dark = useIsDark();
+  const ct = chartTheme(dark);
   const [financials, setFinancials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
       });
       if (!res.ok) {
         const errJson = await res.json();
-        throw new Error(errJson.error || 'Access boundary triggered');
+        throw new Error(errJson.error || 'You do not have access to payout records.');
       }
       const data = await res.json();
       setFinancials(data);
@@ -96,40 +96,20 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
     fetchFinancials();
   }, [token, refreshSignal]);
 
-  const getStatusBadgeClass = (status: FinancialStatus) => {
-    switch (status) {
-      case FinancialStatus.PAID: 
-        return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/25';
-      case FinancialStatus.PENDING: 
-        return 'bg-amber-500/15 text-amber-600 border-amber-500/25';
-      case FinancialStatus.OVERDUE: 
-        return 'bg-rose-500/15 text-rose-500 border-rose-500/25';
-      case FinancialStatus.PARTIAL: 
-        return 'bg-blue-500/15 text-blue-500 border-blue-500/25';
-      default: 
-        return 'bg-gray-500/15 text-gray-500 border-gray-500/25';
-    }
-  };
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12 min-h-[400px]">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#1B4332] border-t-transparent animate-fade-in" />
+      <div className="flex items-center justify-center p-12 min-h-[400px]" role="status" aria-label="Loading payouts">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-8 bg-red-50 border-l-4 border-red-500 rounded-2xl space-y-3">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="text-red-500 h-5 w-5 shrink-0" />
-          <h3 className="font-sans font-bold text-sm text-red-800">Operational Security Violation</h3>
-        </div>
-        <p className="text-xs text-red-700 leading-relaxed max-w-xl">
-          {error}. Under regulatory security policies, farm manager assignment operations are restricted from auditing financials. Please request assistance from administrative supervisors.
-        </p>
-      </div>
+      <Card className="p-6 border-destructive/40">
+        <h3 className="font-bold text-destructive flex items-center gap-2"><AlertTriangle className="h-5 w-5" /> We could not load payouts</h3>
+        <p className="text-sm text-muted-foreground mt-2">{error}</p>
+      </Card>
     );
   }
 
@@ -191,15 +171,15 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
     };
 
     const headers = [
-      'Billing Cycle',
-      ...(user.role === 'admin' ? ['Investor Client'] : []),
-      'Plot ID',
-      'Crop Cultivar',
-      'Net Payout (₦)',
-      'Yield ROI (%)',
-      'Ledger Date',
+      'Period',
+      ...(user.role === 'admin' ? ['Investor'] : []),
+      'Plot',
+      'Crop',
+      'Payout (NGN)',
+      'Return (%)',
+      'Payout date',
       'Status',
-      'Auditor Remarks'
+      'Notes'
     ];
 
     const rows = financials.map(fin => [
@@ -237,9 +217,9 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
 
       // Set document properties
       doc.setProperties({
-        title: 'Adubiaro Farms - Investment Statement',
-        subject: 'Audited Financial Statement',
-        author: 'Adubiaro Farms Admin Portal',
+        title: 'Adubiaro Farms - Payout Statement',
+        subject: 'Payout statement',
+        author: 'Adubiaro Farms',
       });
 
       // 1. Header decoration banner
@@ -255,20 +235,20 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(173, 223, 173); // Muted green-ish text
-      doc.text('PRIVATE INVESTMENT PORTAL • AUDITED FINANCIAL STATEMENTS', 14, 25);
+      doc.text('INVESTOR PORTAL • PAYOUT STATEMENT', 14, 25);
 
       // 3. Document Details & Stats
       doc.setTextColor(40, 40, 40);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.text('STATEMENT DETAILS', 14, 48);
+      doc.text('STATEMENT', 14, 48);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(80, 80, 80);
-      doc.text(`Generated By: ${user.role === 'admin' ? 'System Administrator' : 'Investor Client'}`, 14, 55);
+      doc.text(user.role === 'admin' ? 'All investors' : `Investor: ${user.name}`, 14, 55);
       doc.text(`Date of Issue: ${new Date().toLocaleDateString('en-GB')}`, 14, 61);
-      doc.text(`Database Authority: Verified Firestore Cloud Engine`, 14, 67);
+      doc.text('Figures as recorded in the investor portal on the date of issue.', 14, 67);
 
       // Investment totals Summary block
       doc.setFillColor(248, 248, 244); // Soft warm white/beige
@@ -279,13 +259,13 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(27, 67, 50);
-      doc.text('PORTFOLIO SUMMARY', 125, 48);
+      doc.text('SUMMARY', 125, 48);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(100, 100, 100);
-      doc.text(`Total Payout Distributed: NGN ${totalPaid.toLocaleString()}`, 125, 54);
-      doc.text(`Pending Disbursements:  NGN ${totalPending.toLocaleString()}`, 125, 59);
-      doc.text(`Average Yield Performance:  ${avgRoi.toFixed(1)}%`, 125, 64);
+      doc.text(`Paid to date: NGN ${totalPaid.toLocaleString()}`, 125, 54);
+      doc.text(`Pending: NGN ${totalPending.toLocaleString()}`, 125, 59);
+      doc.text(`Average return: ${avgRoi.toFixed(1)}%`, 125, 64);
 
       // 4. Line divider
       doc.setDrawColor(230, 230, 230);
@@ -295,17 +275,17 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
       doc.setTextColor(27, 67, 50);
-      doc.text('INVESTMENT LEDGER TRANSACTIONS', 14, 84);
+      doc.text('PAYOUTS', 14, 84);
 
       // 6. Build autoTable
       const tableHeaders = [
-        'Billing Cycle',
-        ...(user.role === 'admin' ? ['Investor Client'] : []),
-        'Plot ID',
-        'Crop Cultivar',
-        'Net Payout',
-        'ROI %',
-        'Ledger Date',
+        'Period',
+        ...(user.role === 'admin' ? ['Investor'] : []),
+        'Plot',
+        'Crop',
+        'Payout',
+        'Return %',
+        'Payout date',
         'Status'
       ];
 
@@ -356,7 +336,7 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
           doc.setFontSize(8);
           doc.setTextColor(150, 150, 150);
           doc.text(
-            `Page ${data.pageNumber} • Adubiaro Farms Private Portal Statement`,
+            `Page ${data.pageNumber} • Adubiaro Farms payout statement`,
             14,
             doc.internal.pageSize.height - 10
           );
@@ -364,250 +344,116 @@ export default function FinancialsView({ user, token, refreshSignal }: Financial
       });
 
       // Save PDF
-      doc.save(`adubiaro_financial_statement_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`adubiaro_payout_statement_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
       console.error('Failed to export PDF:', err);
       toast.error('An error occurred during PDF generation. Please try again.');
     }
   };
 
+  const columns: ColumnDef<any>[] = [
+    { id: 'period', header: 'Period', accessorFn: f => (parseInt(f.year) || 0) * 100 + (periodOrder[String(f.period).toUpperCase()] || 0), cell: ({ row }) => <span className="font-semibold whitespace-nowrap">{row.original.period} {row.original.year}</span> },
+    ...(user.role === 'admin' ? [{ accessorKey: 'investorName', header: 'Investor' } as ColumnDef<any>] : []),
+    { accessorKey: 'plotNumber', header: 'Plot', cell: ({ getValue }) => <span className="font-mono text-xs whitespace-nowrap">{getValue() as string}</span> },
+    { accessorKey: 'cropType', header: 'Crop' },
+    { accessorKey: 'payoutAmount', header: 'Payout', cell: ({ getValue }) => <span className="font-semibold whitespace-nowrap">{formatNaira(getValue() as number)}</span> },
+    { accessorKey: 'roiPercentage', header: 'Return', cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() as number}%</span> },
+    { accessorKey: 'payoutDate', header: 'Payout date', cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? new Date(getValue() as string).toLocaleDateString() : '—'}</span> },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ getValue }) => {
+        const st = STATUS[getValue() as string] || { label: String(getValue()), variant: 'muted' as const };
+        return <Badge variant={st.variant}>{st.label}</Badge>;
+      }
+    },
+    { accessorKey: 'notes', header: 'Notes', enableSorting: false, cell: ({ getValue }) => <span className="block max-w-[260px] whitespace-normal text-muted-foreground">{(getValue() as string) || '—'}</span> }
+  ];
+
+  const axisProps = { stroke: ct.axis, fontSize: 12, tickLine: false, axisLine: false };
+
   return (
-    <div id="financials-stage" className="space-y-8 animate-fade-in">
-      
-      {/* Title */}
-      <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div id="financials-stage" className="flex flex-col gap-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="font-serif font-extrabold text-2xl text-[#1B4332] tracking-wide">Investment Ledger Statements</h1>
-          <p className="text-xs text-[#2c3e35]/60 font-mono mt-1">Notarized statements, audits & historical ROI payout records</p>
+          <h1 className="font-bold text-2xl text-foreground">Payouts</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {user.role === 'admin' ? 'Returns paid and due to investors, by period.' : 'The returns paid and due to you, by period.'}
+          </p>
         </div>
         {financials.length > 0 && (
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={handleExportToCSV}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-stone-50 hover:bg-stone-100 text-[#1B4332] rounded-xl text-xs font-bold transition duration-300 shadow-sm border border-stone-200 cursor-pointer"
-            >
-              <Download className="h-4 w-4 text-[#2D6A4F]" />
-              <span>Export CSV</span>
-            </button>
-            <button
-              onClick={handleExportToPDF}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-[#52B788] hover:text-white rounded-xl text-xs font-bold transition duration-300 shadow-sm border border-[#52B788]/20 cursor-pointer"
-            >
-              <FileDown className="h-4 w-4 text-[#52B788] hover:text-white" />
-              <span>Export PDF Statement</span>
-            </button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleExportToCSV}><Download /> Download CSV</Button>
+            <Button onClick={handleExportToPDF}><FileDown /> Download PDF statement</Button>
           </div>
         )}
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium hover:shadow-premium-hover transition duration-300 flex items-center gap-4">
-          <div className="p-3.5 bg-emerald-50 text-[#1B4332] rounded-xl">
-            <DollarSign className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Distributed Payouts</div>
-            <div className="text-xl font-extrabold text-[#1B4332] font-sans mt-1">₦{totalPaid?.toLocaleString()}</div>
-          </div>
-        </div>
+      <section aria-label="Payout summary" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {[
+          { icon: DollarSign, label: 'Paid to date', value: formatNaira(totalPaid) },
+          { icon: Calendar, label: 'Pending', value: formatNaira(totalPending) },
+          { icon: TrendingUp, label: 'Average return', value: `${avgRoi.toFixed(1)}%` },
+          { icon: Layers, label: 'Payout records', value: financials.length }
+        ].map(s => (
+          <Card key={s.label} className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-primary/10 text-primary"><s.icon className="h-6 w-6" aria-hidden="true" /></div>
+            <div>
+              <div className="text-sm text-muted-foreground">{s.label}</div>
+              <div className="text-xl font-bold text-foreground mt-0.5">{s.value}</div>
+            </div>
+          </Card>
+        ))}
+      </section>
 
-        <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium hover:shadow-premium-hover transition duration-300 flex items-center gap-4">
-          <div className="p-3.5 bg-amber-50 text-amber-600 rounded-xl">
-            <Calendar className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Pending Disburse</div>
-            <div className="text-xl font-extrabold text-gray-800 font-sans mt-1">₦{totalPending?.toLocaleString()}</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium hover:shadow-premium-hover transition duration-300 flex items-center gap-4">
-          <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl">
-            <TrendingUp className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Mean ROI Performance</div>
-            <div className="text-xl font-extrabold text-[#1B4332] font-sans mt-1">{avgRoi?.toFixed(1)}%</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium hover:shadow-premium-hover transition duration-300 flex items-center gap-4">
-          <div className="p-3.5 bg-stone-50 text-stone-600 rounded-xl">
-            <Layers className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Total Settlements</div>
-            <div className="text-xl font-extrabold text-gray-800 font-sans mt-1">{financials.length} cycles</div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Charts Section */}
       {financials.length > 0 && (
-        <div id="financials-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          {/* Chart 1: ROI & Payouts */}
-          <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-[#2D6A4F]/10 dark:border-stone-800 shadow-premium">
-            <div className="flex flex-col mb-6">
-              <h3 className="font-serif font-extrabold text-base text-[#1B4332] dark:text-emerald-400">Quarterly ROI & Payout Performance</h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400 font-mono mt-1">Comparison of net payout amounts (₦) against yield ROI percentages</p>
-            </div>
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:stroke-stone-800" />
-                  <XAxis 
-                    dataKey="label" 
-                    stroke="#888888" 
-                    fontSize={10}
-                    fontFamily="JetBrains Mono, monospace"
-                    tickLine={false}
-                  />
-                  <YAxis 
-                    yAxisId="left"
-                    stroke="#1B4332" 
-                    fontSize={10}
-                    fontFamily="JetBrains Mono, monospace"
-                    tickLine={false}
-                    tickFormatter={(value) => `₦${value >= 1000000 ? (value / 1000000).toFixed(1) + 'M' : value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
-                  />
-                  <YAxis 
-                    yAxisId="right"
-                    orientation="right"
-                    stroke="#D4A017" 
-                    fontSize={10}
-                    fontFamily="JetBrains Mono, monospace"
-                    tickLine={false}
-                    tickFormatter={(value) => `${value}%`}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend 
-                    wrapperStyle={{ fontSize: '11px', fontFamily: 'Inter, sans-serif', paddingTop: '10px' }}
-                    verticalAlign="bottom"
-                  />
-                  <Line 
-                    yAxisId="left"
-                    type="monotone" 
-                    dataKey="payout" 
-                    name="Quarter Payout" 
-                    stroke="#1B4332" 
-                    strokeWidth={3} 
-                    activeDot={{ r: 6 }} 
-                    dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                  />
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="roi" 
-                    name="Yield ROI %" 
-                    stroke="#D4A017" 
-                    strokeWidth={2} 
-                    dot={{ r: 3, strokeWidth: 1, fill: '#fff' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+        <div id="financials-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payouts by period</CardTitle>
+              <CardDescription>Total paid or due in each period (₦)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke={ct.grid} />
+                    <XAxis dataKey="label" {...axisProps} />
+                    <YAxis {...axisProps} width={56} tickFormatter={compactNaira} />
+                    <Tooltip cursor={{ fill: ct.grid, opacity: 0.5 }} content={<ChartTooltip format={formatNaira} />} />
+                    <Bar dataKey="payout" name="Payout" fill={ct.series} radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Chart 2: Investment Growth Trend */}
-          <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-[#2D6A4F]/10 dark:border-stone-800 shadow-premium">
-            <div className="flex flex-col mb-6">
-              <h3 className="font-serif font-extrabold text-base text-[#1B4332] dark:text-emerald-400">Cumulative Investment Growth</h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400 font-mono mt-1">Growth progression of cumulative ROI returns across billing cycles</p>
-            </div>
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:stroke-stone-800" />
-                  <XAxis 
-                    dataKey="label" 
-                    stroke="#888888" 
-                    fontSize={10}
-                    fontFamily="JetBrains Mono, monospace"
-                    tickLine={false}
-                  />
-                  <YAxis 
-                    stroke="#2D6A4F" 
-                    fontSize={10}
-                    fontFamily="JetBrains Mono, monospace"
-                    tickLine={false}
-                    tickFormatter={(value) => `₦${value >= 1000000 ? (value / 1000000).toFixed(1) + 'M' : value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend 
-                    wrapperStyle={{ fontSize: '11px', fontFamily: 'Inter, sans-serif', paddingTop: '10px' }}
-                    verticalAlign="bottom"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="cumulativePayout" 
-                    name="Cumulative Returns" 
-                    stroke="#2D6A4F" 
-                    strokeWidth={4} 
-                    activeDot={{ r: 7 }} 
-                    dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
+          <Card>
+            <CardHeader>
+              <CardTitle>Average return by period</CardTitle>
+              <CardDescription>Return on investment for each period (%)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke={ct.grid} />
+                    <XAxis dataKey="label" {...axisProps} />
+                    <YAxis {...axisProps} width={44} tickFormatter={v => `${v}%`} />
+                    <Tooltip cursor={{ stroke: ct.axis, strokeDasharray: '3 3' }} content={<ChartTooltip format={(v: number) => `${v}%`} />} />
+                    <Line type="monotone" dataKey="roi" name="Average return" stroke={ct.series} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: ct.surface }} activeDot={{ r: 6, stroke: ct.surface, strokeWidth: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {/* Main Table */}
-      <div className="bg-white rounded-2xl border border-[#2D6A4F]/10 shadow-premium overflow-hidden p-6">
-        {financials.length === 0 ? (
-          <div className="text-center p-12 text-gray-400 font-mono text-xs">
-            No audited financial summaries found for your target plot allocations.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs bg-white rounded-xl">
-              <thead>
-                <tr className="border-b border-gray-150 text-gray-400 uppercase font-mono tracking-wider">
-                  <th className="py-4 px-3 font-bold select-none">Billing Cycle</th>
-                  {user.role === 'admin' && <th className="py-4 px-3 font-bold select-none">Investor Client</th>}
-                  <th className="py-4 px-3 font-bold text-center select-none">Plot ID</th>
-                  <th className="py-4 px-3 font-bold select-none">Crop cultivar</th>
-                  <th className="py-4 px-3 font-bold text-right select-none">Net Payout</th>
-                  <th className="py-4 px-3 font-bold text-center select-none">Yield ROI %</th>
-                  <th className="py-4 px-3 font-bold select-none">Ledger Date</th>
-                  <th className="py-4 px-3 font-bold text-center select-none">Status</th>
-                  <th className="py-4 px-3 font-bold max-w-[200px] select-none">Auditor Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financials.map((fin) => (
-                  <tr key={fin.id} className="border-b last:border-0 border-gray-50 hover:bg-[#FBF9F4]/40 transition">
-                    <td className="py-5 px-3 font-sans font-bold text-[#1B4332]">{fin.period} {fin.year}</td>
-                    {user.role === 'admin' && (
-                      <td className="py-5 px-3 font-semibold text-[#2c3e35] font-sans">{fin.investorName}</td>
-                    )}
-                    <td className="py-5 px-3 text-center font-mono text-[#1B4332] font-extrabold">{fin.plotNumber}</td>
-                    <td className="py-5 px-3 text-[#2c3e35]/80 font-medium font-mono text-[11px] truncate">{fin.cropType}</td>
-                    <td className="py-5 px-3 text-right font-sans font-extrabold text-[#1B4332]">₦{fin.payoutAmount?.toLocaleString()}</td>
-                    <td className="py-5 px-3 text-center font-mono font-extrabold text-[#D4A017]">{fin.roiPercentage}%</td>
-                    <td className="py-5 px-3 text-gray-400 font-mono text-[11px] font-semibold">{fin.payoutDate}</td>
-                    <td className="py-5 px-3 text-center">
-                      <span className={`inline-block px-2.5 py-0.5 font-mono text-[9px] font-bold uppercase rounded-full border ${getStatusBadgeClass(fin.status)}`}>
-                        {fin.status}
-                      </span>
-                    </td>
-                    <td className="py-5 px-3 text-gray-500 font-normal leading-relaxed font-sans max-w-[250px] truncate" title={fin.notes}>
-                      {fin.notes || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
+      <section aria-labelledby="payout-table-heading" className="flex flex-col gap-3">
+        <h2 id="payout-table-heading" className="font-bold text-lg">All payouts</h2>
+        <DataTable columns={columns} data={financials} searchPlaceholder="Search payouts…" emptyMessage="No payouts have been recorded yet." />
+      </section>
     </div>
   );
 }

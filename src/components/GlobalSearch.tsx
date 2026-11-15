@@ -118,7 +118,7 @@ export default function GlobalSearch({ token, user, onSelectFarm, setActiveTab }
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Search farms, land plots, records, or docs..."
-          className="w-full bg-[#FBF9F4] dark:bg-stone-850 border border-[#2D6A4F]/10 dark:border-stone-800 text-xs text-[#1B4332] dark:text-stone-200 placeholder-gray-400 dark:placeholder-stone-500 rounded-xl pl-9.5 pr-8.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] transition-all"
+          className="w-full bg-[#FBF9F4] dark:bg-stone-800 border border-[#2D6A4F]/10 dark:border-stone-800 text-xs text-[#1B4332] dark:text-stone-200 placeholder-gray-400 dark:placeholder-stone-500 rounded-xl pl-9.5 pr-8.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] transition-all"
         />
         {loading ? (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#2D6A4F] animate-spin" />

@@ -57,9 +57,9 @@ export default function Sidebar({
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
-      case UserRole.ADMIN: return 'Super Admin';
+      case UserRole.ADMIN: return 'Admin';
       case UserRole.FARM_MANAGER: return 'Farm Manager';
-      case UserRole.INVESTOR: return 'Investor Client';
+      case UserRole.INVESTOR: return 'Investor';
       default: return 'User';
     }
   };
@@ -88,7 +88,7 @@ export default function Sidebar({
           </div>
           <div>
             <h1 className="font-serif font-bold text-xl tracking-wide text-white leading-tight">{logoText || 'Adubiaro'}</h1>
-            <p className="text-[9px] uppercase tracking-widest text-[#52B788] font-mono leading-none font-bold mt-0.5">ESTATE INVESTOR PORTAL</p>
+            <p className="text-[9px] uppercase tracking-widest text-[#52B788] font-mono leading-none font-bold mt-0.5">INVESTOR PORTAL</p>
           </div>
         </div>
 
@@ -149,7 +149,7 @@ export default function Sidebar({
               }`}
             >
               <CreditCard className="h-4.5 w-4.5" />
-              <span>Ledger</span>
+              <span>Payouts</span>
             </button>
           )}
 
@@ -167,7 +167,7 @@ export default function Sidebar({
           >
             <Mail className="h-4.5 w-4.5" />
             <div className="flex items-center justify-between w-full">
-              <span>Mailings</span>
+              <span>Messages</span>
               <span className="bg-[#D4A017] text-[#0A2619] text-[8px] px-2 py-0.5 rounded-full font-mono font-black border border-[#D4A017]/30">LIVE</span>
             </div>
           </button>

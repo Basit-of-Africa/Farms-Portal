@@ -66,7 +66,7 @@ export default function DashboardStats({ stats, loading }: DashboardStatsProps) 
     <div id="dashboard-stats-grid" className="grid grid-cols-1 md:grid-cols-3 gap-6">
       
       {/* 1. TOTAL ACTIVE INVESTMENTS */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800/80 shadow-premium flex flex-col justify-between transition-all duration-300 hover:shadow-[#2D6A4F]/10 dark:hover:shadow-stone-850 relative group overflow-hidden">
+      <div className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800/80 shadow-premium flex flex-col justify-between transition-all duration-300 hover:shadow-[#2D6A4F]/10 dark:hover:shadow-stone-800 relative group overflow-hidden">
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-emerald-500/5 to-transparent rounded-bl-full pointer-events-none" />
         <div className="flex items-start justify-between">
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 rounded-2xl">
@@ -90,7 +90,7 @@ export default function DashboardStats({ stats, loading }: DashboardStatsProps) 
       </div>
 
       {/* 2. TOTAL PAYOUTS THIS MONTH */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800/80 shadow-premium flex flex-col justify-between transition-all duration-300 hover:shadow-[#2D6A4F]/10 dark:hover:shadow-stone-850 relative group overflow-hidden">
+      <div className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800/80 shadow-premium flex flex-col justify-between transition-all duration-300 hover:shadow-[#2D6A4F]/10 dark:hover:shadow-stone-800 relative group overflow-hidden">
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-[#D4A017]/5 to-transparent rounded-bl-full pointer-events-none" />
         <div className="flex items-start justify-between">
           <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 rounded-2xl">
@@ -114,7 +114,7 @@ export default function DashboardStats({ stats, loading }: DashboardStatsProps) 
       </div>
 
       {/* 3. NUMBER OF ACTIVE FARMS */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800/80 shadow-premium flex flex-col justify-between transition-all duration-300 hover:shadow-[#2D6A4F]/10 dark:hover:shadow-stone-850 relative group overflow-hidden">
+      <div className="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-[#2D6A4F]/10 dark:border-stone-800/80 shadow-premium flex flex-col justify-between transition-all duration-300 hover:shadow-[#2D6A4F]/10 dark:hover:shadow-stone-800 relative group overflow-hidden">
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-[#52B788]/5 to-transparent rounded-bl-full pointer-events-none" />
         <div className="flex items-start justify-between">
           <div className="p-3 bg-[#52B788]/10 dark:bg-[#52B788]/5 text-emerald-800 dark:text-[#52B788] rounded-2xl">

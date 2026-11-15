@@ -3464,7 +3464,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
           state: r.farmState || 'Not specified',
           totalPlots: 0,
           totalHectares: 0,
-          description: r.farmDescription || `Imported farm estate: ${r.farmName}`,
+          description: r.farmDescription || '',
           coverImage: '/farm-placeholder.svg',
           dateEstablished: r.farmDateEstablished || new Date().toISOString().split('T')[0],
           isActive: true

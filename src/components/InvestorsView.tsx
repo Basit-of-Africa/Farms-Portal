@@ -823,7 +823,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${selectedUserIds.length > 0 ? 'pb-56 md:pb-36' : ''}`}>
       {reviewModal}
       
       {/* Banner Notifications */}
@@ -845,35 +845,35 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
       )}
 
       {/* Control Header & Actions bar */}
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 bg-white dark:bg-stone-900 border border-[#2D6A4F]/10 dark:border-stone-800 p-5 rounded-3xl shadow-premium">
-        <div className="flex items-center gap-3 w-full lg:w-auto">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-card border border-border p-5 rounded-3xl shadow-sm">
+        <div className="flex items-center gap-3 w-full xl:w-auto">
           <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-[#1B4332] dark:text-[#52B788]">
             <Briefcase className="h-5 w-5" />
           </div>
           <div>
             <h2 className="font-serif font-extrabold text-base text-[#1B4332] dark:text-[#52B788]">
               {roleFilter === 'ALL'
-                ? 'System Accounts & Roles'
+                ? 'All accounts'
                 : roleFilter === 'INVESTOR'
-                ? 'Investors Directory'
+                ? 'Investors'
                 : roleFilter === 'FARM_MANAGER'
                 ? 'Farm Managers'
-                : 'Super Administrators'}
+                : 'Administrators'}
             </h2>
             <p className="text-[10px] font-mono text-gray-400">
               {roleFilter === 'ALL'
-                ? 'Authorized platform registers'
+                ? 'Investors, farm managers and administrators'
                 : roleFilter === 'INVESTOR'
-                ? 'Total verified active holdings'
+                ? 'People who hold plots'
                 : roleFilter === 'FARM_MANAGER'
-                ? 'Farm management credentials'
-                : 'Root administration tier'}
+                ? 'Staff who run the farms'
+                : 'People who manage the portal'}
             </p>
           </div>
         </div>
 
         {/* Search & Actions */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full xl:w-auto">
           <div className="flex items-center gap-2 flex-1 sm:w-auto">
             <div className="relative flex-1 sm:w-60">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -1138,7 +1138,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-6 pt-4 border-t border-gray-50 dark:border-stone-850 flex items-center justify-between">
+              <div className="mt-6 pt-4 border-t border-gray-50 dark:border-stone-800 flex items-center justify-between">
                 
                 {/* Active Toggle Switch */}
                 <button
@@ -1500,7 +1500,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
               </button>
             </div>
 
-            <div className="mt-4 p-3 bg-stone-50 dark:bg-stone-850 border border-gray-100 dark:border-stone-800 rounded-2xl flex items-center justify-between text-[11px] text-gray-500">
+            <div className="mt-4 p-3 bg-stone-50 dark:bg-stone-800 border border-gray-100 dark:border-stone-800 rounded-2xl flex items-center justify-between text-[11px] text-gray-500">
               <span>Sending communication to:</span>
               <span className="font-bold text-[#1B4332] dark:text-[#52B788]">{selectedInvestor.name} ({selectedInvestor.email})</span>
             </div>
@@ -1639,7 +1639,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
             <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
               {/* Instructions and Template Download */}
-              <div className="p-4 bg-stone-50 dark:bg-stone-850 border border-gray-150 dark:border-stone-800 rounded-2xl text-xs space-y-2.5">
+              <div className="p-4 bg-stone-50 dark:bg-stone-800 border border-gray-150 dark:border-stone-800 rounded-2xl text-xs space-y-2.5">
                 <p className="font-semibold text-gray-700 dark:text-stone-300">How the CSV upload works:</p>
                 <p className="text-gray-500 dark:text-stone-400 leading-relaxed">
                   Import multiple investors at once by uploading a standard comma-separated values (CSV) file. 
@@ -1709,8 +1709,8 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
 
               {/* Parse preview table */}
               {parsedInvestors.length > 0 && (
-                <div className="border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden shadow-inner bg-stone-50/40 dark:bg-stone-850 p-3 space-y-2">
-                  <div className="flex justify-between items-center border-b border-stone-250 dark:border-stone-850 pb-2">
+                <div className="border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden shadow-inner bg-stone-50/40 dark:bg-stone-800 p-3 space-y-2">
+                  <div className="flex justify-between items-center border-b border-stone-250 dark:border-stone-800 pb-2">
                     <h4 className="font-sans font-bold text-xs text-stone-800 dark:text-stone-200">
                       File Preview ({parsedInvestors.length} records parsed)
                     </h4>
@@ -2000,7 +2000,7 @@ export default function InvestorsView({ user, token, refreshSignal, triggerRefre
                 </div>
 
                 {bulkMessageAttachmentPreview && (
-                  <div className="mt-3 p-3 bg-stone-50 dark:bg-stone-850 rounded-xl border border-stone-200/50 dark:border-stone-800 flex items-center justify-between">
+                  <div className="mt-3 p-3 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-200/50 dark:border-stone-800 flex items-center justify-between">
                     <div className="flex items-center gap-2 overflow-hidden">
                       <FileText className="h-4 w-4 text-[#2D6A4F] shrink-0" />
                       <span className="text-[11px] font-mono text-gray-600 dark:text-stone-300 truncate">{bulkMessageAttachment?.name}</span>
