@@ -146,7 +146,7 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
         );
       default:
         return (
-          <div className="h-9 w-9 rounded-xl bg-gray-50 border border-gray-250 flex items-center justify-center text-gray-600 shrink-0">
+          <div className="h-9 w-9 rounded-xl bg-muted/50 border border-gray-250 flex items-center justify-center text-foreground/80 shrink-0">
             <Bell className="h-4.5 w-4.5" />
           </div>
         );
@@ -159,7 +159,7 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
       <button
         id="btn-bell-toggle"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-500 hover:text-[#1B4332] hover:bg-neutral-100 rounded-xl transition duration-200 cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center border border-gray-150/50"
+        className="relative p-2 text-muted-foreground hover:text-primary hover:bg-neutral-100 rounded-xl transition duration-200 cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center border border-gray-150/50"
         aria-label="View alerts"
       >
         <Bell className="h-5 w-5 pointer-events-none" />
@@ -177,10 +177,10 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
       {isOpen && (
         <div 
           id="notifications-dropdown"
-          className="absolute right-0 mt-3.5 w-[calc(100vw-32px)] max-w-sm sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden origin-top-right animate-fadeIn"
+          className="absolute right-0 mt-3.5 w-[calc(100vw-32px)] max-w-sm sm:w-96 bg-card rounded-2xl shadow-xl border border-border z-50 overflow-hidden origin-top-right animate-fadeIn"
         >
           {/* Header */}
-          <div className="p-4 border-b border-gray-50 bg-[#143427] text-white flex items-center justify-between">
+          <div className="p-4 border-b border-border bg-[#143427] text-white flex items-center justify-between">
             <div>
               <h3 className="font-serif font-bold text-sm tracking-wide">Recent Alerts</h3>
               <p className="text-[10px] text-[#52B788] font-mono font-semibold">
@@ -201,16 +201,16 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
           </div>
 
           {/* List Workspace */}
-          <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
+          <div className="max-h-96 overflow-y-auto divide-y divide-border">
             {loading && notifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-400 text-xs font-mono">
+              <div className="p-8 text-center text-muted-foreground text-xs font-mono">
                 Spinning secure logs...
               </div>
             ) : notifications.length === 0 ? (
-              <div className="p-10 text-center text-gray-400">
+              <div className="p-10 text-center text-muted-foreground">
                 <Bell className="h-8 w-8 text-gray-200 mx-auto mb-3" />
-                <p className="text-xs font-medium text-gray-500">No recent alerts found</p>
-                <p className="text-[10px] font-mono text-gray-400 mt-1">All clean! Check back later.</p>
+                <p className="text-xs font-medium text-muted-foreground">No recent alerts found</p>
+                <p className="text-[10px] font-mono text-muted-foreground mt-1">All clean! Check back later.</p>
               </div>
             ) : (
               notifications.map((alert) => {
@@ -231,14 +231,14 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
 
                     <div className="flex-1 min-w-0 pr-1 pl-1">
                       <div className="flex justify-between items-start gap-1">
-                        <h4 className={`text-[12.5px] font-bold truncate ${!isRead ? 'text-gray-900' : 'text-gray-700'}`}>
+                        <h4 className={`text-[12.5px] font-bold truncate ${!isRead ? 'text-foreground' : 'text-foreground'}`}>
                           {alert.title}
                         </h4>
-                        <span className="text-[9px] font-mono text-gray-400 whitespace-nowrap pt-0.5">
+                        <span className="text-[9px] font-mono text-muted-foreground whitespace-nowrap pt-0.5">
                           {formatDate(alert.date).split(',')[0]}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                         {alert.message}
                       </p>
                       <div className="mt-2 flex items-center justify-between">
@@ -264,7 +264,7 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
           id="alert-detail-modal"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#07140e]/60 backdrop-blur-sm animate-fadeIn"
         >
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100">
+          <div className="bg-card rounded-3xl shadow-xl w-full max-w-lg overflow-hidden border border-border">
             {/* Header */}
             <div className={`p-6 text-white flex justify-between items-start ${
               selectedAlert.type === 'roi_payout' ? 'bg-gradient-to-r from-[#D4A017] to-amber-600' :
@@ -280,7 +280,7 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
                 <p className="text-[11px] opacity-80 mt-1 font-mono">Published {formatDate(selectedAlert.date)}</p>
               </div>
               <button
-                _id="btn-close-modal"
+                id="btn-close-modal"
                 onClick={() => setSelectedAlert(null)}
                 className="p-1 px-1.5 hover:bg-white/10 rounded-xl text-white cursor-pointer transition min-w-[32px] min-h-[32px] flex items-center justify-center"
               >
@@ -292,17 +292,17 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
             <div className="p-6 space-y-6">
               
               {/* Main Message summary card */}
-              <div className="bg-gray-50/60 border border-gray-100 p-4 rounded-2xl">
-                <p className="text-sm text-gray-700 leading-relaxed font-sans">{selectedAlert.message}</p>
+              <div className="bg-muted/40 border border-border p-4 rounded-2xl">
+                <p className="text-sm text-foreground leading-relaxed font-sans">{selectedAlert.message}</p>
               </div>
 
               {/* Grid Metadata details based on type */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 
                 {selectedAlert.meta?.farmName && (
-                  <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100/50">
-                    <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Farm Estate</span>
-                    <p className="text-gray-800 font-bold mt-1 text-sm">{selectedAlert.meta.farmName}</p>
+                  <div className="bg-muted/40 p-3 rounded-xl border border-gray-100/50">
+                    <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Farm Estate</span>
+                    <p className="text-foreground font-bold mt-1 text-sm">{selectedAlert.meta.farmName}</p>
                   </div>
                 )}
 
@@ -321,15 +321,15 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
                         {selectedAlert.meta.roiPercentage}%
                       </p>
                     </div>
-                    <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100/50">
-                      <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Period</span>
-                      <p className="text-gray-800 font-bold mt-1 text-sm">
+                    <div className="bg-muted/40 p-3 rounded-xl border border-gray-100/50">
+                      <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Period</span>
+                      <p className="text-foreground font-bold mt-1 text-sm">
                         {selectedAlert.meta.period} {selectedAlert.meta.year}
                       </p>
                     </div>
-                    <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100/50">
-                      <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Plot Code</span>
-                      <p className="text-gray-800 font-bold mt-1 text-sm">Plot #{selectedAlert.meta.plotNumber}</p>
+                    <div className="bg-muted/40 p-3 rounded-xl border border-gray-100/50">
+                      <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Plot Code</span>
+                      <p className="text-foreground font-bold mt-1 text-sm">Plot #{selectedAlert.meta.plotNumber}</p>
                     </div>
                   </>
                 )}
@@ -340,14 +340,14 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
                       <span className="text-emerald-700/60 font-mono text-[10px] uppercase font-bold tracking-wider">Update Category</span>
                       <p className="text-emerald-800 font-bold mt-1 text-sm capitalize">{selectedAlert.meta.updateType}</p>
                     </div>
-                    <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100/50">
-                      <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Published By</span>
-                      <p className="text-gray-800 font-bold mt-1 text-sm">{selectedAlert.meta.postedByName || 'System'}</p>
+                    <div className="bg-muted/40 p-3 rounded-xl border border-gray-100/50">
+                      <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Published By</span>
+                      <p className="text-foreground font-bold mt-1 text-sm">{selectedAlert.meta.postedByName || 'System'}</p>
                     </div>
                     {selectedAlert.meta.body && (
-                      <div className="col-span-2 bg-gray-50/50 p-3 rounded-xl border border-gray-100/50 max-h-36 overflow-y-auto">
-                        <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Body Preview</span>
-                        <p className="text-gray-700 whitespace-pre-wrap mt-1 leading-relaxed text-xs">{selectedAlert.meta.body}</p>
+                      <div className="col-span-2 bg-muted/40 p-3 rounded-xl border border-gray-100/50 max-h-36 overflow-y-auto">
+                        <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Body Preview</span>
+                        <p className="text-foreground whitespace-pre-wrap mt-1 leading-relaxed text-xs">{selectedAlert.meta.body}</p>
                       </div>
                     )}
                   </>
@@ -358,9 +358,9 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
                       <p className="text-blue-900 font-bold mt-1 text-sm truncate">{selectedAlert.meta.fileName}</p>
                     </div>
                     {selectedAlert.meta.description && (
-                      <div className="col-span-2 bg-gray-50/50 p-3 rounded-xl border border-gray-100/50">
-                        <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Document Summary</span>
-                        <p className="text-gray-700 mt-1 leading-relaxed text-xs">{selectedAlert.meta.description}</p>
+                      <div className="col-span-2 bg-muted/40 p-3 rounded-xl border border-gray-100/50">
+                        <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Document Summary</span>
+                        <p className="text-foreground mt-1 leading-relaxed text-xs">{selectedAlert.meta.description}</p>
                       </div>
                     )}
                   </>
@@ -373,15 +373,15 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
                       <p className="text-teal-800 font-bold mt-1 text-sm">{selectedAlert.meta.senderName}</p>
                     </div>
                     {selectedAlert.meta.category && (
-                      <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100/50">
-                        <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Category</span>
-                        <p className="text-gray-800 font-bold mt-1 text-sm capitalize">{selectedAlert.meta.category}</p>
+                      <div className="bg-muted/40 p-3 rounded-xl border border-gray-100/50">
+                        <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Category</span>
+                        <p className="text-foreground font-bold mt-1 text-sm capitalize">{selectedAlert.meta.category}</p>
                       </div>
                     )}
                     {selectedAlert.meta.body && (
-                      <div className="col-span-2 bg-gray-50/50 p-3 rounded-xl border border-gray-100/50 max-h-48 overflow-y-auto">
-                        <span className="text-gray-400 font-mono text-[10px] uppercase font-bold tracking-wider">Message Content</span>
-                        <p className="text-gray-700 whitespace-pre-wrap mt-1 leading-relaxed text-xs">{selectedAlert.meta.body}</p>
+                      <div className="col-span-2 bg-muted/40 p-3 rounded-xl border border-gray-100/50 max-h-48 overflow-y-auto">
+                        <span className="text-muted-foreground font-mono text-[10px] uppercase font-bold tracking-wider">Message Content</span>
+                        <p className="text-foreground whitespace-pre-wrap mt-1 leading-relaxed text-xs">{selectedAlert.meta.body}</p>
                       </div>
                     )}
                     {selectedAlert.meta.attachmentUrl && (
@@ -407,11 +407,11 @@ export default function NotificationBell({ user, token, refreshSignal }: Notific
               </div>
 
               {/* Bottom interactive action button */}
-              <div className="pt-4 border-t border-gray-50 flex justify-end gap-3">
+              <div className="pt-4 border-t border-border flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setSelectedAlert(null)}
-                  className="px-4 py-2 border border-gray-200 text-gray-500 hover:bg-neutral-50 rounded-xl text-xs font-bold cursor-pointer transition duration-150"
+                  className="px-4 py-2 border border-border text-muted-foreground hover:bg-neutral-50 rounded-xl text-xs font-bold cursor-pointer transition duration-150"
                 >
                   Dismiss
                 </button>

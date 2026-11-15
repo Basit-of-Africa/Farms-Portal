@@ -39,6 +39,8 @@ import {
   Processor
 } from './server/privacy';
 import { normalizeImportRows, farmKeyOf, NormalizedImportRow } from './server/importNormalize';
+import { buildHealthReport, buildOwnershipOverview, landText } from './server/dataHealth';
+import { registerHoldingRoutes, registerEstateMergeRoute } from './server/holdings';
 import {
   User,
   UserRole,
@@ -101,7 +103,8 @@ app.set('json replacer', secretStrippingReplacer);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+  // Camera is allowed for this site only (farm managers can photograph field updates)
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), interest-cohort=()');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
@@ -1283,7 +1286,7 @@ async function initPostgres() {
   }
 
   if (!isPostgresConfigured()) {
-    console.log('💡 DATABASE_URL not set or set to dummy value. Running in local JSON file mode.');
+    console.log('💡 DATABASE_URL not set: PostgreSQL disabled (Firestore and a local cache file are used).');
     usePostgres = false;
     return;
   }
@@ -1601,6 +1604,11 @@ function saveDb() {
   }
 }
 
+/** Escapes text before it is placed in email HTML. */
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+}
+
 // Simulated real-time triggers for notification emails
 async function dispatchEmail(
   to: string,
@@ -1793,11 +1801,11 @@ function canAccessDocument(user: User, doc: Document): boolean {
   if (user.role === UserRole.ADMIN) return true;
   if (user.role === UserRole.FARM_MANAGER) {
     // Farm managers can see general docs for farms they manage, but not financial ones
-    const managesFarm = db.assignments.some(a => a.managerId === user.id && a.farmId === doc.farmId && a.isActive);
+    const managesFarm = db.assignments.some(a => a.managerId === user.id && a.farmId === doc.farmId && a.isActive !== false);
     return managesFarm && doc.category !== DocumentCategory.FINANCIAL;
   }
   if (user.role === UserRole.INVESTOR) {
-    const plotIds = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive).map(ip => ip.plotId);
+    const plotIds = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false).map(ip => ip.plotId);
     const ownsPlotInFarm = db.plots.some(p => p.farmId === doc.farmId && plotIds.includes(p.id));
     if (!ownsPlotInFarm) return false;
     if (doc.visibility === DocumentVisibility.FARM) return true;
@@ -1808,7 +1816,7 @@ function canAccessDocument(user: User, doc: Document): boolean {
 
 /** Investor ids linked to farms the manager is actively assigned to. */
 function investorIdsForManager(managerId: string): Set<string> {
-  const farmIds = new Set(db.assignments.filter(a => a.managerId === managerId && a.isActive).map(a => a.farmId));
+  const farmIds = new Set(db.assignments.filter(a => a.managerId === managerId && a.isActive !== false).map(a => a.farmId));
   const plotIds = new Set(db.plots.filter(p => farmIds.has(p.farmId)).map(p => p.id));
   return new Set(db.investorPlots.filter(ip => plotIds.has(ip.plotId)).map(ip => ip.investorId));
 }
@@ -1872,7 +1880,8 @@ function migrateUserCredentials(): boolean {
 
   const locked = db.users.filter(u => !isPasswordHash(u.password));
   if (locked.length > 0) {
-    console.warn(`🔒 ${locked.length} account(s) have no password and cannot sign in until an admin sets one: ${locked.map(u => u.username).join(', ')}`);
+    // Count only: logs must not contain personal data (names, emails)
+    console.warn(`🔒 ${locked.length} account(s) have no password and cannot sign in until an admin sends login details (Investors → select → Send login details).`);
   }
   return changed;
 }
@@ -2017,13 +2026,13 @@ app.get('/api/admin/system-stats', requireAuth, (req, res) => {
   const totalInvestors = db.users.filter(u => u.role === UserRole.INVESTOR).length;
   const totalManagers = db.users.filter(u => u.role === UserRole.FARM_MANAGER).length;
   const totalFarms = db.farms.length;
-  const totalActiveFarms = db.farms.filter(f => f.isActive).length;
+  const totalActiveFarms = db.farms.filter(f => f.isActive !== false).length;
   const totalPlotsCount = db.plots.length;
   
   // Calculate total investments
   const totalInvestment = db.investorPlots.reduce((sum, p) => sum + p.investmentAmount, 0);
-  const totalActiveInvestmentCount = db.investorPlots.filter(ip => ip.isActive).length;
-  const totalActiveInvestmentAmount = db.investorPlots.filter(ip => ip.isActive).reduce((sum, p) => sum + p.investmentAmount, 0);
+  const totalActiveInvestmentCount = db.investorPlots.filter(ip => ip.isActive !== false).length;
+  const totalActiveInvestmentAmount = db.investorPlots.filter(ip => ip.isActive !== false).reduce((sum, p) => sum + p.investmentAmount, 0);
   
   // Calculate total paid and pending payouts
   let totalPaidPayouts = 0;
@@ -2134,7 +2143,7 @@ app.get('/api/search', requireAuth, (req, res) => {
   } else if (user.role === UserRole.FARM_MANAGER) {
     // Get assigned farm IDs
     const assignedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
 
     // 1. Farms
@@ -2179,7 +2188,7 @@ app.get('/api/search', requireAuth, (req, res) => {
     matchedFinancials = [];
   } else if (user.role === UserRole.INVESTOR) {
     // Get owned plot IDs
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const ownedPlotIds = investorPlotsList.map(ip => ip.plotId);
     
     // Find farms for those owned plots
@@ -2283,7 +2292,7 @@ app.get('/api/farms', requireAuth, (req, res) => {
   if (user.role === UserRole.FARM_MANAGER) {
     // Get farms assigned to this manager
     const assignedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
     const assignedFarms = db.farms.filter(f => assignedFarmIds.includes(f.id));
     return res.json(assignedFarms.map(enrichFarm));
@@ -2390,7 +2399,7 @@ app.get('/api/updates/manager', requireAuth, (req, res) => {
     assignedFarmIds = db.farms.map(f => f.id);
   } else if (user.role === UserRole.FARM_MANAGER) {
     assignedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
   } else {
     return res.status(403).json({ error: 'Access denied' });
@@ -2431,9 +2440,9 @@ app.post('/api/updates/:updateId/comments', requireAuth, async (req, res) => {
   if (user.role === UserRole.ADMIN) {
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
-    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === update.farmId && a.isActive);
+    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === update.farmId && a.isActive !== false);
   } else if (user.role === UserRole.INVESTOR) {
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     const ownsPlotInFarm = db.plots.some(p => p.farmId === update.farmId && plotIds.includes(p.id));
     const isTargeted = !update.targetInvestorIds || update.targetInvestorIds.length === 0 || update.targetInvestorIds.includes(user.id);
@@ -2535,13 +2544,13 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
     accessAllowed = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     assignedAsManager = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
     if (assignedAsManager) {
       accessAllowed = true;
     }
   } else if (user.role === UserRole.INVESTOR) {
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     const ownsPlotInFarm = db.plots.some(p => p.farmId === farmId && plotIds.includes(p.id));
     if (ownsPlotInFarm) {
@@ -2557,7 +2566,7 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
   let plots = db.plots.filter(p => p.farmId === farmId);
   // If role is investor, format/filter plots so they only see details of their owned plots
   if (user.role === UserRole.INVESTOR) {
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     plots = plots.filter(p => plotIds.includes(p.id));
   }
@@ -2594,7 +2603,7 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
     documents = documents.filter(d => d.category !== DocumentCategory.FINANCIAL);
   } else if (user.role === UserRole.INVESTOR) {
     // Investors can see farm-wide, or specific plot documents matching their holdings
-    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const investorPlotsList = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const plotIds = investorPlotsList.map(ip => ip.plotId);
     documents = documents.filter(
       d => d.visibility === DocumentVisibility.FARM || (d.plotId && plotIds.includes(d.plotId))
@@ -2658,6 +2667,7 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
           plotNumbers: [] as string[],
           totalSize: 0,
           sizeUnits: new Set<string>(),
+          land: {} as Record<string, number>,
           totalInvested: 0
         });
       }
@@ -2666,16 +2676,19 @@ app.get('/api/farms/:id', requireAuth, (req, res) => {
       if (p?.plotNumber) entry.plotNumbers.push(p.plotNumber);
       entry.totalSize += Number(p?.sizeHectares) || 0;
       entry.sizeUnits.add(p?.sizeUnit || 'acre');
+      const unit = (p?.sizeUnit || 'acre').toLowerCase();
+      entry.land[unit] = (entry.land[unit] || 0) + (Number(p?.sizeHectares) || 0);
       entry.totalInvested += Number(h.investmentAmount) || 0;
     });
 
     farmInvestors = Array.from(investorMap.values()).map(inv => {
-      const { totalInvested, sizeUnits, ...rest } = inv;
+      const { totalInvested, sizeUnits, land, ...rest } = inv;
       const unitsArr = Array.from(sizeUnits);
       return {
         ...rest,
         totalSize: Number(inv.totalSize.toFixed(2)),
-        sizeUnit: unitsArr.length === 1 ? unitsArr[0] : 'acres/plots',
+        sizeUnit: unitsArr.length === 1 ? unitsArr[0] : 'mixed',
+        landText: landText(land),
         ...(user.role === UserRole.ADMIN ? { totalInvested } : {})
       };
     });
@@ -2760,7 +2773,7 @@ app.delete('/api/farms/:id/map-notes/:noteId', requireAuth, (req, res) => {
   // Allow if admin or if manager is the author or manager is assigned to the farm
   let authorized = user.role === UserRole.ADMIN || note.authorId === user.id;
   if (!authorized && user.role === UserRole.FARM_MANAGER) {
-    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === note.farmId && a.isActive);
+    authorized = db.assignments.some(a => a.managerId === user.id && a.farmId === note.farmId && a.isActive !== false);
   }
 
   if (!authorized) {
@@ -2783,7 +2796,7 @@ app.get('/api/farms/:id/investors', requireAuth, (req, res) => {
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     authorized = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
   }
 
@@ -2796,7 +2809,7 @@ app.get('/api/farms/:id/investors', requireAuth, (req, res) => {
   const farmPlotIds = farmPlots.map(p => p.id);
 
   // Find all active investorPlot relationships mapping to those plots
-  const ownerships = db.investorPlots.filter(ip => farmPlotIds.includes(ip.plotId) && ip.isActive);
+  const ownerships = db.investorPlots.filter(ip => farmPlotIds.includes(ip.plotId) && ip.isActive !== false);
   const investorIds = [...new Set(ownerships.map(ip => ip.investorId))];
 
   // Map to distinct users who are investors
@@ -2833,7 +2846,7 @@ app.post('/api/updates/farm/:id/new', requireAuth, upload.array('photos', 5), as
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     authorized = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
   }
 
@@ -2892,7 +2905,7 @@ app.post('/api/updates/farm/:id/new', requireAuth, upload.array('photos', 5), as
   // EMAIL TRIGGER 1: New farm update posted → email all investors who own plots in that farm (or selected target ones if personalized)
   const investorPlotsOnFarm = db.plots.filter(p => p.farmId === farmId);
   const investorIdsOnFarm = db.investorPlots
-    .filter(ip => ip.isActive && investorPlotsOnFarm.some(p => p.id === ip.plotId))
+    .filter(ip => ip.isActive !== false && investorPlotsOnFarm.some(p => p.id === ip.plotId))
     .map(ip => ip.investorId);
   
   const distinctInvestors = db.users.filter(u => u.role === UserRole.INVESTOR && investorIdsOnFarm.includes(u.id));
@@ -2951,7 +2964,7 @@ app.post('/api/documents/farm/:id/upload', requireAuth, upload.single('file'), a
     authorized = true;
   } else if (user.role === UserRole.FARM_MANAGER) {
     authorized = db.assignments.some(
-      a => a.managerId === user.id && a.farmId === farmId && a.isActive
+      a => a.managerId === user.id && a.farmId === farmId && a.isActive !== false
     );
   }
 
@@ -3007,14 +3020,14 @@ app.post('/api/documents/farm/:id/upload', requireAuth, upload.single('file'), a
   // EMAIL TRIGGER 2: New document uploaded → email affected investors
   let targetedInvestors: User[] = [];
   if (newDoc.visibility === DocumentVisibility.PLOT && newDoc.plotId) {
-    const ownerships = db.investorPlots.filter(ip => ip.plotId === newDoc.plotId && ip.isActive);
+    const ownerships = db.investorPlots.filter(ip => ip.plotId === newDoc.plotId && ip.isActive !== false);
     const investorIds = ownerships.map(ip => ip.investorId);
     targetedInvestors = db.users.filter(u => u.role === UserRole.INVESTOR && investorIds.includes(u.id));
   } else {
     // Farm-wide document: email all investors that hold plots on this farm
     const plotsInFarm = db.plots.filter(p => p.farmId === farmId);
     const plotIds = plotsInFarm.map(p => p.id);
-    const farmInvestorsIds = db.investorPlots.filter(ip => ip.isActive && plotIds.includes(ip.plotId)).map(ip => ip.investorId);
+    const farmInvestorsIds = db.investorPlots.filter(ip => ip.isActive !== false && plotIds.includes(ip.plotId)).map(ip => ip.investorId);
     targetedInvestors = db.users.filter(u => u.role === UserRole.INVESTOR && farmInvestorsIds.includes(u.id));
   }
 
@@ -3129,7 +3142,7 @@ app.get('/api/financials/my', requireAuth, (req, res) => {
     const allPayouts = db.financials.map(fin => {
       const plot = db.plots.find(p => p.id === fin.plotId);
       const farm = plot ? db.farms.find(f => f.id === plot.farmId) : null;
-      const ownerShip = db.investorPlots.find(ip => ip.plotId === fin.plotId && ip.isActive);
+      const ownerShip = db.investorPlots.find(ip => ip.plotId === fin.plotId && ip.isActive !== false);
       const investorName = ownerShip ? (db.users.find(u => u.id === ownerShip.investorId)?.name || 'Unknown') : 'Unassigned';
       return {
         ...fin,
@@ -3144,7 +3157,7 @@ app.get('/api/financials/my', requireAuth, (req, res) => {
 
   if (user.role === UserRole.INVESTOR) {
     // Investor sees only their owned plots' summaries
-    const ownerships = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+    const ownerships = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
     const ownedPlotIds = ownerships.map(ip => ip.plotId);
     
     const summaries = db.financials
@@ -3226,7 +3239,7 @@ app.post('/api/financials/upload', requireAuth, (req, res) => {
 
   // EMAIL TRIGGER 3: Financial record added → email the specific plot investor
   const plot = db.plots.find(p => p.id === plotId);
-  const investorPlotSetting = db.investorPlots.find(ip => ip.plotId === plotId && ip.isActive);
+  const investorPlotSetting = db.investorPlots.find(ip => ip.plotId === plotId && ip.isActive !== false);
   if (investorPlotSetting) {
     const investor = db.users.find(u => u.id === investorPlotSetting.investorId && u.role === UserRole.INVESTOR);
     if (investor) {
@@ -3306,31 +3319,8 @@ app.post('/api/users/create', requireAuth, (req, res) => {
   recordAudit(db, user, 'user.created', { req });
   saveDb();
 
-  // EMAIL TRIGGER 4: New user / investor account created → welcome email
-  dispatchEmail(
-    createdUser.email,
-    'Welcome to Adubiaro Farm Estates Portal',
-    `Hello ${createdUser.name},\n\nYour profile has been provisioned on Adubiaro Estates.\nUsername: ${createdUser.username}\nTemporary Password: ${tempPassword}\n\nPlease click the link to configure your dashboard securely.`,
-    `<h3>Welcome to Adubiaro Estates Private Portal</h3>
-     <p>Dear ${createdUser.name},</p>
-     <p>An administrative account has been securely setup for you on our private client portal.</p>
-     <p>Your roles permissions: <b>${createdUser.role.toUpperCase()}</b></p>
-     <table style="padding: 10px; background-color: #F8F4EC; border-radius: 6px; width: 100%;">
-       <tr><td><b>Authorized Username:</b></td><td>${createdUser.username}</td></tr>
-       <tr><td><b>Temporary Password:</b></td><td><code>${tempPassword}</code></td></tr>
-       <tr><td><b>Sign-Up Email:</b></td><td>${createdUser.email}</td></tr>
-     </table>
-     <p>You are required to log in and change your temporary password immediately upon landing.</p>
-     <p><a href="${process.env.APP_URL || 'https://ai.studio/build'}" style="background-color:#1B4332;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;display:inline-block;">Access Login Dashboard</a></p>`,
-    'Welcome Registration',
-    {
-      senderId: user.id,
-      recipientId: createdUser.id,
-      relatedType: 'welcome',
-      relatedId: createdUser.id,
-      containsCredentials: true
-    }
-  );
+  // Welcome email with login details (same template as bulk imports)
+  sendWelcomeEmail(createdUser, tempPassword, user).catch(err => console.error('Welcome email failed:', err));
 
   // The temporary password is shown once to the admin (it is also emailed)
   res.status(201).json({ ...publicUser(createdUser), temporaryPassword: tempPassword });
@@ -3394,6 +3384,8 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     skippedCount: 0,
     usersCreatedCount: 0,
     existingUsersMatchedCount: 0,
+    holdingsAlreadyPresent: 0,
+    amountsUpdated: 0,
     farmsCreatedCount: 0,
     farmsCreated: [] as string[],
     plotsCreatedCount: 0,
@@ -3403,11 +3395,11 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     errors: [] as { row: number; username?: string; name?: string; error: string }[],
     warnings: [] as { row: number; name?: string; message: string }[],
     globalWarnings,
-    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number }>
+    rows: [] as Array<{ row: number; status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error'; name: string; email: string; username: string; farm: string; size: string; crop: string; amount: number }>
   };
 
   const isManager = currentUser.role === UserRole.FARM_MANAGER;
-  const managedFarmIds = new Set(db.assignments.filter(a => a.managerId === currentUser.id && a.isActive).map(a => a.farmId));
+  const managedFarmIds = new Set(db.assignments.filter(a => a.managerId === currentUser.id && a.isActive !== false).map(a => a.farmId));
 
   const usersToAdd: User[] = [];
   const plotsToAdd: FarmPlot[] = [];
@@ -3419,11 +3411,33 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
   const findFarm = (list: Farm[], r: NormalizedImportRow) =>
     list.find(f => (r.farmId && f.id === r.farmId) || farmKeyOf(f.name) === r.farmKey);
 
+  // Holdings already in the portal, keyed by owner email + farm + size, so a
+  // re-imported spreadsheet adds only what is missing instead of duplicating.
+  // Keyed by email (not account) so holdings on duplicate accounts still count.
+  const holdingKey = (email: string, farmKey: string, size: number, unit: string) =>
+    `${email.toLowerCase()}|${farmKey}|${Math.round((Number(size) || 0) * 10000) / 10000}|${(unit || 'acre').toLowerCase()}`;
+  const existingPool = new Map<string, InvestorPlot[]>();
+  for (const h of db.investorPlots) {
+    if (h.isActive === false) continue;
+    const owner = db.users.find(u => u.id === h.investorId);
+    const plot = db.plots.find(p => p.id === h.plotId);
+    const farm = plot ? db.farms.find(f => f.id === plot.farmId) : undefined;
+    if (!owner || !plot || !farm) continue;
+    const k = holdingKey(owner.email || '', farmKeyOf(farm.name), Number(plot.sizeHectares), plot.sizeUnit || 'acre');
+    existingPool.set(k, [...(existingPool.get(k) || []), h]);
+  }
+  const amountUpdates: Array<() => void> = [];
+  // When several accounts share an email, use the one that already holds plots
+  const pickAccount = (email: string) => {
+    const candidates = db.users.filter(u => (u.email || '').toLowerCase() === email);
+    return candidates.find(u => db.investorPlots.some(h => h.investorId === u.id)) || candidates[0];
+  };
+
   for (const r of rows) {
     const rowNum = r.rowNum;
     r.warnings.forEach(message => results.warnings.push({ row: rowNum, name: r.name, message }));
     const sizeLabel = `${r.size} ${r.sizeUnit}${r.size === 1 ? '' : 's'}`;
-    const report = (status: 'new_user' | 'existing_user' | 'skipped' | 'error') =>
+    const report = (status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error') =>
       results.rows.push({ row: rowNum, status, name: r.name, email: r.email, username: r.username, farm: r.farmName, size: r.farmName ? sizeLabel : '', crop: r.farmName ? r.cropType : '', amount: r.investmentAmount });
 
     if (r.errors.length > 0) {
@@ -3464,7 +3478,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
           state: r.farmState || 'Not specified',
           totalPlots: 0,
           totalHectares: 0,
-          description: r.farmDescription || `Imported farm estate: ${r.farmName}`,
+          description: r.farmDescription || '',
           coverImage: '/farm-placeholder.svg',
           dateEstablished: r.farmDateEstablished || new Date().toISOString().split('T')[0],
           isActive: true
@@ -3483,7 +3497,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     // Find or create the investor account (matched by email, then username)
     let targetUser: User | undefined =
       usersToAdd.find(u => u.email.toLowerCase() === r.email) ||
-      db.users.find(u => u.email.toLowerCase() === r.email) ||
+      pickAccount(r.email) ||
       (!r.usernameGenerated ? usersToAdd.find(u => u.username.toLowerCase() === r.username.toLowerCase()) || db.users.find(u => u.username.toLowerCase() === r.username.toLowerCase()) : undefined);
 
     let isNewUser = false;
@@ -3530,6 +3544,27 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
       usersToAdd.push(targetUser);
       results.usersCreatedCount++;
       isNewUser = true;
+    }
+
+    if (matchedFarm && !isNewUser && !usersToAdd.includes(targetUser)) {
+      const pool = existingPool.get(holdingKey(r.email, farmKeyOf(matchedFarm.name), r.size, r.sizeUnit));
+      if (pool && pool.length > 0) {
+        const existing = pool.shift()!;
+        if (!(Number(existing.investmentAmount) > 0) && r.investmentAmount > 0) {
+          // Holding exists but has no amount: fill it in from the spreadsheet
+          amountUpdates.push(() => {
+            existing.investmentAmount = r.investmentAmount;
+            if (r.startDate) existing.startDate = r.startDate;
+          });
+          results.amountsUpdated++;
+          results.totalInvestment += r.investmentAmount;
+          report('amount_updated');
+        } else {
+          results.holdingsAlreadyPresent++;
+          report('already_present');
+        }
+        continue;
+      }
     }
 
     if (matchedFarm) {
@@ -3598,7 +3633,8 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
   }
 
   // Persist changes if any succeeded
-  if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0) {
+  if (usersToAdd.length > 0 || plotsToAdd.length > 0 || investorPlotsToAdd.length > 0 || farmsToAdd.length > 0 || amountUpdates.length > 0) {
+    amountUpdates.forEach(apply => apply());
     db.farms.push(...farmsToAdd);
     db.users.push(...usersToAdd);
     plotUpdates.forEach(apply => apply());
@@ -3618,7 +3654,7 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
     });
 
     recordAudit(db, currentUser, 'data.import_investors', {
-      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
+      details: `users=${usersToAdd.length}; holdings=${investorPlotsToAdd.length}; amountsUpdated=${amountUpdates.length}; farms=${farmsToAdd.length}; welcomeEmails=${sendWelcomeEmails}`
     });
     saveDb();
 
@@ -4196,7 +4232,7 @@ app.post('/api/admin/users/:id/message', requireAuth, upload.single('attachment'
       textBody,
       `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 12px;">
         <h3 style="color: #1B4332; margin-top: 0;">Message from ${currentUser.name} (${currentUser.role === UserRole.ADMIN ? 'Administrator' : 'Farm Manager'})</h3>
-        <p>${body.replace(/\n/g, '<br/>')}</p>
+        <p>${escapeHtml(String(body)).replace(/\n/g, '<br/>')}</p>
         ${mediaHtml}
         <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
         <p style="font-size: 11px; color: #888;">This email is dispatched from Adubiaro Farm Estates Private Portal.</p>
@@ -4292,7 +4328,7 @@ app.post('/api/admin/broadcast', requireAuth, upload.single('attachment'), async
   const textBody = fileUrl ? `${body}\n\n[Attachment: ${fileName} - ${fileUrl}]` : body;
   const htmlBody = `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 12px;">
     <h3 style="color: #1B4332; margin-top: 0;">Broadcast Message from ${currentUser.name} (${currentUser.role === UserRole.ADMIN ? 'Administrator' : 'Farm Manager'})</h3>
-    <p>${body.replace(/\n/g, '<br/>')}</p>
+    <p>${escapeHtml(String(body)).replace(/\n/g, '<br/>')}</p>
     ${mediaHtml}
     <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
     <p style="font-size: 11px; color: #888;">This email is dispatched from Adubiaro Farm Estates Private Portal.${isMarketing ? ' You receive promotional messages because you opted in. You can withdraw consent at any time under Privacy &amp; Data in the portal.' : ''}</p>
@@ -4489,7 +4525,7 @@ app.post('/api/admin/assignments/create', requireAuth, (req, res) => {
 
   const { managerId, farmId } = req.body;
   
-  const alreadyAssigned = db.assignments.find(a => a.managerId === managerId && a.farmId === farmId && a.isActive);
+  const alreadyAssigned = db.assignments.find(a => a.managerId === managerId && a.farmId === farmId && a.isActive !== false);
   if (alreadyAssigned) {
     return res.status(400).json({ error: 'Manager is already assigned to this farm.' });
   }
@@ -4642,7 +4678,7 @@ app.get('/api/emails/outbox', requireAuth, (req, res) => {
   if (user.role === UserRole.FARM_MANAGER) {
     // Farm Managers should see only messages/emails they shared with their attached investors
     const managedFarmIds = db.assignments
-      .filter(a => a.managerId === user.id && a.isActive)
+      .filter(a => a.managerId === user.id && a.isActive !== false)
       .map(a => a.farmId);
     
     const managedPlotIds = db.plots
@@ -4650,7 +4686,7 @@ app.get('/api/emails/outbox', requireAuth, (req, res) => {
       .map(p => p.id);
     
     const managedInvestorPlots = db.investorPlots
-      .filter(ip => ip.isActive && managedPlotIds.includes(ip.plotId));
+      .filter(ip => ip.isActive !== false && managedPlotIds.includes(ip.plotId));
     
     const attachedInvestorIds = [...new Set(managedInvestorPlots.map(ip => ip.investorId))];
     
@@ -4714,13 +4750,13 @@ app.get('/api/notifications', requireAuth, (req, res) => {
   const notifications: any[] = [];
 
   // 1. Gather investor plots/farms if needed
-  const myInvestorPlots = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive);
+  const myInvestorPlots = db.investorPlots.filter(ip => ip.investorId === user.id && ip.isActive !== false);
   const myPlotIds = myInvestorPlots.map(ip => ip.plotId);
   const myInvestorFarmsList = db.plots.filter(p => myPlotIds.includes(p.id));
   const myInvestorFarmIds = [...new Set(myInvestorFarmsList.map(p => p.farmId))];
 
   // 2. Gather manager farms if needed
-  const myAssignments = db.assignments.filter(a => a.managerId === user.id && a.isActive);
+  const myAssignments = db.assignments.filter(a => a.managerId === user.id && a.isActive !== false);
   const myManagedFarmIds = myAssignments.map(a => a.farmId);
 
   // Gather ROI Payouts
@@ -5277,6 +5313,36 @@ app.post('/api/admin/database/import', requireAuth, async (req, res) => {
   }
 });
 
+// Admin: every farm with its investors, land per unit and amounts invested
+app.get('/api/admin/ownership-overview', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  if (user.role !== UserRole.ADMIN) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  recordAudit(db, user, 'system.ownership_overview', { req });
+  res.json(buildOwnershipOverview(db));
+});
+
+// Admin: add, edit and delete holdings and payouts
+registerHoldingRoutes(app, { getDb: () => db, saveDb, getSettings, requireAuth });
+registerEstateMergeRoute(app, { getDb: () => db, saveDb, getSettings, requireAuth });
+
+// Admin: read-only integrity report (broken links, duplicates, hidden records)
+app.get('/api/admin/data-health', requireAuth, (req, res) => {
+  const user = (req as any).user as User;
+  if (user.role !== UserRole.ADMIN) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  recordAudit(db, user, 'system.data_check', { req });
+  res.json(buildHealthReport(db));
+});
+
+// Health check for uptime monitors / keep-alive pings. Public, tiny, and
+// deliberately touches no database so frequent pings cost nothing.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 app.get('/api/portal/settings', (req, res) => {
   const settings = getSettings();
   res.json({
@@ -5371,8 +5437,20 @@ async function startServer() {
   } else {
     // Production Assets serving
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Caching: hashed build assets never change; the page and service worker
+    // must always be re-checked so a deploy reaches every browser immediately.
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        const rel = path.relative(distPath, filePath).split(path.sep).join('/');
+        if (rel.startsWith('assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (rel === 'index.html' || rel === 'sw.js' || rel === 'manifest.json') {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      }
+    }));
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

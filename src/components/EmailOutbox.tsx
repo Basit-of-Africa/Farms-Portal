@@ -237,48 +237,48 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
     <div id="email-outbox-stage" className="space-y-8 animate-fade-in">
       
       {/* Tab Switcher & Title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-2xl border border-border shadow-sm">
         <div>
-          <h1 className="font-sans font-bold text-2xl text-gray-800 tracking-tight flex items-center gap-2">
-            <span>Simulated Notification Portal</span>
+          <h1 className="font-sans font-bold text-2xl text-foreground tracking-tight flex items-center gap-2">
+            <span>Messages</span>
           </h1>
-          <p className="text-xs text-gray-500 font-mono mt-0.5">Real-time outbox tracking and multiple-recipient administrative broadcasts</p>
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">Emails sent by the portal, and messages to many investors at once</p>
         </div>
 
-        <div className="flex items-center gap-2 border border-gray-100 bg-gray-50/80 p-1 rounded-xl">
+        <div className="flex items-center gap-2 border border-border bg-muted/40 p-1 rounded-xl">
           <button
             onClick={() => setActiveTab('logs')}
             className={`px-4 py-2 text-xs font-bold rounded-lg cursor-pointer transition duration-150 flex items-center gap-1.5 ${
               activeTab === 'logs'
-                ? 'bg-white text-[#1B4332] shadow-sm border border-gray-200/50'
-                : 'text-gray-500 hover:text-gray-800'
+                ? 'bg-card text-primary shadow-sm border border-gray-200/50'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Mail className="h-3.5 w-3.5" />
-            <span>Logs & Streams</span>
+            <span>Sent emails</span>
           </button>
           <button
             onClick={() => setActiveTab('broadcast')}
             className={`px-4 py-2 text-xs font-bold rounded-lg cursor-pointer transition duration-150 flex items-center gap-1.5 ${
               activeTab === 'broadcast'
-                ? 'bg-white text-[#1B4332] shadow-sm border border-gray-200/50'
-                : 'text-gray-500 hover:text-gray-800'
+                ? 'bg-card text-primary shadow-sm border border-gray-200/50'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Send className="h-3.5 w-3.5" />
-            <span>Send Broadcast</span>
+            <span>Send a message</span>
           </button>
         </div>
       </div>
 
       {activeTab === 'broadcast' ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6 animate-fade-in">
-          <div className="border-b border-gray-150 pb-4">
-            <h3 className="font-sans font-bold text-lg text-gray-800 tracking-tight flex items-center gap-2">
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-6 space-y-6 animate-fade-in">
+          <div className="border-b border-border pb-4">
+            <h3 className="font-sans font-bold text-lg text-foreground tracking-tight flex items-center gap-2">
               <Users className="h-5 w-5 text-[#2D6A4F]" />
               <span>Compose Investor Broadcast Notification</span>
             </h3>
-            <p className="text-xs text-gray-500 font-mono mt-0.5">Dispatches emails, files attachments, and creates direct message system notifications for all selected investors in real-time</p>
+            <p className="text-xs text-muted-foreground font-mono mt-0.5">Sends an email (with any attachment) and an in-portal notification to each selected investor</p>
           </div>
 
           {broadcastSuccess && (
@@ -286,7 +286,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
               <div className="font-sans">
                 <p className="font-bold">{broadcastSuccess}</p>
-                <p className="text-[10px] text-emerald-600 mt-0.5 font-mono">Redirecting you to outbox logs to inspect dispatches...</p>
+                <p className="text-[10px] text-emerald-600 mt-0.5 font-mono">Opening the sent emails log…</p>
               </div>
             </div>
           )}
@@ -306,7 +306,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
             {/* Left Column - Recipient Selector (5 cols) */}
             <div className="lg:col-span-5 flex flex-col space-y-4">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-mono font-extrabold text-[#1B4332] uppercase tracking-wider">
+                <label className="text-xs font-mono font-extrabold text-primary uppercase tracking-wider">
                   Select Recipient Investors
                 </label>
                 <span className="text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/50 px-2 py-0.5 rounded-full">
@@ -316,13 +316,13 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
 
               {/* Search Bar */}
               <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search by name or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-xs font-sans placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] bg-gray-50/50"
+                  className="w-full pl-10 pr-4 py-2 border border-border rounded-xl text-xs font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring bg-muted/40"
                 />
               </div>
 
@@ -331,39 +331,39 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                 <button
                   type="button"
                   onClick={handleSelectAllFiltered}
-                  className="flex-1 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 rounded-lg text-[10px] font-bold cursor-pointer transition duration-150"
+                  className="flex-1 py-1.5 px-3 bg-muted/50 hover:bg-muted border border-border text-foreground/80 rounded-lg text-[10px] font-bold cursor-pointer transition duration-150"
                 >
                   Select All Visible
                 </button>
                 <button
                   type="button"
                   onClick={handleDeselectAllFiltered}
-                  className="flex-1 py-1.5 px-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 rounded-lg text-[10px] font-bold cursor-pointer transition duration-150"
+                  className="flex-1 py-1.5 px-3 bg-muted/50 hover:bg-muted border border-border text-foreground/80 rounded-lg text-[10px] font-bold cursor-pointer transition duration-150"
                 >
                   Clear Visible Selection
                 </button>
               </div>
 
               {/* Checklist Container */}
-              <div className="border border-gray-150 rounded-xl overflow-hidden flex flex-col h-[280px] bg-gray-50/30">
+              <div className="border border-border rounded-xl overflow-hidden flex flex-col h-[280px] bg-muted/40">
                 {filteredInvestors.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-gray-400">
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
                     <Users className="h-8 w-8 mb-2 text-gray-300" />
                     <p className="text-xs font-medium">No matching investors found</p>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+                  <div className="flex-1 overflow-y-auto divide-y divide-border">
                     {filteredInvestors.map((investor) => {
                       const isChecked = selectedInvestorIds.includes(investor.id);
                       return (
                         <div
                           key={investor.id}
                           onClick={() => handleToggleInvestor(investor.id)}
-                          className={`flex items-center gap-3 p-3 text-left cursor-pointer transition duration-150 hover:bg-gray-50 ${
+                          className={`flex items-center gap-3 p-3 text-left cursor-pointer transition duration-150 hover:bg-muted/60 ${
                             isChecked ? 'bg-amber-50/10' : ''
                           }`}
                         >
-                          <div className="shrink-0 text-gray-400">
+                          <div className="shrink-0 text-muted-foreground">
                             {isChecked ? (
                               <CheckSquare className="h-4 w-4 text-[#2D6A4F]" />
                             ) : (
@@ -371,8 +371,8 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-gray-800 truncate">{investor.name}</p>
-                            <p className="text-[10px] text-gray-500 font-mono truncate">{investor.email}</p>
+                            <p className="text-xs font-bold text-foreground truncate">{investor.name}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">{investor.email}</p>
                           </div>
                         </div>
                       );
@@ -387,7 +387,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
               
               {/* Subject */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-mono font-extrabold text-[#1B4332] uppercase tracking-wider">
+                <label className="block text-xs font-mono font-extrabold text-primary uppercase tracking-wider">
                   Broadcast Subject
                 </label>
                 <input
@@ -395,14 +395,14 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                   placeholder="e.g. Q2 Crop Yield Report & Payout Announcement"
                   value={broadcastForm.subject}
                   onChange={(e) => setBroadcastForm({ ...broadcastForm, subject: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs font-sans placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F]"
+                  className="w-full px-4 py-2.5 border border-border rounded-xl text-xs font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring"
                   required
                 />
               </div>
 
               {/* Message Body */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-mono font-extrabold text-[#1B4332] uppercase tracking-wider">
+                <label className="block text-xs font-mono font-extrabold text-primary uppercase tracking-wider">
                   Message Body (HTML Supported)
                 </label>
                 <textarea
@@ -410,38 +410,38 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                   rows={6}
                   value={broadcastForm.body}
                   onChange={(e) => setBroadcastForm({ ...broadcastForm, body: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-xs font-sans placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] leading-relaxed resize-none"
+                  className="w-full px-4 py-3 border border-border rounded-xl text-xs font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring leading-relaxed resize-none"
                   required
                 />
               </div>
 
-              <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-stone-300 cursor-pointer">
+              <label className="flex items-start gap-2 text-xs text-foreground/80 dark:text-stone-300 cursor-pointer">
                 <input type="checkbox" className="mt-0.5" checked={isMarketingBroadcast} onChange={(e) => setIsMarketingBroadcast(e.target.checked)} />
                 <span>Promotional / marketing message (only sent to people who opted in to marketing)</span>
               </label>
 
               {/* Attachment Drag & Drop */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-mono font-extrabold text-[#1B4332] uppercase tracking-wider">
+                <label className="block text-xs font-mono font-extrabold text-primary uppercase tracking-wider">
                   File Attachment (Optional Image or Video)
                 </label>
                 
                 {broadcastAttachmentPreview ? (
-                  <div className="relative border border-gray-200 rounded-2xl p-3 bg-gray-50 flex items-center gap-3">
+                  <div className="relative border border-border rounded-2xl p-3 bg-muted/50 flex items-center gap-3">
                     {broadcastAttachment?.type.startsWith('video/') ? (
-                      <div className="h-12 w-12 bg-white rounded-xl flex items-center justify-center text-[#2D6A4F] shrink-0 border">
+                      <div className="h-12 w-12 bg-card rounded-xl flex items-center justify-center text-[#2D6A4F] shrink-0 border">
                         <FileVideo className="h-5 w-5" />
                       </div>
                     ) : (
                       <img
                         src={broadcastAttachmentPreview}
                         alt="Attachment preview"
-                        className="h-12 w-12 object-cover rounded-xl border shrink-0 bg-white"
+                        className="h-12 w-12 object-cover rounded-xl border shrink-0 bg-card"
                       />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-gray-800 truncate">{broadcastAttachment?.name}</p>
-                      <p className="text-[10px] text-gray-500 font-mono">
+                      <p className="text-xs font-bold text-foreground truncate">{broadcastAttachment?.name}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono">
                         {(broadcastAttachment ? (broadcastAttachment.size / (1024 * 1024)).toFixed(2) : '0')} MB
                       </p>
                     </div>
@@ -462,7 +462,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                     className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-colors ${
                       isDragging
                         ? 'border-[#2D6A4F] bg-[#2D6A4F]/5'
-                        : 'border-gray-250 hover:border-[#2D6A4F] bg-gray-50 hover:bg-white'
+                        : 'border-gray-250 hover:border-[#2D6A4F] bg-muted/50 hover:bg-white'
                     }`}
                   >
                     <input
@@ -476,11 +476,11 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                         }
                       }}
                     />
-                    <Paperclip className="h-5 w-5 mx-auto text-gray-400 mb-1.5" />
-                    <p className="text-xs font-bold text-gray-700">
+                    <Paperclip className="h-5 w-5 mx-auto text-muted-foreground mb-1.5" />
+                    <p className="text-xs font-bold text-foreground">
                       Drag & drop an image or video, or browse
                     </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
                       Supports PNG, JPG, WEBP, MP4, MOV up to 50MB
                     </p>
                   </div>
@@ -498,7 +498,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                     handleRemoveAttachment();
                     setActiveTab('logs');
                   }}
-                  className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-bold cursor-pointer hover:bg-gray-50 transition duration-150"
+                  className="px-4 py-2 border border-border text-muted-foreground rounded-xl text-xs font-bold cursor-pointer hover:bg-muted/60 transition duration-150"
                 >
                   Cancel
                 </button>
@@ -526,29 +526,29 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
         </div>
       ) : (
         <>
-          <div className="p-4 bg-amber-50 rounded-xl border border-amber-200/40 text-[11px] leading-relaxed text-amber-800 flex gap-2">
+          <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200/40 dark:border-amber-900/50 text-[11px] leading-relaxed text-amber-800 dark:text-amber-200 flex gap-2">
             <Sparkles className="h-4.5 w-4.5 shrink-0 text-[#D4A017]" />
             <span>
-              <b>System Note:</b> Modifying databases (e.g. creating user, posting updates, uploading docs, filing financials) fires signals that automatically record and dispatch standard HTML/Text emails recorded below. If SMTP configurations are parsed in your `.env` settings, they will try real dispatch routing.
+              <b>How this works:</b> the portal emails investors automatically when accounts are created, updates or documents are posted and payouts are recorded. Every email is listed here. Emails are only actually sent when an email service is set up under Settings → Email.
             </span>
           </div>
 
           {emails.length === 0 ? (
-            <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-gray-200 animate-fade-in">
+            <div className="bg-card p-12 text-center rounded-2xl border border-dashed border-border animate-fade-in">
               <Inbox className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-              <h3 className="font-sans font-bold text-gray-700 text-sm">No recorded emails</h3>
-              <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto font-sans leading-relaxed">Modify database records via the admin or managers hubs to witness dynamic email streams.</p>
+              <h3 className="font-sans font-bold text-foreground text-sm">No recorded emails</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto font-sans leading-relaxed">Modify database records via the admin or managers hubs to witness dynamic email streams.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 h-auto lg:h-[600px] bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fade-in">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 h-auto lg:h-[600px] bg-card rounded-2xl border border-border shadow-sm overflow-hidden animate-fade-in">
               
               {/* List panel - Left 5 cols */}
-              <div className="col-span-1 lg:col-span-5 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col h-[280px] lg:h-full bg-gray-50/50">
-                <div className="p-4 border-b border-gray-100 bg-white">
-                  <h3 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">Outbox Stream ({emails.length})</h3>
+              <div className="col-span-1 lg:col-span-5 border-b lg:border-b-0 lg:border-r border-border flex flex-col h-[280px] lg:h-full bg-muted/40">
+                <div className="p-4 border-b border-border bg-card">
+                  <h3 className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wider">Sent emails ({emails.length})</h3>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+                <div className="flex-1 overflow-y-auto divide-y divide-border">
                   {emails.map((email) => (
                     <div
                       key={email.id}
@@ -561,7 +561,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                     >
                       <div className="flex justify-between items-center gap-2 mb-1.5">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[9px] font-mono font-bold bg-stone-100 text-stone-600 border px-2 py-0.5 rounded-full uppercase truncate">
+                          <span className="text-[9px] font-mono font-bold bg-muted text-foreground/80 border px-2 py-0.5 rounded-full uppercase truncate">
                             {email.category || 'Notification'}
                           </span>
                           {email.deliveryStatus === 'delivered' && (
@@ -577,18 +577,18 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                             </span>
                           )}
                           {(email.deliveryStatus === 'simulated' || !email.deliveryStatus) && (
-                            <span className="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200 uppercase tracking-wide">
+                            <span className="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground border border-border uppercase tracking-wide">
                               sim
                             </span>
                           )}
                         </div>
-                        <span className="text-[9px] text-gray-400 font-mono shrink-0">
+                        <span className="text-[9px] text-muted-foreground font-mono shrink-0">
                           {new Date(email.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
 
-                      <h4 className="text-xs font-bold text-gray-800 truncate mb-1">{email.subject}</h4>
-                      <p className="text-[10.5px] text-gray-500 font-medium truncate font-sans">To: {email.to}</p>
+                      <h4 className="text-xs font-bold text-foreground truncate mb-1">{email.subject}</h4>
+                      <p className="text-[10.5px] text-muted-foreground font-medium truncate font-sans">To: {email.to}</p>
                       <div className="flex items-center gap-1 mt-1 text-[10px]">
                         {email.isRead ? (
                           <span className="inline-flex items-center gap-0.5 text-emerald-600 font-semibold font-sans">
@@ -596,7 +596,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                             <span>Read {email.readAt ? `(${new Date(email.readAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})` : ''}</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-0.5 text-gray-400 font-sans">
+                          <span className="inline-flex items-center gap-0.5 text-muted-foreground font-sans">
                             <Mail className="h-3 w-3 shrink-0" />
                             <span>Unread</span>
                           </span>
@@ -610,13 +610,13 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
               {/* Render Panel - Right 7 cols */}
               <div className="col-span-1 lg:col-span-7 flex flex-col h-[320px] lg:h-full">
                 {selectedEmail ? (
-                  <div className="flex flex-col h-full bg-white divide-y divide-gray-100">
+                  <div className="flex flex-col h-full bg-card divide-y divide-border">
                     {/* Email headers */}
-                    <div className="p-6 space-y-3.5 bg-gray-50/30">
+                    <div className="p-6 space-y-3.5 bg-muted/40">
                       <div className="flex justify-between items-center gap-4">
                         <div className="flex items-center gap-2">
                           <Send className="h-4.5 w-4.5 text-emerald-600" />
-                          <span className="text-xs font-mono text-gray-400">SMTP Header Envelope</span>
+                          <span className="text-xs font-mono text-muted-foreground">Email details</span>
                         </div>
                         
                         {/* Delivery Status Badge */}
@@ -631,16 +631,16 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                             Delivery Failed
                           </span>
                         ) : (
-                          <span className="text-[10px] font-bold font-mono bg-gray-50 text-gray-500 border border-gray-200 px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-                            <HelpCircle className="h-3 w-3 text-gray-400" />
-                            Simulated Outbox
+                          <span className="text-[10px] font-bold font-mono bg-muted/50 text-muted-foreground border border-border px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                            Logged only
                           </span>
                         )}
                       </div>
                       
                       <div>
-                        <h2 className="text-sm font-bold text-gray-800">{selectedEmail.subject}</h2>
-                        <div className="mt-2 text-xs font-mono text-gray-600 space-y-1">
+                        <h2 className="text-sm font-bold text-foreground">{selectedEmail.subject}</h2>
+                        <div className="mt-2 text-xs font-mono text-foreground/80 space-y-1">
                           <div><b>Recipient:</b> {selectedEmail.to}</div>
                           <div><b>Timestamp:</b> {new Date(selectedEmail.sentAt).toLocaleString()}</div>
                           <div>
@@ -651,25 +651,25 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                                 Read at {new Date(selectedEmail.readAt!).toLocaleString()}
                               </span>
                             ) : (
-                              <span className="text-gray-400 font-sans inline-flex items-center gap-1">
+                              <span className="text-muted-foreground font-sans inline-flex items-center gap-1">
                                 <Mail className="h-3.5 w-3.5 text-gray-300" />
                                 Unread (Awaiting investor review)
                               </span>
                             )}
                           </div>
                           {selectedEmail.attachmentUrl && (
-                            <div className="flex items-center gap-1.5 text-[#2D6A4F] font-sans font-bold text-xs pt-1.5 border-t border-gray-100 dark:border-stone-800 mt-1.5">
+                            <div className="flex items-center gap-1.5 text-[#2D6A4F] font-sans font-bold text-xs pt-1.5 border-t border-border dark:border-stone-800 mt-1.5">
                               <Paperclip className="h-3.5 w-3.5" />
                               <span>Attachment:</span>
                               <a 
                                 href={selectedEmail.attachmentUrl} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
-                                className="underline hover:text-[#1B4332] cursor-pointer break-all"
+                                className="underline hover:text-primary cursor-pointer break-all"
                               >
                                 {selectedEmail.attachmentName || 'View Attachment'}
                               </a>
-                              <span className="text-[10px] text-gray-400 font-mono font-normal">
+                              <span className="text-[10px] text-muted-foreground font-mono font-normal">
                                 ({selectedEmail.attachmentType || 'file'})
                               </span>
                             </div>
@@ -683,12 +683,12 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                           <div className="flex items-start gap-2.5">
                             <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
-                              <h4 className="text-xs font-extrabold text-red-800 uppercase tracking-wider font-sans">Email Dispatch Error Details</h4>
-                              <p className="text-[10.5px] text-red-700 leading-normal font-mono break-all bg-white border border-red-100 p-2.5 rounded-lg">{selectedEmail.deliveryError}</p>
+                              <h4 className="text-xs font-extrabold text-red-800 uppercase tracking-wider font-sans">Why the email failed</h4>
+                              <p className="text-[10.5px] text-red-700 leading-normal font-mono break-all bg-card border border-red-100 p-2.5 rounded-lg">{selectedEmail.deliveryError}</p>
                             </div>
                           </div>
                           
-                          <div className="text-[10.5px] text-gray-600 leading-relaxed font-sans pt-1 border-t border-red-100 pl-6 space-y-1.5">
+                          <div className="text-[10.5px] text-foreground/80 leading-relaxed font-sans pt-1 border-t border-red-100 pl-6 space-y-1.5">
                             <strong className="text-red-800">💡 Dynamic Integration Troubleshooting Guide:</strong>
                             <ul className="list-disc pl-4 space-y-1 text-[10px]">
                               <li>
@@ -710,7 +710,7 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
                         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-left">
                           <div className="flex items-center gap-2 text-[10.5px] text-emerald-800 font-medium font-sans">
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                            <span>Real dispatch completed successfully through your configured active provider channel!</span>
+                            <span>Email sent successfully.</span>
                           </div>
                         </div>
                       )}
@@ -718,16 +718,21 @@ export default function EmailOutbox({ token, refreshSignal }: EmailOutboxProps) 
 
                     {/* Simulated email client container */}
                     <div className="flex-1 p-8 overflow-y-auto bg-stone-100/10">
-                      <div className="bg-white p-6 rounded-xl border border-gray-200/60 shadow-sm max-w-xl mx-auto text-left">
-                        <div 
-                          className="email-body-pane prose prose-sm text-xs text-gray-700 leading-relaxed max-w-none"
-                          dangerouslySetInnerHTML={{ __html: selectedEmail.htmlBody || selectedEmail.body }}
-                        />
-                      </div>
+                      {/* Sandboxed frame: email HTML can never run scripts or touch the portal page,
+                          and always renders on white like a real email client */}
+                      <iframe
+                        title={`Email: ${selectedEmail.subject}`}
+                        sandbox=""
+                        className="w-full max-w-xl mx-auto block h-[520px] rounded-xl border border-border bg-white"
+                        srcDoc={`<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2d26;background:#fff;margin:16px}img{max-width:100%}</style></head><body>${
+                          selectedEmail.htmlBody ||
+                          String(selectedEmail.body || '').replace(/[&<>]/g, (c: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string)).replace(/\n/g, '<br>')
+                        }</body></html>`}
+                      />
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400 text-xs font-mono">
+                  <div className="flex items-center justify-center h-full text-muted-foreground text-xs font-mono">
                     Select an email from the simulated outbox stack to review formatting.
                   </div>
                 )}

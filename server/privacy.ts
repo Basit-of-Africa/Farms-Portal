@@ -41,6 +41,7 @@ import {
   FarmMapNote,
   DocumentVisibility
 } from '../src/types';
+import { profileSchema, firstIssue } from '../src/lib/schemas';
 
 export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   controllerName: 'Adubiaro Farms',
@@ -312,14 +313,17 @@ export function registerPrivacyRoutes(app: express.Express, ctx: PrivacyContext)
   app.put('/api/privacy/profile', requireAuth, (req, res) => {
     const db = ctx.getDb();
     const user = (req as any).user as User;
-    const name = str(req.body?.name, 100);
-    const email = str(req.body?.email, 100);
-    const phone = str(req.body?.phone, 30);
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+    const parsed = profileSchema.safeParse({
+      name: req.body?.name ?? user.name,
+      email: req.body?.email ?? user.email,
+      phone: req.body?.phone ?? user.phone ?? ''
+    });
+    if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed) });
+    const { name, email, phone } = parsed.data;
     const changed: string[] = [];
     if (name && name !== user.name) { user.name = name; changed.push('name'); }
     if (email && email !== user.email) { user.email = email; changed.push('email'); }
-    if (typeof req.body?.phone === 'string' && phone !== (user.phone || '')) { user.phone = phone; changed.push('phone'); }
+    if (phone !== (user.phone || '')) { user.phone = phone; changed.push('phone'); }
     if (changed.length) {
       recordAudit(db, user, 'privacy.profile_rectified', { targetType: 'user', targetId: user.id, details: `fields=${changed.join(',')}`, req });
       ctx.saveDb();

@@ -8,8 +8,17 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, X, XCircle } from 'lucide-react';
+import { ColumnDef } from '@tanstack/react-table';
+import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
+import { Label } from './ui/label';
+import { DataTable } from './ui/data-table';
+import { FormError } from './ui/form';
+import { useConfirm } from './ui/confirm';
+import { formatNaira } from '../lib/utils';
 
 interface ImportReviewModalProps {
   records: any[];
@@ -22,16 +31,38 @@ interface ImportReviewModalProps {
   onImported: (results: any) => void;
 }
 
-const naira = (n: number) => `₦${Number(n || 0).toLocaleString()}`;
+interface PreviewRow {
+  row: number;
+  status: 'new_user' | 'existing_user' | 'already_present' | 'amount_updated' | 'skipped' | 'error';
+  name: string;
+  email: string;
+  username: string;
+  farm: string;
+  size: string;
+  crop: string;
+  amount: number;
+  errors: string[];
+  warnings: string[];
+}
+
+const STATUS: Record<PreviewRow['status'], { label: string; variant: 'success' | 'default' | 'muted' | 'destructive' | 'warning' }> = {
+  new_user: { label: 'New account', variant: 'success' },
+  existing_user: { label: 'Add to account', variant: 'default' },
+  already_present: { label: 'Already in portal', variant: 'muted' },
+  amount_updated: { label: 'Amount filled in', variant: 'warning' },
+  skipped: { label: 'Skipped', variant: 'muted' },
+  error: { label: 'Error', variant: 'destructive' }
+};
 
 export default function ImportReviewModal({ records, token, endpoint = '/api/admin/users/bulk-upload', rowOffset = 1, onClose, onImported }: ImportReviewModalProps) {
+  const confirmDialog = useConfirm();
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [sendEmails, setSendEmails] = useState(false);
+  const [onlyIssues, setOnlyIssues] = useState(false);
   const [preview, setPreview] = useState<any | null>(null);
   const [result, setResult] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [onlyIssues, setOnlyIssues] = useState(false);
 
   const run = async (dryRun: boolean) => {
     const res = await fetch(endpoint, {
@@ -53,23 +84,78 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
       .finally(() => setLoading(false));
   }, [skipDuplicates]);
 
-  const issuesByRow = useMemo(() => {
-    const map = new Map<number, { errors: string[]; warnings: string[] }>();
-    for (const e of preview?.errors || []) {
-      const entry = map.get(e.row) || { errors: [], warnings: [] };
-      entry.errors.push(e.error);
-      map.set(e.row, entry);
-    }
-    for (const w of preview?.warnings || []) {
-      const entry = map.get(w.row) || { errors: [], warnings: [] };
-      entry.warnings.push(w.message);
-      map.set(w.row, entry);
-    }
-    return map;
-  }, [preview]);
+  const rows: PreviewRow[] = useMemo(() => {
+    if (!preview) return [];
+    const issues = new Map<number, { errors: string[]; warnings: string[] }>();
+    const get = (row: number) => issues.get(row) || (issues.set(row, { errors: [], warnings: [] }), issues.get(row)!);
+    for (const e of preview.errors || []) get(e.row).errors.push(e.error);
+    for (const w of preview.warnings || []) get(w.row).warnings.push(w.message);
+    return (preview.rows || []).map((r: any) => ({ ...r, row: r.row + rowOffset, errors: issues.get(r.row)?.errors || [], warnings: issues.get(r.row)?.warnings || [] }));
+  }, [preview, rowOffset]);
+
+  const changeCount = (preview?.successCount || 0) + (preview?.amountsUpdated || 0);
+  const issueCount = rows.filter(r => r.errors.length || r.warnings.length).length;
+  const visibleRows = onlyIssues ? rows.filter(r => r.errors.length || r.warnings.length) : rows;
+
+  const columns = useMemo<ColumnDef<PreviewRow>[]>(
+    () => [
+      { accessorKey: 'row', header: 'Line', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() as number}</span> },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ getValue }) => {
+          const s = STATUS[getValue() as PreviewRow['status']];
+          return <Badge variant={s.variant}>{s.label}</Badge>;
+        }
+      },
+      { accessorKey: 'name', header: 'Name' },
+      {
+        accessorKey: 'email',
+        header: 'Email / username',
+        cell: ({ row }) => (
+          <div>
+            <div>{row.original.email}</div>
+            <div className="text-xs text-muted-foreground">{row.original.username}</div>
+          </div>
+        )
+      },
+      { accessorKey: 'farm', header: 'Farm' },
+      { accessorKey: 'size', header: 'Size', cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() as string}</span> },
+      { accessorKey: 'crop', header: 'Crop' },
+      {
+        accessorKey: 'amount',
+        header: 'Amount',
+        cell: ({ getValue }) => <span className="whitespace-nowrap">{(getValue() as number) ? formatNaira(getValue() as number) : '—'}</span>
+      },
+      {
+        id: 'notes',
+        header: 'Notes',
+        enableSorting: false,
+        accessorFn: r => [...r.errors, ...r.warnings].join(' '),
+        cell: ({ row }) => (
+          <div className="min-w-[260px] max-w-[420px] whitespace-normal text-xs space-y-1">
+            {row.original.errors.map(m => (
+              <p key={m} className="text-destructive font-medium">{m}</p>
+            ))}
+            {row.original.warnings.map(m => (
+              <p key={m} className="text-warning">{m}</p>
+            ))}
+          </div>
+        )
+      }
+    ],
+    []
+  );
 
   const confirmImport = async () => {
-    if (preview.failCount > 0 && !window.confirm(`${preview.failCount} row(s) have errors and will not be imported. Continue with the other ${preview.successCount}?`)) return;
+    if (preview.failCount > 0) {
+      const ok = await confirmDialog({
+        title: `Save ${changeCount} change(s) and leave out ${preview.failCount} row(s)?`,
+        description: 'Rows with errors are not imported. You can fix them in the file and import them later.',
+        confirmText: 'Import'
+      });
+      if (!ok) return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -83,28 +169,31 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
     }
   };
 
-  const line = (row: number) => row + rowOffset;
-  const rows = (preview?.rows || []).filter((r: any) => !onlyIssues || issuesByRow.has(r.row));
+  return (
+    <Dialog open onOpenChange={open => !open && onClose()}>
+      <DialogContent className="max-w-6xl p-0 gap-0">
+        <DialogHeader className="p-5 border-b border-border">
+          <DialogTitle id="import-review-title">{result ? 'Import complete' : 'Review import before saving'}</DialogTitle>
+          <DialogDescription>{result ? 'Your data has been saved.' : 'Nothing is saved until you press Import.'}</DialogDescription>
+        </DialogHeader>
 
-  // Rendered at <body> level so animated/transformed parents cannot clip it
-  return createPortal(
-    <div className="fixed inset-0 z-[130] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm">
-      <div role="dialog" aria-modal="true" aria-labelledby="import-review-title" className="bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-100 rounded-3xl w-full max-w-6xl max-h-[94vh] flex flex-col shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-stone-100 dark:border-stone-800">
-          <h2 id="import-review-title" className="font-bold text-lg text-[#1B4332] dark:text-emerald-400">
-            {result ? 'Import complete' : 'Review import before saving'}
-          </h2>
-          <button onClick={onClose} aria-label="Close" className="p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800"><X className="h-5 w-5" /></button>
-        </div>
-
-        <div className="p-5 overflow-y-auto flex-1 space-y-5">
-          {error && <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}
-          {loading && !preview && <p className="text-sm text-stone-500">Checking {records.length} rows…</p>}
+        <div className="p-5 overflow-y-auto flex-1 min-h-0 flex flex-col gap-5">
+          <FormError message={error} />
+          {loading && !preview && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Checking {records.length} rows…
+            </p>
+          )}
 
           {result && (
-            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 text-sm space-y-1">
-              <p className="font-semibold flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Imported {result.successCount} holding(s).</p>
-              <p>{result.usersCreatedCount} new account(s), {result.farmsCreatedCount} new farm(s), {result.plotsCreatedCount} plot(s).</p>
+            <div className="p-4 rounded-2xl bg-accent text-accent-foreground text-sm space-y-1">
+              <p className="font-semibold flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" /> Added {result.successCount} holding(s){result.amountsUpdated ? ` and filled in ${result.amountsUpdated} amount(s)` : ''}.
+              </p>
+              {result.holdingsAlreadyPresent > 0 && <p>{result.holdingsAlreadyPresent} row(s) were already in the portal and were left as they are.</p>}
+              <p>
+                {result.usersCreatedCount} new account(s), {result.farmsCreatedCount} new farm(s), {result.plotsCreatedCount} plot(s).
+              </p>
               <p>
                 {result.welcomeEmailsSent > 0
                   ? `Login details were emailed to ${result.welcomeEmailsSent} new investor(s).`
@@ -115,138 +204,131 @@ export default function ImportReviewModal({ records, token, endpoint = '/api/adm
 
           {preview && !result && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                 {[
                   ['Rows', preview.total],
-                  ['Will import', preview.successCount],
+                  ['New holdings', preview.successCount],
+                  ['Already in portal', preview.holdingsAlreadyPresent ?? 0],
+                  ['Amounts filled in', preview.amountsUpdated ?? 0],
                   ['New accounts', preview.usersCreatedCount],
-                  ['Existing accounts', preview.existingUsersMatchedCount],
-                  ['New farms', preview.farmsCreatedCount],
-                  ['Total invested', naira(preview.totalInvestment)]
+                  ['New farms', preview.farmsCreatedCount]
                 ].map(([label, value]) => (
-                  <div key={label as string} className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/60">
-                    <div className="text-[11px] text-stone-500">{label}</div>
+                  <div key={label as string} className="p-3 rounded-2xl bg-muted">
+                    <div className="text-xs text-muted-foreground">{label}</div>
                     <div className="font-bold text-base">{value}</div>
                   </div>
                 ))}
               </div>
 
               {(preview.failCount > 0 || preview.skippedCount > 0) && (
-                <p className="text-sm">
-                  {preview.failCount > 0 && <span className="text-red-600 font-semibold">{preview.failCount} row(s) have errors and will be left out. </span>}
-                  {preview.skippedCount > 0 && <span className="text-stone-600 dark:text-stone-300">{preview.skippedCount} duplicate row(s) will be skipped.</span>}
+                <p className="text-sm flex flex-wrap gap-x-3">
+                  {preview.failCount > 0 && (
+                    <span className="text-destructive font-semibold flex items-center gap-1">
+                      <XCircle className="h-4 w-4" /> {preview.failCount} row(s) have errors and will be left out.
+                    </span>
+                  )}
+                  {preview.skippedCount > 0 && <span className="text-muted-foreground">{preview.skippedCount} duplicate row(s) will be skipped.</span>}
                 </p>
               )}
 
               {preview.farmsCreated?.length > 0 && (
-                <div className="text-sm">
+                <p className="text-sm">
                   <span className="font-semibold">Farms that will be created: </span>
                   {preview.farmsCreated.join(', ')}
-                </div>
+                </p>
               )}
 
               {preview.globalWarnings?.length > 0 && (
                 <ul className="space-y-1.5">
                   {preview.globalWarnings.map((w: string) => (
-                    <li key={w} className="flex gap-2 text-sm text-amber-800 dark:text-amber-300"><AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />{w}</li>
+                    <li key={w} className="flex gap-2 text-sm text-warning">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+                      {w}
+                    </li>
                   ))}
                 </ul>
               )}
 
-              <div className="flex flex-wrap items-center gap-4 text-sm">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={skipDuplicates} onChange={e => setSkipDuplicates(e.target.checked)} /> Skip exact duplicate rows
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={onlyIssues} onChange={e => setOnlyIssues(e.target.checked)} /> Show only rows with warnings or errors ({issuesByRow.size})
-                </label>
-              </div>
-
-              <div className="overflow-x-auto border border-stone-100 dark:border-stone-800 rounded-xl">
-                <table className="w-full text-xs">
-                  <thead className="bg-stone-50 dark:bg-stone-800/60 text-left text-stone-500">
-                    <tr>
-                      <th className="p-2">Line</th><th className="p-2">Status</th><th className="p-2">Name</th><th className="p-2">Email / username</th>
-                      <th className="p-2">Farm</th><th className="p-2">Size</th><th className="p-2">Crop</th><th className="p-2 text-right">Amount</th><th className="p-2">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-                    {rows.map((r: any) => {
-                      const issues = issuesByRow.get(r.row);
-                      return (
-                        <tr key={r.row} className={r.status === 'error' ? 'bg-red-50/60 dark:bg-red-950/20' : issues?.warnings.length ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}>
-                          <td className="p-2 font-mono">{line(r.row)}</td>
-                          <td className="p-2 whitespace-nowrap">
-                            {r.status === 'error' ? <span className="text-red-600 flex items-center gap-1"><XCircle className="h-3.5 w-3.5" />Error</span>
-                              : r.status === 'skipped' ? <span className="text-stone-500">Skipped</span>
-                              : r.status === 'new_user' ? 'New account' : 'Add to account'}
-                          </td>
-                          <td className="p-2">{r.name}</td>
-                          <td className="p-2"><div>{r.email}</div><div className="text-stone-400">{r.username}</div></td>
-                          <td className="p-2">{r.farm}</td>
-                          <td className="p-2 whitespace-nowrap">{r.size}</td>
-                          <td className="p-2">{r.crop}</td>
-                          <td className="p-2 text-right whitespace-nowrap">{r.amount ? naira(r.amount) : '—'}</td>
-                          <td className="p-2 min-w-[280px] whitespace-normal">
-                            {issues?.errors.map(m => <div key={m} className="text-red-600">{m}</div>)}
-                            {issues?.warnings.map(m => <div key={m} className="text-amber-700 dark:text-amber-300">{m}</div>)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={columns}
+                data={visibleRows}
+                pageSize={50}
+                searchPlaceholder="Search name, email or farm…"
+                rowClassName={r => (r.status === 'error' ? 'bg-destructive/5' : r.warnings.length ? 'bg-warning/5' : undefined)}
+                toolbar={
+                  <div className="flex flex-wrap items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="skip-dupes" checked={skipDuplicates} onCheckedChange={v => setSkipDuplicates(!!v)} />
+                      <Label htmlFor="skip-dupes" className="font-normal cursor-pointer">Skip exact duplicate rows</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="only-issues" checked={onlyIssues} onCheckedChange={v => setOnlyIssues(!!v)} />
+                      <Label htmlFor="only-issues" className="font-normal cursor-pointer">Only rows with warnings or errors ({issueCount})</Label>
+                    </div>
+                  </div>
+                }
+              />
             </>
           )}
         </div>
 
-        {!result && (
-          <div className="p-5 border-t border-stone-100 dark:border-stone-800 space-y-3">
-            <label className="flex items-start gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="mt-1" checked={sendEmails} onChange={e => setSendEmails(e.target.checked)} />
-              <span>
-                Email login details to new investors now. Leave this off to check the imported data first; you can send them later from
-                Investors → select → <b>Send login details</b>.
-              </span>
-            </label>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={confirmImport}
-                disabled={loading || !preview || preview.successCount === 0}
-                className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold bg-[#1B4332] hover:bg-[#2D6A4F] text-white disabled:opacity-50 cursor-pointer"
-              >
-                {loading && preview ? 'Working…' : `Import ${preview?.successCount ?? 0} holding(s)`}
-              </button>
-              <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 cursor-pointer">Cancel</button>
+        <div className="p-5 border-t border-border flex flex-col gap-3">
+          {!result && (
+            <div className="flex items-start gap-3">
+              <Checkbox id="send-emails" checked={sendEmails} onCheckedChange={v => setSendEmails(!!v)} className="mt-0.5" />
+              <Label htmlFor="send-emails" className="font-normal leading-snug cursor-pointer">
+                Email login details to new investors now. Leave this off to check the imported data first; you can send them later from Investors → select →{' '}
+                <b>Send login details</b>.
+              </Label>
             </div>
-          </div>
-        )}
-        {result && (
-          <div className="p-5 border-t border-stone-100 dark:border-stone-800">
-            <button onClick={onClose} className="w-full px-4 py-3 rounded-xl text-sm font-semibold bg-[#1B4332] hover:bg-[#2D6A4F] text-white cursor-pointer">Done</button>
-          </div>
-        )}
-      </div>
-    </div>
-  , document.body);
+          )}
+          <DialogFooter>
+            {result ? (
+              <Button onClick={onClose}>Done</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                <Button onClick={confirmImport} disabled={loading || !preview || changeCount === 0}>
+                  {loading && preview && <Loader2 className="animate-spin" />}
+                  {changeCount === 0 ? 'Nothing to change' : `Save ${changeCount} change(s)`}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
+/**
+ * Hook for existing import flows: `await reviewImport(records)` opens the
+ * review screen and resolves with the import results once the admin
+ * confirms, or with null if they cancel.
+ */
 export function useImportReview(token: string) {
   const [state, setState] = useState<null | { records: any[]; endpoint?: string; rowOffset?: number; resolve: (data: any) => void }>(null);
+  const resultRef = React.useRef<any>(null);
 
   const reviewImport = (records: any[], opts: { endpoint?: string; rowOffset?: number } = {}) =>
-    new Promise<any>(resolve => setState({ records, ...opts, resolve }));
+    new Promise<any>(resolve => {
+      resultRef.current = null;
+      setState({ records, ...opts, resolve });
+    });
 
+  // The result is handed back when the dialog closes, so the caller's refresh
+  // (which may re-render or remount the page) does not dismiss the summary.
   const reviewModal = state ? (
     <ImportReviewModal
       records={state.records}
       token={token}
       endpoint={state.endpoint}
       rowOffset={state.rowOffset}
-      onImported={data => state.resolve(data)}
+      onImported={data => {
+        resultRef.current = data;
+      }}
       onClose={() => {
-        state.resolve(null);
+        state.resolve(resultRef.current);
         setState(null);
       }}
     />

@@ -40,6 +40,8 @@ import DashboardStats from './DashboardStats';
 import CSVDataImporter from './CSVDataImporter';
 import { parseCsvRecords, INVESTOR_IMPORT_CSV_TEMPLATE } from '../utils/csvParser';
 import { useImportReview } from './ImportReviewModal';
+import { toast } from './ui/sonner';
+import { useConfirm } from './ui/confirm';
 
 interface AdminDashboardProps {
   user: User;
@@ -51,6 +53,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ user, token, onSelectFarm, onSelectInvestor, triggerRefreshSignal, refreshSignal }: AdminDashboardProps) {
+  const confirmDialog = useConfirm();
   const { reviewImport, reviewModal } = useImportReview(token);
 
   // Stats
@@ -146,7 +149,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
   const [finStatus, setFinStatus] = useState('pending');
   const [finSuccessMessage, setFinSuccessMessage] = useState<string | null>(null);
 
-  // 5. Upload Document
+  // 5. Upload document
   const [docFarmId, setDocFarmId] = useState('');
   const [docPlotId, setDocPlotId] = useState('');
   const [docTitle, setDocTitle] = useState('');
@@ -165,7 +168,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       const statsRes = await fetch('/api/admin/system-stats', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!statsRes.ok) throw new Error('Unassigned or unauthorized access to stats');
+      if (!statsRes.ok) {
+        const body = await statsRes.json().catch(() => ({}));
+        if (statsRes.status === 401) throw new Error('Your session has expired. Please sign in again.');
+        throw new Error(`${body.error || 'The server could not load the dashboard'} (error ${statsRes.status}). Refresh the page to try again.`);
+      }
       const statsData = await statsRes.json();
       setStats(statsData);
 
@@ -216,7 +223,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   const handleToggleUserActive = async (targetUser: User) => {
     if (targetUser.id === user.id) {
-      alert('You cannot deactivate your own super admin account.');
+      toast.error('You cannot deactivate your own super admin account.');
       return;
     }
 
@@ -237,17 +244,17 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       fetchStatsAndLists();
       if (triggerRefreshSignal) triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message || 'Error updating account status.');
+      toast.error(err.message || 'Error updating account status.');
     }
   };
 
   const handleDeleteUser = async (targetUser: User) => {
     if (targetUser.id === user.id) {
-      alert('You cannot delete your own super admin account.');
+      toast.error('You cannot delete your own super admin account.');
       return;
     }
 
-    if (!window.confirm(`Are you absolutely sure you want to permanently delete user "${targetUser.name}"? This action cannot be undone.`)) {
+    if (!(await confirmDialog({ title: `Delete ${targetUser.name}?`, description: 'This permanently removes the account and cannot be undone. To erase personal data while keeping legally required records, use Privacy & Data instead.', confirmText: 'Delete user', destructive: true }))) {
       return;
     }
 
@@ -267,7 +274,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       fetchStatsAndLists();
       if (triggerRefreshSignal) triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message || 'Error deleting user.');
+      toast.error(err.message || 'Error deleting user.');
     }
   };
 
@@ -437,7 +444,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setNewPassword('');
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -455,7 +462,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       try {
         const { headers, records } = parseCsvRecords(text);
         if (headers.length === 0) {
-          alert('CSV file is empty.');
+          toast.error('CSV file is empty.');
           return;
         }
         
@@ -464,14 +471,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         const hasEmail = headers.some(h => ['email', 'emailaddress'].includes(h));
         
         if (!hasName || !hasEmail) {
-          alert('CSV file must have at least "name" and "email" columns.');
+          toast.error('CSV file must have at least "name" and "email" columns.');
           return;
         }
         
         setParsedInvestors(records);
       } catch (err) {
         console.error(err);
-        alert('Failed to parse CSV file. Ensure it is a valid comma-separated format.');
+        toast.error('Failed to parse CSV file. Ensure it is a valid comma-separated format.');
       }
     };
     reader.readAsText(file);
@@ -479,7 +486,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   const handleBulkUploadInvestors = async () => {
     if (parsedInvestors.length === 0) {
-      alert('No parsed investor records to upload.');
+      toast.error('No parsed investor records to upload.');
       return;
     }
     
@@ -497,7 +504,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         triggerRefreshSignal();
       }
     } catch (err: any) {
-      alert(err.message || 'An error occurred during bulk import.');
+      toast.error(err.message || 'An error occurred during bulk import.');
     } finally {
       setBulkUploading(false);
     }
@@ -598,21 +605,21 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
           const parsed = JSON.parse(text);
           const records = Array.isArray(parsed) ? parsed : (parsed.investors || parsed.records || []);
           if (!Array.isArray(records)) {
-            alert('JSON must be an array of objects or contain a "records"/"investors" list.');
+            toast.error('JSON must be an array of objects or contain a "records"/"investors" list.');
             return;
           }
           setParsedWizardRecords(records);
         } else {
           const { headers, records } = parseCsvRecords(text);
           if (headers.length === 0) {
-            alert('CSV file is empty.');
+            toast.error('CSV file is empty.');
             return;
           }
           setParsedWizardRecords(records);
         }
       } catch (err: any) {
         console.error(err);
-        alert('Failed to parse file. Please verify format.');
+        toast.error('Failed to parse file. Please verify format.');
       }
     };
     reader.readAsText(file);
@@ -620,7 +627,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   const handleWizardSubmit = async () => {
     if (parsedWizardRecords.length === 0) {
-      alert('No parsed records to import.');
+      toast.error('No parsed records to import.');
       return;
     }
 
@@ -638,7 +645,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         triggerRefreshSignal();
       }
     } catch (err: any) {
-      alert(err.message || 'An error occurred during wizard import.');
+      toast.error(err.message || 'An error occurred during wizard import.');
     } finally {
       setWizardUploading(false);
     }
@@ -674,7 +681,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setAllocAmount('');
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -700,7 +707,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setAssignSuccessMessage(`Farm Manager successfuly linked and registered for updates.`);
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -735,7 +742,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setFinNotes('');
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -744,7 +751,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     e.preventDefault();
     setDocSuccessMessage(null);
     if (!docFile) {
-      alert('Attach a valid legal file.');
+      toast.error('Attach a valid legal file.');
       return;
     }
 
@@ -775,14 +782,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       setDocFile(null);
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
   const parseAndSetCoverPhoto = (file: File) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image is customly large. Please select an image under 5MB for optimized storage.");
+      toast.error("Image is customly large. Please select an image under 5MB for optimized storage.");
       return;
     }
     const reader = new FileReader();
@@ -864,7 +871,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
       triggerRefreshSignal();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -882,42 +889,6 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     setFarmSuccessMessage(null);
   };
 
-  // System Db Reset Seed
-  const handleResetDb = async () => {
-    if (!window.confirm('Restore system state to pristine seed values? This deletes custom plots.')) return;
-    try {
-      const res = await fetch('/api/admin/reset-db', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        alert('Prinstine state restored.');
-        triggerRefreshSignal();
-      }
-    } catch (err) {
-      alert('Reset failed.');
-    }
-  };
-
-  // Clean Slate for Production Mode
-  const handleCleanSlate = async () => {
-    if (!window.confirm('Wipe ALL demo data (farms, plots, investments, announcements, documents, and other users) and enter Production Mode? This cannot be undone.')) return;
-    try {
-      const res = await fetch('/api/admin/clean-slate', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        alert('All demo data cleared successfully! Your database is now fresh, clean, and ready for real data.');
-        triggerRefreshSignal();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Clean slate action failed.');
-      }
-    } catch (err) {
-      alert('Action failed.');
-    }
-  };
 
   if (loading) {
     return (
@@ -929,9 +900,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
   if (error) {
     return (
-      <div className="p-6 bg-red-50 border-l-4 border-red-500 rounded-xl">
-        <h3 className="text-sm font-bold text-red-800">Connection Error</h3>
-        <p className="text-xs text-red-700 mt-1">{error}</p>
+      <div role="alert" className="p-6 bg-red-50 dark:bg-red-950/30 border-l-4 border-red-500 rounded-xl flex flex-col gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-red-800 dark:text-red-300">The dashboard could not load</h3>
+          <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
+        </div>
+        <div>
+          <button onClick={fetchStatsAndLists} className="px-4 py-2 rounded-xl bg-[#1B4332] text-white text-sm font-semibold cursor-pointer hover:bg-[#2D6A4F]">Try again</button>
+        </div>
       </div>
     );
   }
@@ -942,17 +918,17 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     return (
       <div className="space-y-8 animate-fade-in">
         {/* Breadcrumb Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-6 rounded-2xl border border-border shadow-premium">
           <div>
             <button 
               onClick={() => setSubView('default')}
-              className="flex items-center gap-1 text-xs font-mono font-bold text-[#2D6A4F] hover:text-[#1B4332] transition cursor-pointer mb-2"
+              className="flex items-center gap-1 text-xs font-mono font-bold text-[#2D6A4F] hover:text-primary transition cursor-pointer mb-2"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Back to Admin Dashboard</span>
             </button>
-            <h1 className="font-serif font-extrabold text-2xl text-[#1B4332] tracking-wide">Investor Directory</h1>
-            <p className="text-xs text-gray-400 font-mono mt-1 font-bold">
+            <h1 className="font-serif font-extrabold text-2xl text-primary tracking-wide">Investor Directory</h1>
+            <p className="text-xs text-muted-foreground font-mono mt-1 font-bold">
               {investorsList.length} registered investors & their active holding portfolios
             </p>
           </div>
@@ -979,15 +955,15 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {investorsList.map((usr) => {
             // Find owned plots
-            const holdings = stats?.investorPlots?.filter((ip: any) => ip.investorId === usr.id && ip.isActive) || [];
+            const holdings = stats?.investorPlots?.filter((ip: any) => ip.investorId === usr.id && ip.isActive !== false) || [];
             const totalInvestedAmount = holdings.reduce((sum: number, ip: any) => sum + ip.investmentAmount, 0);
 
             return (
               <div 
                 key={usr.id} 
-                className={`bg-white rounded-3xl border ${usr.isActive !== false ? 'border-[#2D6A4F]/10' : 'border-red-200/45 bg-red-50/10'} p-6 shadow-premium transition duration-300 hover:shadow-lg`}
+                className={`bg-card rounded-3xl border ${usr.isActive !== false ? 'border-border' : 'border-red-200/45 bg-red-50/10'} p-6 shadow-premium transition duration-300 hover:shadow-lg`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-gray-100 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-border pb-4">
                   {onSelectInvestor ? (
                     <button
                       type="button"
@@ -995,11 +971,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       className="flex items-center gap-3 text-left group/profile cursor-pointer"
                       title={`View ${usr.name}'s portfolio & returns`}
                     >
-                      <div className="h-12 w-12 bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] rounded-full flex items-center justify-center font-bold text-[#1B4332] group-hover/profile:text-white text-sm shrink-0 border border-[#52B788]/20 transition-colors">
+                      <div className="h-12 w-12 bg-[#52B788]/10 group-hover/profile:bg-[#1B4332] rounded-full flex items-center justify-center font-bold text-primary group-hover/profile:text-white text-sm shrink-0 border border-[#52B788]/20 transition-colors">
                         {usr.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
                       </div>
                       <div>
-                        <h3 className="font-serif font-bold text-base text-[#1B4332] group-hover/profile:text-[#2D6A4F] group-hover/profile:underline flex items-center gap-2 transition-colors">
+                        <h3 className="font-serif font-bold text-base text-primary group-hover/profile:text-[#2D6A4F] group-hover/profile:underline flex items-center gap-2 transition-colors">
                           {usr.name}
                           {usr.isActive === false && (
                             <span className="text-[9px] font-mono font-extrabold bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200 uppercase">
@@ -1007,16 +983,16 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             </span>
                           )}
                         </h3>
-                        <p className="text-[11px] text-gray-400 font-mono">@{usr.username} • {usr.id}</p>
+                        <p className="text-[11px] text-muted-foreground font-mono">@{usr.username} • {usr.id}</p>
                       </div>
                     </button>
                   ) : (
                     <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-[#1B4332] text-sm shrink-0 border border-[#52B788]/20">
+                      <div className="h-12 w-12 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-primary text-sm shrink-0 border border-[#52B788]/20">
                         {usr.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
                       </div>
                       <div>
-                        <h3 className="font-serif font-bold text-base text-[#1B4332] flex items-center gap-2">
+                        <h3 className="font-serif font-bold text-base text-primary flex items-center gap-2">
                           {usr.name}
                           {usr.isActive === false && (
                             <span className="text-[9px] font-mono font-extrabold bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200 uppercase">
@@ -1024,7 +1000,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             </span>
                           )}
                         </h3>
-                        <p className="text-[11px] text-gray-400 font-mono">@{usr.username} • {usr.id}</p>
+                        <p className="text-[11px] text-muted-foreground font-mono">@{usr.username} • {usr.id}</p>
                       </div>
                     </div>
                   )}
@@ -1037,7 +1013,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold font-mono rounded-lg border cursor-pointer transition ${
                         usr.isActive !== false
                           ? 'text-emerald-800 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
-                          : 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100'
+                          : 'text-muted-foreground bg-muted/50 border-border hover:bg-muted'
                       } ${usr.id === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                       title={usr.isActive !== false ? 'Deactivate investor' : 'Activate investor'}
                     >
@@ -1048,8 +1024,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         </>
                       ) : (
                         <>
-                          <ToggleLeft className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                          <span className="text-gray-400">INACTIVE</span>
+                          <ToggleLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground">INACTIVE</span>
                         </>
                       )}
                     </button>
@@ -1057,7 +1033,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                     <button
                       onClick={() => handleDeleteUser(usr)}
                       disabled={usr.id === user.id}
-                      className={`p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer ${
+                      className={`p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer ${
                         usr.id === user.id ? 'opacity-30 cursor-not-allowed' : ''
                       }`}
                       title="Permanently delete user"
@@ -1067,14 +1043,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 border-b border-gray-100 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 border-b border-border text-xs">
                   <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 font-bold block">Email Address</span>
-                    <span className="font-medium text-gray-700 block mt-0.5">{usr.email}</span>
+                    <span className="text-[10px] font-mono uppercase text-muted-foreground font-bold block">Email Address</span>
+                    <span className="font-medium text-foreground block mt-0.5">{usr.email}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 font-bold block">Phone Number</span>
-                    <span className="font-medium text-gray-700 block mt-0.5">{usr.phone || 'N/A'}</span>
+                    <span className="text-[10px] font-mono uppercase text-muted-foreground font-bold block">Phone Number</span>
+                    <span className="font-medium text-foreground block mt-0.5">{usr.phone || 'N/A'}</span>
                   </div>
                 </div>
 
@@ -1085,14 +1061,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       <Landmark className="h-3.5 w-3.5 text-amber-500" />
                       <span>Allocated Holdings ({holdings.length})</span>
                     </span>
-                    <span className="text-xs font-mono font-bold text-[#1B4332]">
+                    <span className="text-xs font-mono font-bold text-primary">
                       Total Invested: ₦{totalInvestedAmount.toLocaleString()}
                     </span>
                   </div>
 
                   {holdings.length === 0 ? (
-                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-center">
-                      <p className="text-[11px] text-gray-400 italic">No plots active or allocated to this investor.</p>
+                    <div className="p-4 bg-muted/50 rounded-2xl border border-border text-center">
+                      <p className="text-[11px] text-muted-foreground italic">No plots active or allocated to this investor.</p>
                       <button
                         onClick={() => {
                           setActiveFormTab('plot');
@@ -1103,7 +1079,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             if (el) el.scrollIntoView({ behavior: 'smooth' });
                           }, 100);
                         }}
-                        className="text-[10px] font-mono font-extrabold text-emerald-600 hover:text-[#1B4332] mt-1 hover:underline cursor-pointer"
+                        className="text-[10px] font-mono font-extrabold text-emerald-600 hover:text-primary mt-1 hover:underline cursor-pointer"
                       >
                         + Allocate Plot Record
                       </button>
@@ -1117,15 +1093,15 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         return (
                           <div 
                             key={h.id} 
-                            className="bg-gray-50/50 hover:bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between text-xs transition"
+                            className="bg-muted/40 hover:bg-muted/60 p-3 rounded-xl border border-border flex items-center justify-between text-xs transition"
                           >
                             <div>
-                              <div className="font-bold text-gray-800">Plot {plotDetail?.plotNumber || 'Unspecified'}</div>
-                              <div className="text-[10px] text-gray-400 truncate max-w-[200px]">{farmName}</div>
+                              <div className="font-bold text-foreground">Plot {plotDetail?.plotNumber || 'Unspecified'}</div>
+                              <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">{farmName}</div>
                             </div>
                             <div className="text-right">
-                              <div className="font-mono font-bold text-[#1B4332]">₦{h.investmentAmount?.toLocaleString()}</div>
-                              <div className="text-[9px] font-mono text-gray-400">{h.ownershipPercentage}% Ownership • Ref: {h.contractRef}</div>
+                              <div className="font-mono font-bold text-primary">₦{h.investmentAmount?.toLocaleString()}</div>
+                              <div className="text-[9px] font-mono text-muted-foreground">{h.ownershipPercentage}% Ownership • Ref: {h.contractRef}</div>
                             </div>
                           </div>
                         );
@@ -1147,17 +1123,17 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     return (
       <div className="space-y-8 animate-fade-in">
         {/* Breadcrumb Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-6 rounded-2xl border border-border shadow-premium">
           <div>
             <button 
               onClick={() => setSubView('default')}
-              className="flex items-center gap-1 text-xs font-mono font-bold text-[#2D6A4F] hover:text-[#1B4332] transition cursor-pointer mb-2"
+              className="flex items-center gap-1 text-xs font-mono font-bold text-[#2D6A4F] hover:text-primary transition cursor-pointer mb-2"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Back to Admin Dashboard</span>
             </button>
-            <h1 className="font-serif font-extrabold text-2xl text-[#1B4332] tracking-wide">Farm Managers Directory</h1>
-            <p className="text-xs text-gray-400 font-mono mt-1 font-bold">
+            <h1 className="font-serif font-extrabold text-2xl text-primary tracking-wide">Farm Managers Directory</h1>
+            <p className="text-xs text-muted-foreground font-mono mt-1 font-bold">
               {managersList.length} field supervisors & their active estate supervisor assignments
             </p>
           </div>
@@ -1184,20 +1160,20 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {managersList.map((usr) => {
             // Find manager assignments
-            const managerAssignments = stats?.assignments?.filter((a: any) => a.managerId === usr.id && a.isActive) || [];
+            const managerAssignments = stats?.assignments?.filter((a: any) => a.managerId === usr.id && a.isActive !== false) || [];
 
             return (
               <div 
                 key={usr.id} 
-                className={`bg-white rounded-3xl border ${usr.isActive !== false ? 'border-[#2D6A4F]/10' : 'border-red-200/45 bg-red-50/10'} p-6 shadow-premium transition duration-300 hover:shadow-lg`}
+                className={`bg-card rounded-3xl border ${usr.isActive !== false ? 'border-border' : 'border-red-200/45 bg-red-50/10'} p-6 shadow-premium transition duration-300 hover:shadow-lg`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-gray-100 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-border pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-[#1B4332] text-sm shrink-0 border border-[#52B788]/20">
+                    <div className="h-12 w-12 bg-[#52B788]/10 rounded-full flex items-center justify-center font-bold text-primary text-sm shrink-0 border border-[#52B788]/20">
                       {usr.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
                     </div>
                     <div>
-                      <h3 className="font-serif font-bold text-base text-[#1B4332] flex items-center gap-2">
+                      <h3 className="font-serif font-bold text-base text-primary flex items-center gap-2">
                         {usr.name}
                         {usr.isActive === false && (
                           <span className="text-[9px] font-mono font-extrabold bg-red-100 text-red-800 px-2 py-0.5 rounded-full border border-red-200 uppercase">
@@ -1205,7 +1181,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                           </span>
                         )}
                       </h3>
-                      <p className="text-[11px] text-gray-400 font-mono">@{usr.username} • {usr.id}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">@{usr.username} • {usr.id}</p>
                     </div>
                   </div>
                   
@@ -1217,7 +1193,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold font-mono rounded-lg border cursor-pointer transition ${
                         usr.isActive !== false
                           ? 'text-emerald-800 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
-                          : 'text-gray-500 bg-gray-50 border-gray-200 hover:bg-gray-100'
+                          : 'text-muted-foreground bg-muted/50 border-border hover:bg-muted'
                       } ${usr.id === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                       title={usr.isActive !== false ? 'Deactivate manager' : 'Activate manager'}
                     >
@@ -1228,8 +1204,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         </>
                       ) : (
                         <>
-                          <ToggleLeft className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                          <span className="text-gray-400">INACTIVE</span>
+                          <ToggleLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground">INACTIVE</span>
                         </>
                       )}
                     </button>
@@ -1237,7 +1213,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                     <button
                       onClick={() => handleDeleteUser(usr)}
                       disabled={usr.id === user.id}
-                      className={`p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer ${
+                      className={`p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer ${
                         usr.id === user.id ? 'opacity-30 cursor-not-allowed' : ''
                       }`}
                       title="Permanently delete user"
@@ -1247,14 +1223,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 border-b border-gray-100 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 border-b border-border text-xs">
                   <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 font-bold block">Email Address</span>
-                    <span className="font-medium text-gray-700 block mt-0.5">{usr.email}</span>
+                    <span className="text-[10px] font-mono uppercase text-muted-foreground font-bold block">Email Address</span>
+                    <span className="font-medium text-foreground block mt-0.5">{usr.email}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-mono uppercase text-gray-400 font-bold block">Phone Number</span>
-                    <span className="font-medium text-gray-700 block mt-0.5">{usr.phone || 'N/A'}</span>
+                    <span className="text-[10px] font-mono uppercase text-muted-foreground font-bold block">Phone Number</span>
+                    <span className="font-medium text-foreground block mt-0.5">{usr.phone || 'N/A'}</span>
                   </div>
                 </div>
 
@@ -1268,8 +1244,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
 
                   {managerAssignments.length === 0 ? (
-                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-center">
-                      <p className="text-[11px] text-gray-400 italic">No farm estates currently assigned to this manager.</p>
+                    <div className="p-4 bg-muted/50 rounded-2xl border border-border text-center">
+                      <p className="text-[11px] text-muted-foreground italic">No farm estates currently assigned to this manager.</p>
                       <button
                         onClick={() => {
                           setActiveFormTab('assign');
@@ -1280,7 +1256,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             if (el) el.scrollIntoView({ behavior: 'smooth' });
                           }, 100);
                         }}
-                        className="text-[10px] font-mono font-extrabold text-emerald-600 hover:text-[#1B4332] mt-1 hover:underline cursor-pointer"
+                        className="text-[10px] font-mono font-extrabold text-emerald-600 hover:text-primary mt-1 hover:underline cursor-pointer"
                       >
                         + Assign Farm Estate
                       </button>
@@ -1293,14 +1269,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         return (
                           <div 
                             key={a.id} 
-                            className="bg-gray-50/50 hover:bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between text-xs transition"
+                            className="bg-muted/40 hover:bg-muted/60 p-3 rounded-xl border border-border flex items-center justify-between text-xs transition"
                           >
                             <div>
-                              <div className="font-bold text-gray-800">{farmDetail?.name || 'Adubiaro Estate'}</div>
-                              <div className="text-[10px] text-gray-400">{farmDetail?.location || 'Unknown Location'}</div>
+                              <div className="font-bold text-foreground">{farmDetail?.name || 'Adubiaro Estate'}</div>
+                              <div className="text-[10px] text-muted-foreground">{farmDetail?.location || 'Unknown Location'}</div>
                             </div>
                             <div className="text-right">
-                              <div className="font-mono text-[10px] text-gray-500">Assigned: {new Date(a.assignedDate).toLocaleDateString()}</div>
+                              <div className="font-mono text-[10px] text-muted-foreground">Assigned: {new Date(a.assignedDate).toLocaleDateString()}</div>
                               <div className="text-[9px] font-mono text-emerald-600 font-bold">Active Supervisor</div>
                             </div>
                           </div>
@@ -1321,40 +1297,26 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
     <div id="admin-dashboard-container" className="space-y-8 animate-fade-in">
       {reviewModal}
       {/* Upper header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#2D6A4F]/10 shadow-premium">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-6 rounded-2xl border border-border shadow-sm">
         <div>
-          <h1 className="font-serif font-extrabold text-2xl text-[#1B4332] tracking-wide">Super Admin Hub</h1>
-          <p className="text-xs text-gray-400 font-mono mt-1 font-bold">Full system status & security role controller</p>
+          <h1 className="font-bold text-2xl text-foreground">Admin overview</h1>
+          <p className="text-sm text-muted-foreground mt-1">Investors, farms, payouts and documents at a glance. Database reset and go-live are under System Settings → Danger zone.</p>
         </div>
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={fetchStatsAndLists}
-            className="flex items-center gap-2 px-4 py-2 border border-[#2D6A4F]/15 text-gray-600 rounded-xl text-xs font-mono font-bold cursor-pointer hover:bg-gray-50 transition shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 border border-border text-foreground/80 rounded-xl text-xs font-mono font-bold cursor-pointer hover:bg-muted/60 transition shadow-sm"
           >
             <RefreshCw className="h-3.5 w-3.5 text-[#2D6A4F]" />
-            <span>Reload Portal Status</span>
-          </button>
-          <button
-            onClick={handleResetDb}
-            className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl text-xs font-mono font-bold cursor-pointer shadow-sm transition"
-          >
-            <ShieldAlert className="h-3.5 w-3.5" />
-            <span>Reset Database Seed</span>
-          </button>
-          <button
-            onClick={handleCleanSlate}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-mono font-bold cursor-pointer shadow-sm transition"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Go Live — Wipe Demo Data</span>
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {/* New 'Dashboard Stats' Key Performance Indicators Grid */}
       <div id="admin-dashboard-stats-section" className="space-y-4">
-        <h2 className="font-sans font-extrabold text-xs text-[#2c3e35]/70 uppercase tracking-wider font-mono">
-          System Performance Analytics
+        <h2 className="font-sans font-extrabold text-xs text-muted-foreground uppercase tracking-wider font-mono">
+          Summary
         </h2>
         <DashboardStats stats={stats} loading={loading} />
       </div>
@@ -1363,16 +1325,16 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div 
           onClick={() => setSubView('investors')}
-          className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center justify-between gap-3 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
+          className="bg-card p-4.5 rounded-2xl border border-border shadow-premium flex items-center justify-between gap-3 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
           title="Click to view full Investor Directory"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-[#1B4332] group-hover:bg-[#52B788]/20 transition-all duration-300">
+            <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-primary group-hover:bg-[#52B788]/20 transition-all duration-300">
               <Users className="h-5.5 w-5.5 text-[#2D6A4F] group-hover:scale-105 transition duration-300" />
             </div>
             <div>
-              <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider group-hover:text-[#2D6A4F] transition duration-300">Total Investors</div>
-              <div className="text-xl font-bold text-[#1B4332] font-serif mt-0.5 flex items-center gap-1.5">
+              <div className="text-[9px] font-mono uppercase text-muted-foreground font-bold tracking-wider group-hover:text-[#2D6A4F] transition duration-300">Total Investors</div>
+              <div className="text-xl font-bold text-primary font-serif mt-0.5 flex items-center gap-1.5">
                 <span>{stats?.totalInvestors}</span>
                 <span className="text-[10px] font-mono font-bold text-emerald-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition duration-300">→ VIEW</span>
               </div>
@@ -1382,16 +1344,16 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
         <div 
           onClick={() => setSubView('managers')}
-          className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center justify-between gap-3 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
+          className="bg-card p-4.5 rounded-2xl border border-border shadow-premium flex items-center justify-between gap-3 cursor-pointer hover:border-[#2D6A4F]/35 hover:shadow-lg hover:shadow-[#2D6A4F]/5 transition-all duration-300 transform hover:-translate-y-0.5 group active:scale-95"
           title="Click to view full Farm Managers Directory"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-[#1B4332] group-hover:bg-[#52B788]/20 transition-all duration-300">
+            <div className="p-2.5 bg-[#52B788]/10 rounded-2xl text-primary group-hover:bg-[#52B788]/20 transition-all duration-300">
               <Briefcase className="h-5.5 w-5.5 text-[#2D6A4F] group-hover:scale-105 transition duration-300" />
             </div>
             <div>
-              <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider group-hover:text-[#2D6A4F] transition duration-300">Farm Managers</div>
-              <div className="text-xl font-bold text-[#1B4332] font-serif mt-0.5 flex items-center gap-1.5">
+              <div className="text-[9px] font-mono uppercase text-muted-foreground font-bold tracking-wider group-hover:text-[#2D6A4F] transition duration-300">Farm Managers</div>
+              <div className="text-xl font-bold text-primary font-serif mt-0.5 flex items-center gap-1.5">
                 <span>{stats?.totalManagers}</span>
                 <span className="text-[10px] font-mono font-bold text-emerald-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition duration-300">→ VIEW</span>
               </div>
@@ -1399,69 +1361,68 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
           </div>
         </div>
 
-        <div className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center gap-3">
+        <div className="bg-card p-4.5 rounded-2xl border border-border shadow-premium flex items-center gap-3">
           <div className="p-2.5 bg-amber-500/10 rounded-2xl text-[#D4A017]">
             <Sprout className="h-5.5 w-5.5" />
           </div>
           <div>
-            <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider">Deeded plots</div>
-            <div className="text-lg font-bold text-[#1B4332] font-serif mt-0.5">{stats?.totalPlotsCount} <span className="text-xs text-gray-400">/ {stats?.totalFarms} Farms</span></div>
+            <div className="text-[9px] font-mono uppercase text-muted-foreground font-bold tracking-wider">Allocated plots</div>
+            <div className="text-lg font-bold text-primary font-serif mt-0.5">{stats?.totalPlotsCount} <span className="text-xs text-muted-foreground">/ {stats?.totalFarms} Farms</span></div>
           </div>
         </div>
 
-        <div className="bg-white p-4.5 rounded-2xl border border-[#2D6A4F]/10 shadow-premium flex items-center gap-3">
+        <div className="bg-card p-4.5 rounded-2xl border border-border shadow-premium flex items-center gap-3">
           <div className="p-2.5 bg-[#D4A017]/10 rounded-2xl text-[#D4A017]">
             <DollarSign className="h-5.5 w-5.5" />
           </div>
           <div>
-            <div className="text-[9px] font-mono uppercase text-gray-400 font-bold tracking-wider">Invested Capital</div>
-            <div className="text-lg font-bold text-[#1B4332] font-serif mt-0.5">₦{stats?.totalInvestment?.toLocaleString()}</div>
+            <div className="text-[9px] font-mono uppercase text-muted-foreground font-bold tracking-wider">Invested Capital</div>
+            <div className="text-lg font-bold text-primary font-serif mt-0.5">₦{stats?.totalInvestment?.toLocaleString()}</div>
           </div>
         </div>
       </div>
 
-      {/* Our Managed Estates Section */}
+      {/* Farms Section */}
       <div className="space-y-4">
-        <h2 className="font-sans font-extrabold text-xs text-[#2c3e35]/70 uppercase tracking-wider font-mono">Our Managed Estates</h2>
+        <h2 className="font-sans font-extrabold text-xs text-muted-foreground uppercase tracking-wider font-mono">Farms</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {farms.map(farm => (
               <div 
                 key={farm.id}
                 onClick={() => onSelectFarm(farm.id)}
-                className="bg-white rounded-3xl overflow-hidden border border-[#2D6A4F]/10 shadow-premium hover:shadow-[#2D6A4F]/15 hover:border-[#2D6A4F]/25 transition-all duration-300 cursor-pointer group"
+                className="bg-card rounded-3xl overflow-hidden border border-border shadow-premium hover:shadow-[#2D6A4F]/15 hover:border-[#2D6A4F]/25 transition-all duration-300 cursor-pointer group"
               >
-                <div className="relative h-40 bg-gray-100 overflow-hidden">
+                <div className="relative h-40 bg-muted overflow-hidden">
                   <img src={farm.coverImage} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                   <div className="absolute top-3 left-3 z-10">
                     <button
                       onClick={(e) => handleQuickEditFarm(farm, e)}
-                      className="bg-white/95 hover:bg-white text-[#1B4332] py-1 px-2 rounded-lg shadow-md border border-[#1B4332]/10 cursor-pointer transition flex items-center gap-1 text-[9px] font-bold font-sans"
+                      className="bg-white/95 hover:bg-white text-primary py-1 px-2 rounded-lg shadow-md border border-[#1B4332]/10 cursor-pointer transition flex items-center gap-1 text-[9px] font-bold font-sans"
                     >
                       <Edit className="h-2.5 w-2.5 text-[#2D6A4F]" />
                       <span>Edit Estate</span>
                     </button>
                   </div>
                   <div className="absolute top-3 right-3 bg-[#1B4332] text-white text-[9px] uppercase font-bold font-mono px-3 py-1 rounded-full border border-[#52B788]/20 shadow-sm">
-                    Active Operations
+                    Active
                   </div>
                 </div>
                 <div className="p-6">
-                  <h3 className="font-serif font-bold text-[#1B4332] text-base group-hover:text-[#2D6A4F] transition">{farm.name}</h3>
-                  <p className="text-xs text-gray-500 mt-1 font-sans">{farm.location}, {farm.state}</p>
+                  <h3 className="font-serif font-bold text-primary text-base group-hover:text-[#2D6A4F] transition">{farm.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-1 font-sans">{farm.location}, {farm.state}</p>
                   
-                  <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-gray-400 font-bold">Plots: <b className="text-gray-700">{farm.totalPlots}</b></span>
-                      <span className="text-gray-400 font-bold">Owners: <b className="text-gray-700">{farm.investorCount ?? 0}</b></span>
-                      <span className="text-gray-400 font-bold">Size: <b className="text-gray-700">{farm.totalHectares} acres/plots</b></span>
+                  <div className="mt-4 pt-3 border-t border-border space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                      <span className="text-muted-foreground font-bold">Plots: <b className="text-foreground">{farm.totalPlots}</b></span>
+                      <span className="text-muted-foreground font-bold">Owners: <b className="text-foreground">{farm.investorCount ?? 0}</b></span>
                     </div>
-                    <div className="flex items-center justify-between text-xs font-mono pt-1">
-                      <span className="text-gray-400 font-bold">
-                        Received: <b className="text-emerald-700">₦{(farm.totalInvestmentReceived ?? 0).toLocaleString()}</b>
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+                      <span className="text-muted-foreground font-bold">
+                        Invested: <b className="text-success">₦{(farm.totalInvestmentReceived ?? 0).toLocaleString()}</b>
                       </span>
                       <span className="text-[#2D6A4F] font-bold flex items-center gap-1 group-hover:underline">
-                        Explore Portal <ArrowRight className="h-3 w-3" />
+                        Open farm <ArrowRight className="h-3 w-3" />
                       </span>
                     </div>
                   </div>
@@ -1472,28 +1433,28 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
       </div>
 
       {/* Administrative Controls Tab Area */}
-      <div className="bg-white rounded-3xl border border-[#2D6A4F]/10 shadow-premium overflow-hidden">
+      <div className="bg-card rounded-3xl border border-border shadow-premium overflow-hidden">
           
           {/* Internal tab selector */}
-          <div className="flex border-b border-gray-100 bg-[#FBF9F4]/40 overflow-x-auto">
+          <div className="flex border-b border-border bg-muted/40 overflow-x-auto">
             <button
               onClick={() => setActiveFormTab('wizard')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'wizard' 
                   ? 'border-[#2D6A4F] text-emerald-800 bg-emerald-50/40 font-black' 
-                  : 'border-transparent text-emerald-600/70 hover:text-[#1B4332]'
+                  : 'border-transparent text-emerald-600/70 hover:text-primary'
               }`}
             >
               <Sparkles className="h-3.5 w-3.5 text-emerald-600 animate-pulse" />
-              <span>Unified Setup Wizard</span>
+              <span>Import investors</span>
             </button>
 
             <button
               onClick={() => setActiveFormTab('payout')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'payout' 
-                  ? 'border-[#1B4332] text-[#1B4332] bg-white font-black' 
-                  : 'border-transparent text-gray-400 hover:text-gray-700'
+                  ? 'border-[#1B4332] text-primary bg-card font-black' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <TrendingUp className="h-3.5 w-3.5" />
@@ -1504,8 +1465,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
               onClick={() => setActiveFormTab('document')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'document' 
-                  ? 'border-[#1B4332] text-[#1B4332] bg-white font-black' 
-                  : 'border-transparent text-gray-400 hover:text-gray-700'
+                  ? 'border-[#1B4332] text-primary bg-card font-black' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <FileText className="h-3.5 w-3.5" />
@@ -1517,19 +1478,19 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'user' 
                   ? 'border-[#2D6A4F] text-[#2D6A4F] bg-emerald-50/40 font-black' 
-                  : 'border-transparent text-gray-400 hover:text-[#2D6A4F] hover:border-[#2D6A4F]/30'
+                  : 'border-transparent text-muted-foreground hover:text-[#2D6A4F] hover:border-[#2D6A4F]/30'
               }`}
             >
               <UserPlus className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Register User / Manager</span>
+              <span>Add account</span>
             </button>
 
             <button
               onClick={() => setActiveFormTab('plot')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'plot' 
-                  ? 'border-[#1B4332] text-[#1B4332] bg-white font-black' 
-                  : 'border-transparent text-gray-400 hover:text-gray-700'
+                  ? 'border-[#1B4332] text-primary bg-card font-black' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Sprout className="h-3.5 w-3.5" />
@@ -1540,8 +1501,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
               onClick={() => setActiveFormTab('assign')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'assign' 
-                  ? 'border-[#1B4332] text-[#1B4332] bg-white font-black' 
-                  : 'border-transparent text-gray-400 hover:text-gray-700'
+                  ? 'border-[#1B4332] text-primary bg-card font-black' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Briefcase className="h-3.5 w-3.5" />
@@ -1552,8 +1513,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
               onClick={() => setActiveFormTab('farms')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'farms' 
-                  ? 'border-[#1B4332] text-[#1B4332] bg-white font-black' 
-                  : 'border-transparent text-gray-400 hover:text-gray-700'
+                  ? 'border-[#1B4332] text-primary bg-card font-black' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Layers className="h-3.5 w-3.5" />
@@ -1565,8 +1526,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
               onClick={() => setActiveFormTab('settings')}
               className={`px-4 py-3.5 text-[11px] font-mono font-bold uppercase tracking-wider border-b-2 flex items-center gap-1.5 cursor-pointer transition-all duration-200 shrink-0 ${
                 activeFormTab === 'settings' 
-                  ? 'border-[#1B4332] text-[#1B4332] bg-white font-black' 
-                  : 'border-transparent text-gray-400 hover:text-gray-700'
+                  ? 'border-[#1B4332] text-primary bg-card font-black' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               <Settings className="h-3.5 w-3.5 text-[#2D6A4F]" />
@@ -1584,9 +1545,9 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             {/* PAYOUT FORM */}
             {activeFormTab === 'payout' && (
               <form onSubmit={handleCreateFinancials} className="space-y-4">
-                <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
+                <div className="flex items-center gap-2 mb-4 border-b border-border pb-2">
                   <TrendingUp className="text-[#D4A017] h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Publish Financial Payout Summary</h3>
+                  <h3 className="font-sans font-bold text-sm text-foreground">Publish Financial Payout Summary</h3>
                 </div>
 
                 {finSuccessMessage && (
@@ -1598,11 +1559,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Select plot</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Select plot</label>
                     <select
                       value={finPlotId}
                       onChange={(e) => setFinPlotId(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                     >
                       {systemPlots.map(p => (
                         <option key={p.id} value={p.id}>Plot {p.plotNumber} ({p.cropType})</option>
@@ -1610,11 +1571,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Quarter Period</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Quarter Period</label>
                     <select
                       value={finPeriod}
                       onChange={(e) => setFinPeriod(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                     >
                       <option value="Q1">Q1</option>
                       <option value="Q2">Q2</option>
@@ -1627,17 +1588,17 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Financial year</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Financial year</label>
                     <input
                       type="number"
                       required
                       value={finYear}
                       onChange={(e) => setFinYear(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Audited ROI %</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Audited ROI %</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1645,39 +1606,39 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       placeholder="e.g. 12.5"
                       value={finRoi}
                       onChange={(e) => setFinRoi(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Amount (₦)</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Amount (₦)</label>
                     <input
                       type="number"
                       required
                       placeholder="payout volume"
                       value={finAmount}
                       onChange={(e) => setFinAmount(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400"> payout Date</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground"> payout Date</label>
                     <input
                       type="date"
                       required
                       value={finDate}
                       onChange={(e) => setFinDate(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Payout status</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Payout status</label>
                     <select
                       value={finStatus}
                       onChange={(e) => setFinStatus(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                     >
                       <option value="pending">Pending</option>
                       <option value="paid">Paid</option>
@@ -1688,13 +1649,13 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Audit notes / remarks</label>
+                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Audit notes / remarks</label>
                   <textarea
                     rows={2}
                     placeholder="Provide description..."
                     value={finNotes}
                     onChange={(e) => setFinNotes(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                    className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                   />
                 </div>
 
@@ -1711,9 +1672,9 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             {/* DOCUMENT UPLOAD FORM */}
             {activeFormTab === 'document' && (
               <form onSubmit={handleUploadDocument} className="space-y-4">
-                <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
-                  <FileText className="text-[#1B4332] h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Secure Document Dispatcher</h3>
+                <div className="flex items-center gap-2 mb-4 border-b border-border pb-2">
+                  <FileText className="text-primary h-4 w-4" />
+                  <h3 className="font-sans font-bold text-sm text-foreground">Upload a document</h3>
                 </div>
 
                 {docSuccessMessage && (
@@ -1725,11 +1686,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Target farm</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Target farm</label>
                     <select
                       value={docFarmId}
                       onChange={(e) => handleDocFarmChange(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                     >
                       {farms.map(f => (
                         <option key={f.id} value={f.id}>{f.name}</option>
@@ -1738,41 +1699,41 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Document title</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Document title</label>
                     <input
                       type="text"
                       required
                       placeholder="e.g. Deed of Custom Plot Land"
                       value={docTitle}
                       onChange={(e) => setDocTitle(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Document category</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Document category</label>
                     <select
                       value={docCategory}
                       onChange={(e) => setDocCategory(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     >
                       <option value="contract">Contract (Deed)</option>
                       <option value="certificate">Certificate</option>
                       <option value="report">Operational Report</option>
                       <option value="financial">Financial Report</option>
-                      <option value="legal">Legal clearance</option>
+                      <option value="legal">Legal document</option>
                       <option value="other">Other / Support</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Visibility policy</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Visibility policy</label>
                     <select
                       value={docVisibility}
                       onChange={(e) => setDocVisibility(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     >
                       <option value="farm">Farm (Visible to ALL plot owners on farm)</option>
                       <option value="plot">Plot (Visible ONLY to a single plot holder)</option>
@@ -1782,11 +1743,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 {docVisibility === 'plot' && (
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Target Specific Plot</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Target Specific Plot</label>
                     <select
                       value={docPlotId}
                       onChange={(e) => setDocPlotId(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                     >
                       {systemPlots.map(p => (
                         <option key={p.id} value={p.id}>Plot {p.plotNumber} ({p.cropType})</option>
@@ -1796,24 +1757,24 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 )}
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Attachment file</label>
+                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Attachment file</label>
                   <input
                     type="file"
                     required
                     onChange={(e) => setDocFile(e.target.files?.[0] || null)}
-                    className="w-full text-xs border border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 focus:outline-none"
+                    className="w-full text-xs border border-dashed border-border rounded-lg p-4 bg-muted/50 focus:outline-none"
                   />
-                  <p className="text-[10px] text-gray-400 mt-1 font-mono">Supports real docs over local fallback securely</p>
+                  <p className="text-[10px] text-muted-foreground mt-1 font-mono">Supports real docs over local fallback securely</p>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Document Description</label>
+                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Document Description</label>
                   <textarea
                     rows={2}
                     placeholder="Provide overview of contents..."
                     value={docDescription}
                     onChange={(e) => setDocDescription(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                    className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                   />
                 </div>
 
@@ -1830,14 +1791,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             {/* CREATE USER USER_PLUS FORM & BULK CSV IMPORT */}
             {activeFormTab === 'user' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-4">
+                <div className="flex items-center justify-between border-b border-border pb-2 mb-4">
                   <div className="flex items-center gap-2">
                     <UserPlus className="text-emerald-700 h-4 w-4" />
-                    <h3 className="font-sans font-bold text-sm text-gray-800">Provision Investor / Staff Accounts</h3>
+                    <h3 className="font-sans font-bold text-sm text-foreground">Create investor or staff accounts</h3>
                   </div>
                   
                   {/* Mode Toggles */}
-                  <div className="flex bg-stone-100 rounded-lg p-0.5 text-xs font-mono border border-stone-200">
+                  <div className="flex bg-muted rounded-lg p-0.5 text-xs font-mono border border-border">
                     <button
                       type="button"
                       onClick={() => {
@@ -1846,8 +1807,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       }}
                       className={`px-3 py-1 rounded-md transition duration-200 cursor-pointer ${
                         userCreateMode === 'single' 
-                          ? 'bg-white text-[#1B4332] font-bold shadow-sm' 
-                          : 'text-stone-500 hover:text-stone-800'
+                          ? 'bg-card text-primary font-bold shadow-sm' 
+                          : 'text-muted-foreground hover:text-stone-800'
                       }`}
                     >
                       Single Account
@@ -1860,8 +1821,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       }}
                       className={`px-3 py-1 rounded-md transition duration-200 cursor-pointer ${
                         userCreateMode === 'bulk' 
-                          ? 'bg-white text-[#1B4332] font-bold shadow-sm' 
-                          : 'text-stone-500 hover:text-stone-800'
+                          ? 'bg-card text-primary font-bold shadow-sm' 
+                          : 'text-muted-foreground hover:text-stone-800'
                       }`}
                     >
                       Bulk Import (CSV)
@@ -1880,63 +1841,63 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Full Account Name</label>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Full Account Name</label>
                         <input
                           type="text"
                           required
                           placeholder="e.g. Olumide Benson"
                           value={newName}
                           onChange={(e) => setNewName(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                          className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Primary Username</label>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Primary Username</label>
                         <input
                           type="text"
                           required
                           placeholder="e.g. mbenson"
                           value={newUsername}
                           onChange={(e) => setNewUsername(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                          className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Email Address</label>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Email Address</label>
                         <input
                           type="email"
                           required
                           placeholder="benson@email.com"
                           value={newEmail}
                           onChange={(e) => setNewEmail(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                          className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Primary Telephone</label>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Primary Telephone</label>
                         <input
                           type="tel"
                           required
                           placeholder="+234..."
                           value={newPhone}
                           onChange={(e) => setNewPhone(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                          className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">System Permission Role</label>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">System Permission Role</label>
                         <select
                           value={newRole}
                           onChange={(e) => setNewRole(e.target.value)}
-                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                          className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                         >
                           <option value="investor">Investor (Read-Only Portfolio Client)</option>
                           <option value="farm_manager">Farm Manager (Updates & Documents Supervisor)</option>
@@ -1945,7 +1906,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       </div>
 
                       <div>
-                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Account Access Password (Defined by Admin)</label>
+                        <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Account Access Password (Defined by Admin)</label>
                         <div className="relative">
                           <input
                             type={showPassword ? 'text' : 'password'}
@@ -1953,12 +1914,12 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             placeholder="e.g. FarmManager2026!"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full text-xs border border-gray-200 rounded-lg p-2.5 pr-10 bg-gray-50 focus:outline-[#1B4332]"
+                            className="w-full text-xs border border-border rounded-lg p-2.5 pr-10 bg-muted/50 focus:outline-[#1B4332]"
                           />
                           <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gray-600 focus:outline-none p-1 cursor-pointer"
                             title={showPassword ? 'Hide password' : 'Show password'}
                           >
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1991,21 +1952,21 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         if (file && file.name.endsWith('.csv')) {
                           handleCsvSelect(file);
                         } else {
-                          alert('Please drop a valid CSV file.');
+                          toast.error('Please drop a valid CSV file.');
                         }
                       }}
                       className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-all duration-300 cursor-pointer ${
                         isDraggingCsv 
                           ? 'border-[#2D6A4F] bg-emerald-50/40' 
-                          : 'border-stone-200 bg-stone-50 hover:bg-stone-100/50'
+                          : 'border-border bg-muted/50 hover:bg-stone-100/50'
                       }`}
                       onClick={() => {
                         const input = document.getElementById('bulk-csv-input');
                         if (input) input.click();
                       }}
                     >
-                      <UploadCloud className={`h-10 w-10 mb-2 transition-transform duration-300 ${isDraggingCsv ? 'scale-110 text-[#2D6A4F]' : 'text-[#1B4332]'}`} />
-                      <p className="text-xs text-stone-700 font-medium text-center">
+                      <UploadCloud className={`h-10 w-10 mb-2 transition-transform duration-300 ${isDraggingCsv ? 'scale-110 text-[#2D6A4F]' : 'text-primary'}`} />
+                      <p className="text-xs text-foreground/80 font-medium text-center">
                         Drag & Drop investor CSV file here, or{' '}
                         <span className="text-[#2D6A4F] hover:underline font-bold cursor-pointer">
                           browse files
@@ -2021,8 +1982,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         }}
                         className="hidden"
                       />
-                      <p className="text-[10px] text-stone-400 mt-1 font-mono">
-                        Requires columns: <span className="text-stone-600 font-bold">name, email</span> (usernames are created from emails if blank; you review everything before it is saved)
+                      <p className="text-[10px] text-muted-foreground mt-1 font-mono">
+                        Requires columns: <span className="text-foreground/80 font-bold">name, email</span> (usernames are created from emails if blank; you review everything before it is saved)
                       </p>
                     </div>
 
@@ -2031,17 +1992,17 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       <button
                         type="button"
                         onClick={handleDownloadSampleCsv}
-                        className="text-[10px] font-mono text-[#2D6A4F] hover:text-[#1B4332] flex items-center gap-1 bg-[#52B788]/10 hover:bg-[#52B788]/20 px-2.5 py-1.5 rounded-md transition duration-200 cursor-pointer"
+                        className="text-[10px] font-mono text-[#2D6A4F] hover:text-primary flex items-center gap-1 bg-[#52B788]/10 hover:bg-[#52B788]/20 px-2.5 py-1.5 rounded-md transition duration-200 cursor-pointer"
                       >
                         <FileText className="h-3.5 w-3.5" />
-                        Download Import Template (CSV)
+                        Download template (CSV)
                       </button>
                     </div>
 
                     {/* Parsed List Preview */}
                     {parsedInvestors.length > 0 && (
-                      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3 shadow-inner">
-                        <div className="flex justify-between items-center border-b border-stone-100 pb-2">
+                      <div className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-inner">
+                        <div className="flex justify-between items-center border-b border-border pb-2">
                           <h4 className="font-sans font-bold text-xs text-stone-800">
                             Parsed File Preview ({parsedInvestors.length} records ready)
                           </h4>
@@ -2058,10 +2019,10 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                           </button>
                         </div>
 
-                        <div className="overflow-x-auto max-h-[160px] overflow-y-auto border border-stone-100 rounded-lg">
+                        <div className="overflow-x-auto max-h-[160px] overflow-y-auto border border-border rounded-lg">
                           <table className="w-full text-left border-collapse">
                             <thead>
-                              <tr className="bg-stone-50 border-b border-stone-100 text-[10px] uppercase font-mono text-stone-500">
+                              <tr className="bg-muted/50 border-b border-border text-[10px] uppercase font-mono text-muted-foreground">
                                 <th className="p-2">Row</th>
                                 <th className="p-2">Username</th>
                                 <th className="p-2">Full Name</th>
@@ -2073,13 +2034,13 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             </thead>
                             <tbody>
                               {parsedInvestors.slice(0, 10).map((p: any, idx) => (
-                                <tr key={idx} className="border-b border-stone-50 text-xs text-stone-600 hover:bg-stone-50/50">
-                                  <td className="p-2 font-mono text-stone-400">{idx + 1}</td>
-                                  <td className="p-2 font-bold font-mono text-[#1B4332]">{p.username}</td>
+                                <tr key={idx} className="border-b border-stone-50 text-xs text-foreground/80 hover:bg-stone-50/50">
+                                  <td className="p-2 font-mono text-muted-foreground">{idx + 1}</td>
+                                  <td className="p-2 font-bold font-mono text-primary">{p.username}</td>
                                   <td className="p-2 font-medium">{p.name}</td>
-                                  <td className="p-2 text-stone-500 font-mono">{p.email}</td>
-                                  <td className="p-2 text-stone-600 font-mono">{p.farmEstate || p.farmLocation || '-'}</td>
-                                  <td className="p-2 text-stone-500 font-mono">
+                                  <td className="p-2 text-muted-foreground font-mono">{p.email}</td>
+                                  <td className="p-2 text-foreground/80 font-mono">{p.farmEstate || p.farmLocation || '-'}</td>
+                                  <td className="p-2 text-muted-foreground font-mono">
                                     {p.plotNumber ? p.plotNumber : (p.farmEstate || p.farmLocation ? 'Auto-assigned' : '-')}
                                   </td>
                                   <td className="p-2 text-emerald-700 font-mono font-bold">
@@ -2092,7 +2053,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             </tbody>
                           </table>
                           {parsedInvestors.length > 10 && (
-                            <p className="p-2 bg-stone-50/50 text-[10px] text-center text-stone-400 italic font-mono border-t border-stone-100">
+                            <p className="p-2 bg-stone-50/50 text-[10px] text-center text-muted-foreground italic font-mono border-t border-border">
                               Showing first 10 of {parsedInvestors.length} records.
                             </p>
                           )}
@@ -2121,8 +2082,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                     {/* Bulk results report block */}
                     {bulkResults && (
-                      <div className="border rounded-xl p-4 space-y-3 bg-white shadow-sm border-stone-200 animate-fade-in">
-                        <div className="flex items-center gap-2 border-b border-stone-100 pb-2">
+                      <div className="border rounded-xl p-4 space-y-3 bg-card shadow-sm border-border animate-fade-in">
+                        <div className="flex items-center gap-2 border-b border-border pb-2">
                           <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                           <h4 className="font-sans font-bold text-sm text-stone-800">
                             Bulk Import Complete
@@ -2138,8 +2099,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             <p className="text-[10px] text-rose-500 font-mono uppercase font-bold">Warnings</p>
                             <p className="text-xl font-mono font-bold text-rose-800">{bulkResults.failCount}</p>
                           </div>
-                          <div className="bg-stone-50 p-2.5 rounded-lg border border-stone-200">
-                            <p className="text-[10px] text-stone-500 font-mono uppercase font-bold">Total Scanned</p>
+                          <div className="bg-muted/50 p-2.5 rounded-lg border border-border">
+                            <p className="text-[10px] text-muted-foreground font-mono uppercase font-bold">Total Scanned</p>
                             <p className="text-xl font-mono font-bold text-stone-800">{bulkResults.total}</p>
                           </div>
                         </div>
@@ -2147,9 +2108,9 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         {bulkResults.errors && bulkResults.errors.length > 0 && (
                           <div className="space-y-2">
                             <p className="text-[10px] uppercase font-mono font-bold text-rose-600">Import Warnings & Skips</p>
-                            <div className="max-h-[140px] overflow-y-auto border border-stone-100 rounded-lg p-2.5 space-y-1.5 bg-stone-50 shadow-inner">
+                            <div className="max-h-[140px] overflow-y-auto border border-border rounded-lg p-2.5 space-y-1.5 bg-muted/50 shadow-inner">
                               {bulkResults.errors.map((err: any, idx: number) => (
-                                <div key={idx} className="text-xs text-stone-600 flex items-start gap-1.5 font-mono">
+                                <div key={idx} className="text-xs text-foreground/80 flex items-start gap-1.5 font-mono">
                                   <span className="text-rose-600 font-bold">[Row {err.row}]</span>
                                   <span>
                                     {err.username ? `(${err.username}) ` : ''}
@@ -2176,9 +2137,9 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             {/* ALLOCATE PLOT FORM */}
             {activeFormTab === 'plot' && (
               <form onSubmit={handleAllocatePlot} className="space-y-4">
-                <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
+                <div className="flex items-center gap-2 mb-4 border-b border-border pb-2">
                   <Sprout className="text-amber-600 h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Add Plot & Link to Investor</h3>
+                  <h3 className="font-sans font-bold text-sm text-foreground">Add plot & Link to Investor</h3>
                 </div>
 
                 {plotSuccessMessage && (
@@ -2190,11 +2151,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Select estate farm</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Select estate farm</label>
                     <select
                       value={allocFarmId}
                       onChange={(e) => setAllocFarmId(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     >
                       {farms.map(f => (
                         <option key={f.id} value={f.id}>{f.name}</option>
@@ -2203,21 +2164,21 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Plot number catalog</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Plot number catalog</label>
                     <input
                       type="text"
                       required
                       placeholder="e.g. C-04"
                       value={allocPlotNumber}
                       onChange={(e) => setAllocPlotNumber(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Plot size & unit</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Plot size & unit</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -2226,12 +2187,12 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         placeholder="e.g. 1.8"
                         value={allocSize}
                         onChange={(e) => setAllocSize(e.target.value)}
-                        className="flex-1 text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332]"
+                        className="flex-1 text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332]"
                       />
                       <select
                         value={allocSizeUnit}
                         onChange={(e) => setAllocSizeUnit(e.target.value as 'acre' | 'plot')}
-                        className="w-28 text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 focus:outline-[#1B4332] cursor-pointer font-semibold text-gray-700"
+                        className="w-28 text-xs border border-border rounded-lg p-2.5 bg-muted/50 focus:outline-[#1B4332] cursor-pointer font-semibold text-foreground"
                       >
                         <option value="acre">acre</option>
                         <option value="plot">plot</option>
@@ -2240,12 +2201,12 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Crop Type Cultivar</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Crop Type Cultivar</label>
                     {sysSettings?.allowedCrops && sysSettings.allowedCrops.length > 0 ? (
                       <select
                         value={allocCrop}
                         onChange={(e) => setAllocCrop(e.target.value)}
-                        className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50 cursor-pointer"
+                        className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50 cursor-pointer"
                       >
                         {sysSettings.allowedCrops.map((c: string) => (
                           <option key={c} value={c}>{c}</option>
@@ -2257,7 +2218,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         value={allocCrop}
                         onChange={(e) => setAllocCrop(e.target.value)}
                         placeholder="e.g. Oil Palm Tenera Hybrid"
-                        className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                        className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                       />
                     )}
                   </div>
@@ -2265,11 +2226,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Link to Investor</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Link to Investor</label>
                     <select
                       value={allocInvestorId}
                       onChange={(e) => setAllocInvestorId(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     >
                       <option value="">-- No Assignment (Available) --</option>
                       {systemUsers.filter(u => u.role === 'investor').map(u => (
@@ -2279,13 +2240,13 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
 
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Investment amount (₦)</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Investment amount (₦)</label>
                     <input
                       type="number"
                       placeholder="e.g. 24000"
                       value={allocAmount}
                       onChange={(e) => setAllocAmount(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                 </div>
@@ -2303,9 +2264,9 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             {/* ASSIGN FARM MANAGERS FORM */}
             {activeFormTab === 'assign' && (
               <form onSubmit={handleAssignManager} className="space-y-4">
-                <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
-                  <Briefcase className="text-[#1B4332] h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Assign Supervisor to Farm</h3>
+                <div className="flex items-center gap-2 mb-4 border-b border-border pb-2">
+                  <Briefcase className="text-primary h-4 w-4" />
+                  <h3 className="font-sans font-bold text-sm text-foreground">Assign Supervisor to Farm</h3>
                 </div>
 
                 {assignSuccessMessage && (
@@ -2316,11 +2277,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 )}
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Select Manager</label>
+                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Select Manager</label>
                   <select
                     value={assignManagerId}
                     onChange={(e) => setAssignManagerId(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                    className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                   >
                     {systemUsers.filter(u => u.role === 'farm_manager').map(u => (
                       <option key={u.id} value={u.id}>{u.name} ({u.username})</option>
@@ -2329,11 +2290,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Assign To Farm Estate</label>
+                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Assign To Farm Estate</label>
                   <select
                     value={assignFarmId}
                     onChange={(e) => setAssignFarmId(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                    className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                   >
                     {farms.map(f => (
                       <option key={f.id} value={f.id}>{f.name}</option>
@@ -2354,9 +2315,9 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             {/* MANAGE FARM ESTATES */}
             {activeFormTab === 'farms' && (
               <form onSubmit={handleSaveFarmEstate} className="space-y-4">
-                <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
-                  <Layers className="text-[#1B4332] h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Configure & Manage Farm Estates</h3>
+                <div className="flex items-center gap-2 mb-4 border-b border-border pb-2">
+                  <Layers className="text-primary h-4 w-4" />
+                  <h3 className="font-sans font-bold text-sm text-foreground">Configure & Manage Farm Estates</h3>
                 </div>
 
                 {farmSuccessMessage && (
@@ -2366,12 +2327,12 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
                 )}
 
-                <div className="bg-[#FBF9F4] p-3 rounded-xl border border-[#2D6A4F]/10 mb-2">
-                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Operation Mode</label>
+                <div className="bg-muted/40 p-3 rounded-xl border border-border mb-2">
+                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Operation Mode</label>
                   <select
                     value={selectedFarmToEdit}
                     onChange={(e) => handleSelectFarmToEditChange(e.target.value)}
-                    className="w-full text-xs font-sans font-semibold border border-[#1B4332]/25 rounded-lg p-2.5 bg-white text-[#1B4332] focus:outline-[#1B4332]"
+                    className="w-full text-xs font-sans font-semibold border border-[#1B4332]/25 rounded-lg p-2.5 bg-card text-primary focus:outline-[#1B4332]"
                   >
                     <option value="new">🆕 [+ Add New Farm Estate]</option>
                     {farms.map(f => (
@@ -2382,54 +2343,54 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Estate name</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Estate name</label>
                     <input
                       type="text"
                       required
                       placeholder="e.g. Adubiaro Cocoa Estate"
                       value={farmName}
                       onChange={(e) => setFarmName(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Date established</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Date established</label>
                     <input
                       type="date"
                       required
                       value={farmDateEstablished}
                       onChange={(e) => setFarmDateEstablished(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Location city / area</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Location city / area</label>
                     <input
                       type="text"
                       required
                       placeholder="e.g. Owo"
                       value={farmLocation}
                       onChange={(e) => setFarmLocation(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">State region</label>
+                    <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">State region</label>
                     <input
                       type="text"
                       required
                       placeholder="e.g. Ondo State"
                       value={farmState}
                       onChange={(e) => setFarmState(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
                 </div>
                            <div className="space-y-3">
-                  <span className="block text-[10px] uppercase font-mono font-bold text-gray-400">Estate Cover Image</span>
+                  <span className="block text-[10px] uppercase font-mono font-bold text-muted-foreground">Estate Cover Image</span>
                   
                   {/* Drag-and-drop container */}
                   <div
@@ -2447,8 +2408,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                     onClick={() => document.getElementById('estate-cover-file-input')?.click()}
                     className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition duration-200 flex flex-col items-center justify-center gap-2 ${
                       isDraggingEstateImage 
-                        ? 'border-[#52B788] bg-[#52B788]/10 text-[#1B4332]' 
-                        : 'border-[#2D6A4F]/20 hover:border-[#1B4332] bg-white text-gray-400 hover:text-gray-700'
+                        ? 'border-[#52B788] bg-[#52B788]/10 text-primary' 
+                        : 'border-border hover:border-[#1B4332] bg-card text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <input
@@ -2462,29 +2423,29 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       className="hidden"
                     />
                     <UploadCloud className="h-8 w-8 text-[#2D6A4F]" />
-                    <div className="font-sans font-bold text-xs text-[#1B4332]">
+                    <div className="font-sans font-bold text-xs text-primary">
                       Click to upload cover image or drag & drop here
                     </div>
-                    <p className="text-[10px] text-gray-400 font-sans">
+                    <p className="text-[10px] text-muted-foreground font-sans">
                       Supports JPG, PNG or WEBP (optimized automatic system resizing)
                     </p>
                   </div>
 
                   {/* Preview if image is present */}
                   {farmCoverImage && (
-                    <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-gray-150 relative overflow-hidden group">
+                    <div className="flex items-center gap-3 bg-card p-3.5 rounded-2xl border border-border relative overflow-hidden group">
                       <img 
                         src={farmCoverImage} 
                         alt="Preview" 
-                        className="h-14 w-20 object-cover rounded-xl border border-gray-100"
+                        className="h-14 w-20 object-cover rounded-xl border border-border"
                         onError={(e) => {
                           // Fallback to placeholder if url loads incorrectly
                           (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?auto=format&fit=crop&q=80&w=800';
                         }}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Active Image Preview</div>
-                        <div className="text-xs text-[#1B4332] font-semibold truncate max-w-xs">
+                        <div className="text-[10px] font-mono text-muted-foreground font-bold uppercase tracking-wider">Active Image Preview</div>
+                        <div className="text-xs text-primary font-semibold truncate max-w-xs">
                           {farmCoverImage.startsWith('data:') ? 'Custom Base64 Upload File' : farmCoverImage}
                         </div>
                       </div>
@@ -2500,37 +2461,37 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                   {/* Fallback Direct Link URL */}
                   <div>
-                    <label className="block text-[9px] uppercase font-mono font-bold mb-1 text-gray-400">Or Option B: Provide Direct Image Web URL</label>
+                    <label className="block text-[9px] uppercase font-mono font-bold mb-1 text-muted-foreground">Or Option B: Provide Direct Image Web URL</label>
                     <input
                       type="url"
                       placeholder="https://images.unsplash.com/..."
                       value={farmCoverImage.startsWith('data:') ? '' : farmCoverImage}
                       onChange={(e) => setFarmCoverImage(e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                      className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                     />
                   </div>
 
                   {/* Preset quick buttons */}
                   <div className="flex flex-wrap gap-2 pt-1">
-                    <span className="text-[9px] text-gray-400 font-mono font-bold self-center">Presets:</span>
+                    <span className="text-[9px] text-muted-foreground font-mono font-bold self-center">Presets:</span>
                     <button
                       type="button"
                       onClick={() => setFarmCoverImage('https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?auto=format&fit=crop&q=80&w=800')}
-                      className="bg-gray-100 hover:bg-gray-200 text-[9px] text-gray-600 px-2 py-1 rounded cursor-pointer border border-gray-200"
+                      className="bg-muted hover:bg-gray-200 text-[9px] text-foreground/80 px-2 py-1 rounded cursor-pointer border border-border"
                     >
                       🌱 Palm Nursery
                     </button>
                     <button
                       type="button"
                       onClick={() => setFarmCoverImage('https://images.unsplash.com/photo-1516253593875-bd7ba052fbc5?auto=format&fit=crop&q=80&w=800')}
-                      className="bg-gray-100 hover:bg-gray-200 text-[9px] text-gray-600 px-2 py-1 rounded cursor-pointer border border-gray-200"
+                      className="bg-muted hover:bg-gray-200 text-[9px] text-foreground/80 px-2 py-1 rounded cursor-pointer border border-border"
                     >
                       🌴 Mature Oil Palm
                     </button>
                     <button
                       type="button"
                       onClick={() => setFarmCoverImage('https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80&w=800')}
-                      className="bg-gray-100 hover:bg-gray-200 text-[9px] text-gray-600 px-2 py-1 rounded cursor-pointer border border-gray-200"
+                      className="bg-muted hover:bg-gray-200 text-[9px] text-foreground/80 px-2 py-1 rounded cursor-pointer border border-border"
                     >
                       🚜 Cocoa Farms
                     </button>
@@ -2538,21 +2499,21 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Estate description & scope</label>
+                  <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Estate description & scope</label>
                   <textarea
                     rows={3}
                     required
                     placeholder="Introduce physical crop capabilities, yield expectations, and infrastructural configurations..."
                     value={farmDescription}
                     onChange={(e) => setFarmDescription(e.target.value)}
-                    className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+                    className="w-full text-xs border border-border rounded-lg p-2.5 bg-muted/50"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border">
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-sans font-bold text-gray-700">Estate active status</span>
-                    <span className="text-[9px] text-gray-400 font-sans">Active estates enable interactive tracking logs</span>
+                    <span className="text-[11px] font-sans font-bold text-foreground">Estate active status</span>
+                    <span className="text-[9px] text-muted-foreground font-sans">Active estates enable interactive tracking logs</span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer select-none">
                     <input 
@@ -2578,22 +2539,22 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
             {/* SYSTEM MAINTENANCE AND BACKUPS */}
             {activeFormTab === 'settings' && (
               <div className="space-y-6 animate-fade-in">
-                <div className="flex items-center gap-2 mb-4 border-b border-gray-50 pb-2">
-                  <Settings className="text-[#1B4332] h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">Super Admin Core Control Console</h3>
+                <div className="flex items-center gap-2 mb-4 border-b border-border pb-2">
+                  <Settings className="text-primary h-4 w-4" />
+                  <h3 className="font-sans font-bold text-sm text-foreground">Super Admin Core Control Console</h3>
                 </div>
 
                 {/* 1. INTERACTIVE CONTROL CENTER */}
-                <div className="bg-white p-6 rounded-3xl border border-gray-150 space-y-6">
+                <div className="bg-card p-6 rounded-3xl border border-border space-y-6">
                   <div>
-                    <h4 className="text-sm font-extrabold uppercase font-mono text-[#1B4332] tracking-wider mb-1">Interactive System Admin Consoles</h4>
-                    <p className="text-[11px] text-gray-400">Configure global business rules, toggle background simulation features, adapt brand looks/feel, and crop validation presets.</p>
+                    <h4 className="text-sm font-extrabold uppercase font-mono text-primary tracking-wider mb-1">Interactive System Admin Consoles</h4>
+                    <p className="text-[11px] text-muted-foreground">Configure global business rules, toggle background simulation features, adapt brand looks/feel, and crop validation presets.</p>
                   </div>
 
                   {loadingSysSettings || !sysSettings ? (
                     <div className="flex flex-col items-center justify-center py-10 gap-2">
                       <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#1B4332] border-t-transparent" />
-                      <span className="text-[10px] font-mono text-gray-400">Loading system configurations...</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">Loading system configurations...</span>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -2615,28 +2576,28 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         
                         {/* Box 1: Core Engines */}
-                        <div className="space-y-4 bg-[#FBF9F4]/40 p-5 rounded-2xl border border-gray-100">
-                          <h5 className="text-[11px] font-mono font-bold uppercase text-[#1B4332] tracking-widest border-b border-gray-100 pb-1.5">1. Core Engine Configurations</h5>
+                        <div className="space-y-4 bg-muted/40 p-5 rounded-2xl border border-border">
+                          <h5 className="text-[11px] font-mono font-bold uppercase text-primary tracking-widest border-b border-border pb-1.5">1. Business rules</h5>
                           
                           <div className="space-y-3">
                             <div>
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Database Connection Target</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Database Connection Target</label>
                               <select
                                 value={sysSettings.databaseMode}
                                 onChange={(e) => handleSaveSettings({ ...sysSettings, databaseMode: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] cursor-pointer"
+                                className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-ring cursor-pointer"
                               >
                                 <option value="auto">Automatic (Postgres with Server Fallback)</option>
                                 <option value="local_json">Forced Local db.json mode (Offline Safe)</option>
                                 <option value="postgres_forced">Forced PostgreSQL Mode (Raise Error if Down)</option>
                               </select>
-                              <span className="text-[9.5px] font-mono text-gray-400 mt-1 block leading-tight">
+                              <span className="text-[9.5px] font-mono text-muted-foreground mt-1 block leading-tight">
                                 Controls routing to PostgreSQL. Switching to Forced Local will immediately drop the cloud instance connection cleanly.
                               </span>
                             </div>
 
                             <div>
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Simulated Network Latency (ms)</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Artificial delay for testing (ms)</label>
                               <div className="flex items-center gap-3">
                                 <input
                                   type="range"
@@ -2649,9 +2610,9 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                                   onTouchEnd={() => handleSaveSettings({ ...sysSettings, simulatedLatency: sysSettings.simulatedLatency })}
                                   className="flex-1 accent-[#1B4332]"
                                 />
-                                <span className="text-xs font-mono font-bold text-gray-700 w-12 text-right">{sysSettings.simulatedLatency || 0}ms</span>
+                                <span className="text-xs font-mono font-bold text-foreground w-12 text-right">{sysSettings.simulatedLatency || 0}ms</span>
                               </div>
-                              <span className="text-[9.5px] font-mono text-gray-400 mt-1 block leading-tight">
+                              <span className="text-[9.5px] font-mono text-muted-foreground mt-1 block leading-tight">
                                 Delays server API replies. Use to inspect visual skeleton state transitions, loaders, and network thresholds.
                               </span>
                             </div>
@@ -2659,14 +2620,14 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         </div>
 
                         {/* Box 2: Feature & Business Controls */}
-                        <div className="space-y-4 bg-[#FBF9F4]/40 p-5 rounded-2xl border border-gray-100">
-                          <h5 className="text-[11px] font-mono font-bold uppercase text-[#1B4332] tracking-widest border-b border-gray-100 pb-1.5">2. Feature Permissions & Rules</h5>
+                        <div className="space-y-4 bg-muted/40 p-5 rounded-2xl border border-border">
+                          <h5 className="text-[11px] font-mono font-bold uppercase text-primary tracking-widest border-b border-border pb-1.5">2. Feature Permissions & Rules</h5>
                           
                           <div className="space-y-3">
-                            <div className="flex items-center justify-between p-2.5 bg-white border border-gray-100 rounded-xl">
+                            <div className="flex items-center justify-between p-2.5 bg-card border border-border rounded-xl">
                               <div>
-                                <span className="text-xs font-bold text-gray-700 block">User Push Notifications</span>
-                                <span className="text-[9.5px] font-mono text-gray-400 block max-w-[200px]">System-wide dynamic alerts bell module.</span>
+                                <span className="text-xs font-bold text-foreground block">User Push Notifications</span>
+                                <span className="text-[9.5px] font-mono text-muted-foreground block max-w-[200px]">System-wide dynamic alerts bell module.</span>
                               </div>
                               <label className="relative inline-flex items-center cursor-pointer">
                                 <input
@@ -2679,10 +2640,10 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                               </label>
                             </div>
 
-                            <div className="flex items-center justify-between p-2.5 bg-white border border-gray-100 rounded-xl">
+                            <div className="flex items-center justify-between p-2.5 bg-card border border-border rounded-xl">
                               <div>
-                                <span className="text-xs font-bold text-gray-700 block">Simulate Email Dispatches</span>
-                                <span className="text-[9.5px] font-mono text-gray-400 block max-w-[200px]">Logs all Welcome & Payout alerts to outbox.</span>
+                                <span className="text-xs font-bold text-foreground block">Simulate emails (no real sending)</span>
+                                <span className="text-[9.5px] font-mono text-muted-foreground block max-w-[200px]">Logs all Welcome & Payout alerts to outbox.</span>
                               </div>
                               <label className="relative inline-flex items-center cursor-pointer">
                                 <input
@@ -2696,7 +2657,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             </div>
 
                             <div>
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-400">Active Minimum ROI limit (%)</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Active Minimum ROI limit (%)</label>
                               <div className="flex items-center gap-2">
                                 <input
                                   type="number"
@@ -2705,10 +2666,10 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                                   value={sysSettings.minimumPayoutRoi || ''}
                                   onChange={(e) => setSysSettings({ ...sysSettings, minimumPayoutRoi: parseFloat(e.target.value) || 0 })}
                                   onBlur={() => handleSaveSettings({ ...sysSettings, minimumPayoutRoi: sysSettings.minimumPayoutRoi })}
-                                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#1B4332]"
+                                  className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs text-foreground outline-none focus:border-ring"
                                 />
                               </div>
-                              <span className="text-[9.5px] font-mono text-gray-400 mt-1 block leading-tight">
+                              <span className="text-[9.5px] font-mono text-muted-foreground mt-1 block leading-tight">
                                 Rejects any transaction record attempts below this value. Prevents human data entry mistakes.
                               </span>
                             </div>
@@ -2716,40 +2677,40 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         </div>
 
                         {/* Box 3: Branding & Custom Looks */}
-                        <div className="space-y-4 bg-[#FBF9F4]/40 p-5 rounded-2xl border border-gray-100 md:col-span-2">
-                          <h5 className="text-[11px] font-mono font-bold uppercase text-[#1B4332] tracking-widest border-b border-gray-100 pb-1.5">3. Appearance Branding & Broadcast Banners</h5>
+                        <div className="space-y-4 bg-muted/40 p-5 rounded-2xl border border-border md:col-span-2">
+                          <h5 className="text-[11px] font-mono font-bold uppercase text-primary tracking-widest border-b border-border pb-1.5">3. Appearance Branding & Broadcast Banners</h5>
                           
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Client Portal Title Name</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Client Portal Title Name</label>
                               <input
                                 type="text"
                                 value={sysSettings.portalName || ''}
                                 onChange={(e) => setSysSettings({ ...sysSettings, portalName: e.target.value })}
                                 onBlur={() => handleSaveSettings({ ...sysSettings, portalName: sysSettings.portalName })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#1B4332]"
+                                className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs text-foreground outline-none focus:border-ring"
                                 placeholder="Adubiaro Farm Portal"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Header Icon Logo text</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Header Icon Logo text</label>
                               <input
                                 type="text"
                                 value={sysSettings.logoText || ''}
                                 onChange={(e) => setSysSettings({ ...sysSettings, logoText: e.target.value })}
                                 onBlur={() => handleSaveSettings({ ...sysSettings, logoText: sysSettings.logoText })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#1B4332]"
+                                className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs text-foreground outline-none focus:border-ring"
                                 placeholder="ADUBIARO"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Accent Brand Color Theme</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Accent Brand Color Theme</label>
                               <select
                                 value={sysSettings.accentColor}
                                 onChange={(e) => handleSaveSettings({ ...sysSettings, accentColor: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] cursor-pointer"
+                                className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-ring cursor-pointer"
                               >
                                 <option value="emerald">Emerald Green (Brand Standard)</option>
                                 <option value="forest">Forest Green (Deep High-Contrast)</option>
@@ -2759,23 +2720,23 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                             </div>
 
                             <div className="md:col-span-2">
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Announcement Broadcast Message</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Announcement Broadcast Message</label>
                               <input
                                 type="text"
                                 value={sysSettings.announcementBanner || ''}
                                 onChange={(e) => setSysSettings({ ...sysSettings, announcementBanner: e.target.value })}
                                 onBlur={() => handleSaveSettings({ ...sysSettings, announcementBanner: sysSettings.announcementBanner })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#1B4332]"
+                                className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs text-foreground outline-none focus:border-ring"
                                 placeholder="Enter announcement text to broadcast systemwide..."
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-gray-500">Banner Alert Type</label>
+                              <label className="block text-[10px] uppercase font-mono font-bold mb-1 text-muted-foreground">Banner Alert Type</label>
                               <select
                                 value={sysSettings.bannerType}
                                 onChange={(e) => handleSaveSettings({ ...sysSettings, bannerType: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-[#1B4332] cursor-pointer"
+                                className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs text-foreground outline-none focus:border-ring cursor-pointer"
                               >
                                 <option value="none">Disabled (No Banner Layout)</option>
                                 <option value="info">Info Alert (Sky Blue Theme)</option>
@@ -2787,17 +2748,17 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                         </div>
 
                         {/* Box 4: Supported Culturable Crops */}
-                        <div className="space-y-4 bg-[#FBF9F4]/40 p-5 rounded-2xl border border-gray-100 md:col-span-2">
-                          <h5 className="text-[11px] font-mono font-bold uppercase text-[#1B4332] tracking-widest border-b border-gray-100 pb-1.5">4. Dynamic Validation Presets (Cultivated Crop Breeds)</h5>
+                        <div className="space-y-4 bg-muted/40 p-5 rounded-2xl border border-border md:col-span-2">
+                          <h5 className="text-[11px] font-mono font-bold uppercase text-primary tracking-widest border-b border-border pb-1.5">4. Dynamic Validation Presets (Cultivated Crop Breeds)</h5>
                           
                           <div className="space-y-3">
-                            <span className="text-[10.5px] font-sans text-gray-400 block leading-tight">
+                            <span className="text-[10.5px] font-sans text-muted-foreground block leading-tight">
                               These crop seeds and breed categories are dynamically enforced across land plot definitions and investment tracking profiles.
                             </span>
 
                             <div className="flex flex-wrap gap-2">
                               {(sysSettings.allowedCrops || []).map((crop: string, idx: number) => (
-                                <span key={idx} className="bg-emerald-50 text-[#1B4332] border border-emerald-100 text-[10.5px] px-3 py-1 rounded-full flex items-center gap-1.5 font-medium select-none animate-fade-in">
+                                <span key={idx} className="bg-emerald-50 text-primary border border-emerald-100 text-[10.5px] px-3 py-1 rounded-full flex items-center gap-1.5 font-medium select-none animate-fade-in">
                                   <span>{crop}</span>
                                   <button
                                     type="button"
@@ -2813,7 +2774,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                                 </span>
                               ))}
                               {(!sysSettings.allowedCrops || sysSettings.allowedCrops.length === 0) && (
-                                <span className="text-xs text-gray-400 italic">No custom crops whitelist declared.</span>
+                                <span className="text-xs text-muted-foreground italic">No custom crops whitelist declared.</span>
                               )}
                             </div>
 
@@ -2836,7 +2797,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                                 type="text"
                                 value={newCropTag}
                                 onChange={(e) => setNewCropTag(e.target.value)}
-                                className="flex-1 bg-white border border-gray-100 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none focus:border-[#1B4332]"
+                                className="flex-1 bg-card border border-border rounded-lg px-3 py-1.5 text-xs text-foreground outline-none focus:border-ring"
                                 placeholder="e.g. Kola Nut (Cola Acuminata)"
                               />
                               <button
@@ -2854,18 +2815,18 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 mt-8 mb-4 border-b border-gray-50 pb-2">
-                  <Database className="text-[#1B4332] h-4 w-4" />
-                  <h3 className="font-sans font-bold text-sm text-gray-800">System Infrastructure Status & Backups</h3>
+                <div className="flex items-center gap-2 mt-8 mb-4 border-b border-border pb-2">
+                  <Database className="text-primary h-4 w-4" />
+                  <h3 className="font-sans font-bold text-sm text-foreground">System Infrastructure Status & Backups</h3>
                 </div>
 
-                <div className="bg-[#FBF9F4] p-4.5 rounded-2xl border border-[#2D6A4F]/10 flex gap-4">
-                  <div className="p-3 bg-[#52B788]/10 rounded-xl text-[#1B4332] shrink-0 self-start">
+                <div className="bg-muted/40 p-4.5 rounded-2xl border border-border flex gap-4">
+                  <div className="p-3 bg-[#52B788]/10 rounded-xl text-primary shrink-0 self-start">
                     <Database className="h-5 w-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-[#1B4332] uppercase font-mono">Active Database Maintenance Policy</h4>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                    <h4 className="text-xs font-bold text-primary uppercase font-mono">Active Database Maintenance Policy</h4>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                       To operationalize absolute transparency and resilient business continuity, the Adubiaro Portal executes automatic daily scheduled maintenance backups at 02:15 AM (UTC/GMT). Hot backups preserve complete state snapshots across farms, land plot records, investor allocations, and financial payout ledger audits.
                     </p>
                   </div>
@@ -2873,11 +2834,11 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
 
                 {/* Database Connectivity Diagnostics Card */}
                 {dbStatus && (
-                  <div className="bg-white p-5 rounded-2xl border border-gray-150 space-y-4 animate-fade-in">
+                  <div className="bg-card p-5 rounded-2xl border border-border space-y-4 animate-fade-in">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Database className={`h-5 w-5 ${dbStatus.usePostgres ? 'text-emerald-600' : dbStatus.configured ? 'text-rose-600' : 'text-amber-500'}`} />
-                        <h4 className="text-xs font-extrabold uppercase font-mono text-gray-700">Database Engine Core Diagnostics</h4>
+                        <h4 className="text-xs font-extrabold uppercase font-mono text-foreground">Database Engine Core Diagnostics</h4>
                       </div>
                       <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
                         dbStatus.usePostgres 
@@ -2891,21 +2852,21 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100">
-                        <span className="text-[10px] font-mono font-bold text-gray-400 block">DATABASE ENGINE</span>
-                        <span className="text-xs font-bold text-gray-700 block mt-0.5">
+                      <div className="bg-muted/40 p-3 rounded-xl border border-border">
+                        <span className="text-[10px] font-mono font-bold text-muted-foreground block">DATABASE ENGINE</span>
+                        <span className="text-xs font-bold text-foreground block mt-0.5">
                           {dbStatus.usePostgres ? 'Relational PostgreSQL' : 'Fallback File-based JSON'}
                         </span>
                       </div>
-                      <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100">
-                        <span className="text-[10px] font-mono font-bold text-gray-400 block">HOST & PORT</span>
-                        <span className="text-xs font-bold text-gray-700 block mt-0.5 font-mono truncate" title={`${dbStatus.dbHost}:${dbStatus.dbPort}`}>
+                      <div className="bg-muted/40 p-3 rounded-xl border border-border">
+                        <span className="text-[10px] font-mono font-bold text-muted-foreground block">HOST & PORT</span>
+                        <span className="text-xs font-bold text-foreground block mt-0.5 font-mono truncate" title={`${dbStatus.dbHost}:${dbStatus.dbPort}`}>
                           {dbStatus.configured ? `${dbStatus.dbHost}:${dbStatus.dbPort}` : 'Local File Storage'}
                         </span>
                       </div>
-                      <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100">
-                        <span className="text-[10px] font-mono font-bold text-gray-400 block">SCHEMA CATALOG</span>
-                        <span className="text-xs font-bold text-gray-700 block mt-0.5 font-mono">
+                      <div className="bg-muted/40 p-3 rounded-xl border border-border">
+                        <span className="text-[10px] font-mono font-bold text-muted-foreground block">SCHEMA CATALOG</span>
+                        <span className="text-xs font-bold text-foreground block mt-0.5 font-mono">
                           {dbStatus.configured ? dbStatus.dbName : 'data/db.json'}
                         </span>
                       </div>
@@ -2945,10 +2906,10 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 )}
 
                 {/* Manual trigger section */}
-                <div className="bg-white p-5 rounded-2xl border border-gray-150 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="bg-card p-5 rounded-2xl border border-border flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-left w-full sm:w-auto">
-                    <h5 className="text-xs font-bold text-gray-700">Trigger Custom Manual Backup Point</h5>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Generates immediate physical snapshot of current database state on archival filesystem storage.</p>
+                    <h5 className="text-xs font-bold text-foreground">Trigger Custom Manual Backup Point</h5>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Generates immediate physical snapshot of current database state on archival filesystem storage.</p>
                   </div>
                   <button
                     type="button"
@@ -2979,8 +2940,8 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-1.5">
-                      <Clock className="text-gray-400 h-3.5 w-3.5" />
-                      <span className="text-[10px] font-mono uppercase font-bold text-gray-400 tracking-wider">
+                      <Clock className="text-muted-foreground h-3.5 w-3.5" />
+                      <span className="text-[10px] font-mono uppercase font-bold text-muted-foreground tracking-wider">
                         Last 5 Verified Archival Runs
                       </span>
                     </div>
@@ -2990,24 +2951,24 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                   </div>
 
                   {loadingBackups ? (
-                    <div className="flex flex-col items-center justify-center py-10 gap-2 border border-gray-100 rounded-2xl bg-gray-50/30">
+                    <div className="flex flex-col items-center justify-center py-10 gap-2 border border-border rounded-2xl bg-muted/40">
                       <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#1B4332] border-t-transparent" />
-                      <span className="text-[10px] font-mono text-gray-400">Fetching backup logs...</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">Fetching backup logs...</span>
                     </div>
                   ) : backups.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400 text-xs border border-dashed border-gray-200 rounded-2xl font-sans">
+                    <div className="p-8 text-center text-muted-foreground text-xs border border-dashed border-border rounded-2xl font-sans">
                       No system backups found in directories.
                     </div>
                   ) : (
-                    <div className="border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-100 bg-white">
+                    <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border bg-card">
                       {backups.slice(0, 5).map((bk, idx) => (
-                        <div key={bk.id} className="p-4 hover:bg-gray-50/40 transition duration-150 flex items-start gap-4">
-                          <div className="p-2 bg-gray-100 text-gray-500 rounded-lg shrink-0 mt-0.5">
+                        <div key={bk.id} className="p-4 hover:bg-muted/60 transition duration-150 flex items-start gap-4">
+                          <div className="p-2 bg-muted text-muted-foreground rounded-lg shrink-0 mt-0.5">
                             <HardDrive className="h-4.5 w-4.5" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center justify-between gap-1.5 font-sans font-bold">
-                              <span className="text-xs font-mono text-gray-700">
+                              <span className="text-xs font-mono text-foreground">
                                 {new Date(bk.timestamp).toLocaleString(undefined, {
                                   year: 'numeric',
                                   month: 'short',
@@ -3026,15 +2987,15 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                                 {bk.backupType === 'scheduled' ? 'Scheduled Log' : 'Manual Run'}
                               </span>
                             </div>
-                            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-gray-400">
+                            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-muted-foreground">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span className="text-gray-300 font-normal">File:</span>
-                                <span className="text-gray-500 font-semibold truncate hover:underline hover:text-gray-700" title={bk.fileName}>
+                                <span className="text-muted-foreground font-semibold truncate hover:underline hover:text-foreground" title={bk.fileName}>
                                   {bk.fileName}
                                 </span>
                               </div>
                               <div className="flex items-center gap-3 shrink-0">
-                                <span className="text-gray-500">Size: <b className="text-gray-700">{bk.fileSize}</b></span>
+                                <span className="text-muted-foreground">Size: <b className="text-foreground">{bk.fileSize}</b></span>
                                 <span className="flex items-center gap-1 text-emerald-600 font-bold">
                                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                   VERIFIED
@@ -3049,7 +3010,7 @@ export default function AdminDashboard({ user, token, onSelectFarm, onSelectInve
                 </div>
 
                 {/* Verification Checkpoint Note */}
-                <p className="text-[10.5px] font-sans text-gray-400 italic text-center leading-normal">
+                <p className="text-[10.5px] font-sans text-muted-foreground italic text-center leading-normal">
                   Note: Archival system backups store double-encrypted checksum indexes. These timestamps provide manual administrative proof of hot system maintenance compliance protocols.
                 </p>
               </div>

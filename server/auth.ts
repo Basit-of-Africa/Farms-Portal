@@ -10,6 +10,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { passwordSchema } from '../src/lib/schemas';
 
 // ---------------------------------------------------------------------------
 // Password hashing
@@ -74,12 +75,10 @@ export function needsRehash(stored: string | undefined | null): boolean {
   return !!stored && !isPasswordHash(stored);
 }
 
-/** Returns an error message if the password is too weak, otherwise null. */
+/** Returns an error message if the password is too weak, otherwise null (rules shared with the browser forms). */
 export function validatePasswordStrength(pw: unknown): string | null {
-  if (typeof pw !== 'string' || pw.length < 8) return 'Password must be at least 8 characters long.';
-  if (pw.length > 128) return 'Password must be at most 128 characters long.';
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return 'Password must contain at least one letter and one number.';
-  return null;
+  const result = passwordSchema.safeParse(pw);
+  return result.success ? null : result.error.issues[0]?.message || 'Invalid password.';
 }
 
 /** Random, human-friendly temporary password (no ambiguous characters). */
