@@ -600,61 +600,109 @@ async function loadDbFromFirestore() {
 // Used to skip unchanged documents and to delete documents removed in memory.
 const firestoreLastSaved = new Map<string, string>();
 
-// Helper to fully synchronize memory DB state to corresponding Firestore paths
+// Synchronise the in-memory DB to Firestore. Changed documents are written in
+// batches (up to 400 operations per commit) so a full save takes seconds, not
+// minutes: one-at-a-time writes could be cut off by a restart, leaving plots
+// saved but the holdings that link them to investors missing.
 async function saveDbToFirestore() {
   if (!firestoreDb) return;
+  const collectionsToSave = [
+    { name: 'users', list: db.users },
+    { name: 'farms', list: db.farms },
+    { name: 'plots', list: db.plots },
+    { name: 'investorPlots', list: db.investorPlots },
+    { name: 'assignments', list: db.assignments },
+    { name: 'updates', list: db.updates },
+    { name: 'documents', list: db.documents },
+    { name: 'financials', list: db.financials },
+    { name: 'simulatedEmails', list: db.simulatedEmails },
+    { name: 'mapNotes', list: db.mapNotes || [] },
+    { name: 'auditLogs', list: db.auditLogs || [] },
+    { name: 'dataRequests', list: db.dataRequests || [] },
+    { name: 'breachIncidents', list: db.breachIncidents || [] }
+  ];
+
+  type Op = { key: string; serialized: string | null; ref: any; data?: any };
+  const ops: Op[] = [];
+  for (const col of collectionsToSave) {
+    const currentKeys = new Set<string>();
+    for (const item of col.list as any[]) {
+      if (!item || !item.id) continue;
+      const { id, ...data } = item;
+      const key = `${col.name}/${id}`;
+      currentKeys.add(key);
+      const serialized = JSON.stringify(data);
+      if (firestoreLastSaved.get(key) === serialized) continue; // unchanged
+      ops.push({ key, serialized, ref: firestoreDb.collection(col.name).doc(id), data: JSON.parse(serialized) });
+    }
+    // Propagate deletions (erasure, retention purges, merged or removed records)
+    for (const key of Array.from(firestoreLastSaved.keys())) {
+      if (key.startsWith(`${col.name}/`) && !currentKeys.has(key)) {
+        ops.push({ key, serialized: null, ref: firestoreDb.collection(col.name).doc(key.slice(col.name.length + 1)) });
+      }
+    }
+  }
+  ops.push({ key: '__settings', serialized: null, ref: firestoreDb.collection('settings').doc('standalone'), data: JSON.parse(JSON.stringify(db.settings || {})) });
+
   try {
-    const collectionsToSave = [
-      { name: 'users', list: db.users },
-      { name: 'farms', list: db.farms },
-      { name: 'plots', list: db.plots },
-      { name: 'investorPlots', list: db.investorPlots },
-      { name: 'assignments', list: db.assignments },
-      { name: 'updates', list: db.updates },
-      { name: 'documents', list: db.documents },
-      { name: 'financials', list: db.financials },
-      { name: 'simulatedEmails', list: db.simulatedEmails },
-      { name: 'mapNotes', list: db.mapNotes || [] },
-      { name: 'auditLogs', list: db.auditLogs || [] },
-      { name: 'dataRequests', list: db.dataRequests || [] },
-      { name: 'breachIncidents', list: db.breachIncidents || [] }
-    ];
-
-    for (const col of collectionsToSave) {
-      const currentKeys = new Set<string>();
-      for (const item of col.list as any[]) {
-        if (item && item.id) {
-          const { id, ...data } = item;
-          const key = `${col.name}/${item.id}`;
-          currentKeys.add(key);
-          const serialized = JSON.stringify(data);
-          // Only write documents that changed since the last sync
-          if (firestoreLastSaved.get(key) === serialized) continue;
-          // Prevent setting undefined values in Firestore
-          const cleanData = JSON.parse(serialized);
-          await retryWithBackoff(() => firestoreDb.collection(col.name).doc(item.id).set(cleanData), 3, 1000);
-          firestoreLastSaved.set(key, serialized);
-        }
-      }
-      // Propagate deletions (erasure, retention purges, removed records)
-      for (const key of Array.from(firestoreLastSaved.keys())) {
-        if (key.startsWith(`${col.name}/`) && !currentKeys.has(key)) {
-          const docId = key.slice(col.name.length + 1);
-          await retryWithBackoff(() => firestoreDb.collection(col.name).doc(docId).delete(), 3, 1000);
-          firestoreLastSaved.delete(key);
-        }
-      }
+    for (let i = 0; i < ops.length; i += 400) {
+      const chunk = ops.slice(i, i + 400);
+      await retryWithBackoff(() => {
+        const batch = firestoreDb.batch();
+        chunk.forEach(op => (op.data !== undefined ? batch.set(op.ref, op.data) : batch.delete(op.ref)));
+        return batch.commit();
+      }, 3, 1000);
+      chunk.forEach(op => {
+        if (op.key === '__settings') return;
+        if (op.data !== undefined) firestoreLastSaved.set(op.key, op.serialized as string);
+        else firestoreLastSaved.delete(op.key);
+      });
     }
-
-    if (db.settings) {
-      const cleanSettings = JSON.parse(JSON.stringify(db.settings));
-      await retryWithBackoff(() => firestoreDb.collection('settings').doc('standalone').set(cleanSettings), 3, 1000);
-    }
-    console.log('✅ Synchronized memory DB state to Firestore successfully.');
+    if (ops.length > 1) console.log(`✅ Saved ${ops.length - 1} change(s) to Firestore.`);
   } catch (err) {
     console.error('❌ Error synchronizing memory DB to Firestore:', err);
     throw err;
   }
+}
+
+// Only one Firestore save runs at a time; calls made meanwhile are folded into
+// one follow-up save, so nothing is skipped and writes never overlap.
+let firestoreSaving: Promise<void> | null = null;
+let firestoreSaveAgain = false;
+function queueFirestoreSave(): Promise<void> {
+  if (firestoreSaving) {
+    firestoreSaveAgain = true;
+    return firestoreSaving;
+  }
+  firestoreSaving = (async () => {
+    do {
+      firestoreSaveAgain = false;
+      try {
+        await saveDbToFirestore();
+      } catch {
+        // logged inside; unsaved changes are retried on the next save
+      }
+    } while (firestoreSaveAgain);
+  })().finally(() => {
+    firestoreSaving = null;
+  });
+  return firestoreSaving;
+}
+
+// Render (and most hosts) send SIGTERM before stopping the server on a deploy
+// or restart: finish any pending save first so recent changes are not lost.
+let shuttingDown = false;
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(sig, async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${sig} received: finishing pending saves before exit…`);
+    const timeout = new Promise(r => setTimeout(r, 25000));
+    const pending: Promise<any>[] = [];
+    if (firestoreSaving || firestoreDb) pending.push(queueFirestoreSave());
+    await Promise.race([Promise.all(pending), timeout]);
+    process.exit(0);
+  });
 }
 
 async function initFirestore() {
@@ -1591,9 +1639,7 @@ function saveDb() {
 
   // Push updates to Firestore
   if (firestoreDb) {
-    saveDbToFirestore().catch(err => {
-      console.error('❌ Failed to synchronize database changes with Firestore:', err);
-    });
+    queueFirestoreSave();
   }
 
   // Push updates to PostgreSQL if activated
@@ -3585,6 +3631,28 @@ function executeBulkInvestorImport(investors: any[], currentUser: User, options:
             existingUnownedPlot.sizeHectares = r.size;
             existingUnownedPlot.sizeUnit = r.sizeUnit;
             existingUnownedPlot.cropType = r.cropType;
+          });
+        }
+      }
+
+      // No plot number: reuse an unowned plot of the same size in this estate
+      // (e.g. one left without its owner link by an interrupted save) rather
+      // than creating a duplicate.
+      if (!assignedPlotId && !r.plotNumber) {
+        const sameSize = (p: FarmPlot) =>
+          Math.abs((Number(p.sizeHectares) || 0) - (Number(r.size) || 0)) < 0.0001 &&
+          String(p.sizeUnit || 'acre').toLowerCase() === String(r.sizeUnit || 'acre').toLowerCase();
+        const reusable = db.plots.find(p =>
+          p.farmId === matchedFarm!.id &&
+          sameSize(p) &&
+          !db.investorPlots.some(ip => ip.plotId === p.id && ip.isActive !== false) &&
+          !investorPlotsToAdd.some(ip => ip.plotId === p.id)
+        );
+        if (reusable) {
+          assignedPlotId = reusable.id;
+          plotUpdates.push(() => {
+            reusable.status = PlotStatus.ACTIVE;
+            if (r.cropType) reusable.cropType = r.cropType;
           });
         }
       }
