@@ -5260,6 +5260,12 @@ app.post('/api/admin/database/import', requireAuth, async (req, res) => {
   }
 });
 
+// Health check for uptime monitors / keep-alive pings. Public, tiny, and
+// deliberately touches no database so frequent pings cost nothing.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 app.get('/api/portal/settings', (req, res) => {
   const settings = getSettings();
   res.json({
